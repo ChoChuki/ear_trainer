@@ -1,6 +1,8 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const {createHash} = require('node:crypto');
+const vm = require('node:vm');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 global.window = global;
@@ -63,29 +65,77 @@ assert.deepEqual(m.outputClock(ctx,1.05,1000),{when:1150,method:'context-estimat
 ctx.getOutputTimestamp=()=>({contextTime:.98,performanceTime:1000});
 assert.deepEqual(m.outputClock(ctx,1.05,1020),{when:1070,method:'output-estimate'});
 
-const dir=path.join(root,'ap-audio');
-const src=JSON.parse(fs.readFileSync(path.join(dir,'sources.json'),'utf8'));
-assert.equal(src.version,m.sourceVersion);
-assert.equal(src.samples.length,72);
-const ids=new Set();
-for(const instrument of ['piano','violin']) {
-    for(const octave of [4,5,6]) {
-        const name=instrument+'-'+octave+'.bin';
-        const bank=fs.readFileSync(path.join(dir,name));
-        let offset=0;
-        const parts=src.samples.filter(s=>s.bank===name).sort((a,b)=>a.offset-b.offset);
-        assert.equal(parts.length,12);
-        for(const [pc,s] of parts.entries()) {
-            assert.equal(s.midi,12*(octave+1)+pc);
-            assert.equal(s.offset,offset); assert(s.bytes>1000);
-            assert.equal(s.instrument,instrument);
-            assert.equal(s.id,instrument+'-'+s.midi+'-1');
-            assert(!ids.has(s.id)); ids.add(s.id);
-            const leading=bank.subarray(s.offset,s.offset+3);
-            assert(leading.toString()==='ID3' || (leading[0]===255 && (leading[1]&224)===224));
-            offset+=s.bytes;
-        }
-        assert.equal(offset,bank.length);
+const legacy = {...shared,sourceVersion:'iowa-prototype-1'};
+assert(m.isFocus(legacy)); assert(m.isFocus(shared));
+assert(!m.isFocus({...shared,sourceVersion:'unknown'}));
+assert.equal(m.sampleId('piano',64,legacy.sourceVersion),'piano-64-1');
+assert.equal(m.sampleId('piano',64),'jclive-piano-64');
+sessions[0].sourceVersion=legacy.sourceVersion;
+rows.filter(row => row.sessionId==='a').forEach(row => {row.sourceVersion=legacy.sourceVersion;});
+assert(promote().ready,'completed training still counts after the sound source changes');
+
+const presets = [
+    ['piano','0000_JCLive_sf2_file','201b5e975e6dfd30937c2c153f226e2ca5e0c413b778b5a4a22318d24381765a'],
+    ['violin','0400_JCLive_sf2_file','923d2f2a05ad6847a662fd3e7fd14599426dfc7d711e064e1d5d54acaa398166'],
+];
+for (const [instrument,file,hash] of presets) {
+    const bytes=fs.readFileSync(path.join(root,'vendor',file+'.js'));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'),hash,instrument+' must use the original trainer preset');
+    const scope={console:{log(){}}};
+    vm.runInNewContext(bytes.toString(),scope);
+    const zones=scope['_tone_'+file].zones;
+    for (let midi=60; midi<=95; midi++) {
+        assert(zones.some(z=>midi>=z.keyRangeLow && midi<=z.keyRangeHigh && (z.file||z.sample)),instrument+' '+midi);
     }
 }
-console.log('PASS: output clock and all 72 recorded MP3 boundaries');
+
+require(path.join(root,'ap-focus-audio.js'));
+async function testFocusedPlayback() {
+    global.document={hidden:false};
+    const sources=[];
+    const context={
+        currentTime:2,state:'suspended',sampleRate:44100,destination:{},
+        async resume(){this.state='running';},
+        createBuffer(channels,length,rate) {
+            return {duration:length/rate,getChannelData:()=>new Float32Array(length)};
+        },
+        createBufferSource() {
+            const node={stop(){this.stopped=true;},start(at){this.when=at;},connect(){},disconnect(){}};
+            sources.push(node); return node;
+        }
+    };
+    const calls=[], loaded=[];
+    function queue(instrument,midi,when) {
+        const node=context.createBufferSource();
+        calls.push({instrument,midi,when,node});
+        return {when,audioBufferSourceNode:node};
+    }
+    const sound=APFocusAudio.create(context,async name=>{loaded.push(name);},queue);
+    for (const instrument of ['piano','violin']) {
+        for (let midi=60; midi<=95; midi++) {
+            const clock=await sound.play(instrument,midi);
+            assert(Number.isFinite(clock.when));
+            assert.equal(clock.id,m.sampleId(instrument,midi));
+            assert.equal(calls.at(-1).instrument,instrument);
+            assert.equal(calls.at(-1).midi,midi);
+            assert.equal(calls.at(-1).when,2.04);
+        }
+    }
+    assert.equal(calls.length,72);
+    assert.deepEqual(loaded,calls.map(x=>x.instrument));
+    await sound.play('piano',65,true);
+    assert(Math.abs(calls.at(-1).when-2.35)<1e-8,'the mask precedes the instrument note');
+    sound.stop();
+    assert(sources.every(node=>node.stopped),'replay and stop release each previous source');
+
+    let finishLoad;
+    const pending=APFocusAudio.create(context,()=>new Promise(resolve=>{finishLoad=resolve;}),queue);
+    const stale=pending.play('violin',75); pending.stop(); finishLoad();
+    await assert.rejects(stale,/interrupted/);
+    assert.equal(calls.length,73,'a late decode must not play after cancellation');
+    const failed=APFocusAudio.create(context,async()=>{throw Error('unavailable');},queue);
+    await assert.rejects(failed.play('piano',65),/unavailable/);
+    assert.equal(calls.length,73);
+    console.log('PASS original instrument files, all 72 focused pitches, timing, mixed sources, cancellation, and legacy history');
+}
+testFocusedPlayback().catch(err=>{console.error(err);process.exitCode=1;});
