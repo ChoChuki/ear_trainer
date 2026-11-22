@@ -1,0 +1,380 @@
+:root {
+    color-scheme: light;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #f4f5f7;
+    color: #111827;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; min-height: 100%; background: #f4f5f7; }
+body { overscroll-behavior-y: contain; }
+button, select { font: inherit; }
+button {
+    min-height: 46px;
+    border: 0;
+    border-radius: 12px;
+    padding: 0 12px;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+button:disabled { opacity: 0.45; cursor: default; }
+.primary { background: #111827; color: white; }
+.secondary { background: white; color: #111827; border: 1px solid #d1d5db; }
+.danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.full-width { width: 100%; margin-top: 7px; }
+.app-shell {
+    width: min(100%, 760px);
+    margin: 0 auto;
+    padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+}
+.app-header { text-align: center; margin-bottom: 8px; }
+.header-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+}
+.app-header h1 { margin: 0; font-size: clamp(20px, 5.6vw, 28px); letter-spacing: -0.4px; }
+.header-picker { justify-self: start; display: grid; max-width: 100%; text-align: left; gap: 4px; }
+.header-picker.language-picker { justify-self: end; }
+.header-picker span { font-size: 11px; color: #596270; font-weight: 700; }
+.header-picker select { min-height: 40px; min-width: 0; max-width: 100%; padding: 2px 4px; font-size: 14px; }
+.status { height: 36px; min-height: 36px; overflow: hidden; margin: 3px 0 0; font-size: 13px; line-height: 18px; font-weight: 650; color: #374151; }
+.settings-card, .answer-card, .keyboard-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 5px 18px rgba(17, 24, 39, 0.05);
+}
+.settings-card { padding: 10px; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+.settings-grid label { display: grid; gap: 2px; }
+.settings-grid span, .mode-picker span, .instrument-picker span { font-size: 12px; font-weight: 700; color: #6b7280; }
+.settings-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(92px, .8fr); align-items: end; gap: 10px; margin-top: 7px; }
+.mode-picker, .instrument-picker { display: grid; gap: 2px; min-width: 0; }
+.settings-actions button { min-height: 35px; }
+select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d1d5db; background: #fff; padding: 0 9px; color: #111827; }
+.controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.controls button { font-size: 13px; padding: 0 6px; }
+.answer-card { overflow: hidden; }
+.answer-text { height: 38px; padding: 3px 10px 0; line-height: 32px; font-size: 17px; font-weight: 800; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#staff { display: block; width: 100%; height: auto; }
+.keyboard-card { padding: 7px; }
+.keyboard-scroller { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.keyboard { position: relative; height: 214px; min-width: 100%; user-select: none; }
+.octave-nav { min-height: 38px; display: flex; gap: 7px; overflow-x: auto; scrollbar-width: thin; padding: 1px 0 5px; }
+.octave-nav[hidden] { display: flex; visibility: hidden; }
+.octave-jump { min-width: 58px; min-height: 32px; flex-shrink: 0; padding: 4px 9px; font-size: 13px; border: 1px solid #d1d5db; color: #374151; background: #f9fafb; border-radius: 9px; }
+.octave-jump.current { color: #1d4ed8; background: #eff6ff; border-color: #93c5fd; }
+.octave-mark { position: absolute; top: 192px; display: inline-flex; align-items: center; padding: 0 3px; height: 18px; color: #1d4ed8; font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; z-index: 4; border-left: 2px solid #60a5fa; background: #eff6ff; border-radius: 0 3px 3px 0; }
+
+.piano-key { position: absolute; top: 0; border: 1px solid #111827; border-radius: 0 0 7px 7px; padding: 0; touch-action: pan-x; user-select: none; }
+.white-key { width: 52px; height: 186px; background: #ffffff; z-index: 1; }
+.black-key { width: 32px; height: 120px; background: #111111; z-index: 2; }
+/* A blue ring marks the public reference pitch; wrong/correct fills stay legible. */
+.white-key.reference { box-shadow: inset 0 0 0 4px #2563eb; }
+.black-key.reference { box-shadow: inset 0 0 0 3px #93c5fd; }
+.white-key.correct, .white-key.active { background: #86d17c; }
+.white-key.wrong { background: #e88b8b; }
+.black-key.correct, .black-key.active { background: #4f9d48; }
+.black-key.wrong { background: #b94a4a; }
+.hint { margin: 6px 6px 0; color: #6b7280; font-size: 12px; line-height: 1.45; text-align: center; }
+#demoPointer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(17, 24, 39, 0.20);
+    border: 2px solid rgba(17, 24, 39, 0.52);
+    transform: translate(-50%, -50%) scale(0);
+    transition: left 260ms ease, top 260ms ease, transform 140ms ease, opacity 140ms ease;
+    opacity: 0;
+    z-index: 9999;
+    pointer-events: none;
+}
+#demoPointer.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#demoPointer.tap { transform: translate(-50%, -50%) scale(0.68); }
+@media (min-width: 620px) {
+    .settings-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .controls { grid-template-columns: repeat(5, 1fr); }
+    .controls button { font-size: 14px; }
+}
+
+/* Distinct simultaneous touch indicators during automated piano performance. */
+.demo-music-pointer {
+    position: fixed;
+    width: 17px;
+    height: 17px;
+    background: rgba(37, 99, 235, 0.28);
+    border: 2px solid rgba(37, 99, 235, 0.64);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9998;
+    opacity: 0;
+    pointer-events: none;
+}
+.demo-music-pointer.visible { opacity: 1; }
+
+/* Demo uses the regular keyboard and stable staff dimensions. */
+.app-shell.demo-running .settings-card,
+.app-shell.demo-running .controls,
+.app-shell.demo-running .octave-nav,
+.app-shell.demo-running .keyboard,
+.app-shell.demo-running .header-picker {
+    pointer-events: none;
+}
+.app-shell.demo-running #demoButton {
+    pointer-events: auto;
+}
+
+@media (max-width: 619px) {
+    .controls button { min-height: 40px; }
+    .hint { display: none; }
+}
+@media (max-height: 730px) and (max-width: 619px) {
+    .keyboard { height: 194px; }
+    .white-key { height: 170px; }
+    .black-key { height: 109px; }
+    .octave-mark { top: 175px; }
+}
+
+@media (max-height: 700px) and (max-width: 619px) {
+    .app-shell { padding-top: max(6px, env(safe-area-inset-top)); }
+    .app-header { margin-bottom: 4px; }
+    .settings-card { padding: 7px; }
+    .settings-grid { gap: 4px 8px; }
+    .settings-grid label { gap: 1px; }
+    select { min-height: 31px; }
+    .settings-card .full-width { min-height: 34px; }
+    .controls { margin: 5px 0; }
+    .controls button { min-height: 36px; }
+    .answer-text { height: 32px; line-height: 28px; }
+    .octave-nav { min-height: 32px; }
+    .keyboard { height: 171px; }
+    .white-key { height: 150px; }
+    .black-key { height: 96px; }
+    .octave-mark { top: 152px; }
+}
+
+/* Schematic, chromatic violin fingerboard. Numbers are semitone offsets from each open string,
+   not physical finger numbers or fret locations (violin has no frets). */
+.keyboard.violin-board { height: 174px; min-width: 0; background: linear-gradient(90deg, #fbfaf7, #f2ede3); border-radius: 10px; }
+.violin-string-line { position: absolute; left: 39px; right: 3px; height: 2px; background: #b5a48e; pointer-events: none; }
+.violin-string-label { position: absolute; left: 3px; width: 37px; height: 26px; z-index: 3; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #6b4930; background: #fffaf1; border-radius: 6px; border: 1px solid #d8cbb8; pointer-events: none; }
+.violin-note { position: absolute; height: 34px; width: 42px; border-radius: 9px; border: 1px solid #c2b4a1; background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0; color: #24292f; touch-action: pan-x; box-shadow: 0 1px 3px #574b3833; }
+.violin-note.open-string { background: #f4e8ce; border-color: #b9a57d; }
+.violin-note.out-of-range { opacity: .43; }
+.violin-touch-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #9b8e7c; pointer-events: none; }
+.violin-note.correct .violin-touch-dot, .violin-note.active .violin-touch-dot, .violin-note.wrong .violin-touch-dot { background: #374151; }
+.violin-note.reference { outline: 3px solid #2563eb; outline-offset: -3px; }
+.violin-note.correct, .violin-note.active { background: #86d17c; opacity: 1; }
+.violin-note.wrong { background: #e88b8b; opacity: 1; }
+@media (max-height: 730px) and (max-width: 619px) { .keyboard.violin-board { height: 174px; } }
+@media (max-height: 700px) and (max-width: 619px) { .keyboard.violin-board { height: 174px; } }
+
+#instrumentSelect[hidden] { display: none !important; }
+
+/* Two-note-only controls stay on a separate row, readable at 360px width. */
+.interval-settings { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 7px; }
+.interval-settings[hidden] { display: none; }
+.interval-picker { display: grid; gap: 2px; min-width: 0; align-content: end; }
+.settings-grid span, .interval-picker span { font-size: 12px; font-weight: 700; color: #6b7280; }
+.interval-picker span { line-height: 1.15; }
+.interval-picker select { min-width: 0; padding-left: 5px; padding-right: 3px; }
+
+/* Extra assessment UI never affects legacy single/two-note layouts. */
+.ap-settings { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.ap-settings[hidden], .ap-answer-panel[hidden], .ap-review[hidden] { display: none; }
+.ap-picker { display: grid; gap: 2px; min-width: 0; }
+.ap-picker span { font-size: 12px; font-weight: 700; line-height: 1.2; color: #6b7280; }
+.ap-description { grid-column: 1 / -1; margin: 0; font-size: 11px; color: #6b7280; line-height: 1.4; }
+.ap-answer-panel { margin: 7px 0; padding: 8px; border: 1px solid #e5e7eb; border-radius: 14px; background: white; }
+.ap-answer-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ap-note-button { padding: 0 2px; min-width: 0; min-height: 48px; font-size: 12px; overflow-wrap: anywhere; }
+.app-shell.ap-mode .keyboard-card, .app-shell.ap-mode .answer-card { display: none; }
+.app-shell.ap-complete .ap-answer-buttons { display: none; }
+.ap-review { padding: 7px 2px 0; font-size: 12px; line-height: 1.6; }
+.ap-review h3 { margin: 0 0 4px; font-size: 14px; }
+.ap-review ol { margin: 0; padding-left: 28px; }
+.app-shell.demo-running .ap-answer-panel { pointer-events: none; }
+
+/* New AP learning/cold-check UI; other modes retain their original layout. */
+.ap-configuration { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:7px; }
+.ap-configuration[hidden], .ap-course-info[hidden], .ap-opt[hidden], .ap-note-button[hidden] { display:none!important; }
+.ap-course-info { grid-column:1/-1; display:grid; gap:5px; background:#f1f5f9; padding:8px; border-radius:10px; }
+.ap-course-info p { margin:0; font-size:12px; line-height:1.5; }
+.ap-opt { display:flex; align-items:flex-start; gap:7px; font-size:12px; line-height:1.5; }
+.ap-opt input { margin-top:2px; flex-shrink:0; }
+.ap-history-panel { margin:7px 0; padding:8px; border:1px solid #e5e7eb; background:#fff; border-radius:12px; font-size:12px; }
+.ap-history-panel summary { font-weight:700; cursor:pointer; }
+.ap-history-panel p { margin:4px 0; }
+.ap-history-panel button { margin-top:6px; }
+
+.tracker-strip{margin:5px 0;padding:6px 10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:11px;line-height:1.5}
+.tracker-strip p{margin:2px 0}
+.tracker-config summary{cursor:pointer;color:#374151;font-size:11px}
+.tracker-config label{display:grid;gap:3px;margin:5px 0}
+.tracker-config input{width:100%;min-width:0;box-sizing:border-box;padding:7px;font-size:12px}
+.tracker-buttons{display:flex;gap:5px;flex-wrap:wrap}
+.tracker-buttons button{font-size:11px;min-height:32px}
+
+.tracker-history{margin-top:7px;padding-top:5px;border-top:1px solid #e5e7eb;font-size:11px;color:#475569}
+
+/* v2.2.8: Mobile listening-only interface; the staff and clef are not displayed. */
+.legacy-clef-control[hidden], #staff[hidden] { display: none !important; }
+.settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 7px; }
+@media (min-width:620px) { .settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.answer-card { display: flex; align-items: center; min-height: 43px; padding: 0 5px; }
+.answer-text { flex: 1 1 auto; min-width: 0; }
+.interval-replay-button { flex: 0 0 auto; min-height: 30px; padding: 0 9px; margin-right: 3px; font-size: 12px; }
+.interval-replay-button[hidden] { display: none !important; }
+
+
+/* vNext: Systematic relative-pitch course — compact on phones, independent from Two notes. */
+.rp-panel { margin: 7px 0; padding: 9px; border:1px solid #d8e0ec; background:#fff; border-radius:14px; }
+.rp-panel[hidden], .rp-answer-grid[hidden], .rp-reference[hidden],.rp-results[hidden] { display:none!important; }
+.rp-config {display:grid;grid-template-columns: .85fr 1.25fr .85fr;gap:6px;}
+.rp-config label {min-width:0;display:grid;gap:2px;}
+.rp-config span {font-size:11px;color:#475569;font-weight:700;}
+.rp-config select {padding:1px 3px;min-height:36px;font-size:12px;}
+.rp-examples {margin:8px 0 5px;font-size:12px;}
+.rp-examples summary {font-weight:700;color:#334155;cursor:pointer;}
+.rp-sample-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding-top:6px;}
+.rp-sample {font-size:11px;min-height:34px;padding:3px;}
+.rp-progress {padding:6px 2px 4px;display:flex;gap:8px;align-items:center;font-size:13px;line-height:1.4;}
+.rp-progress strong {font-variant-numeric:tabular-nums;color:#1e40af;white-space:nowrap;}
+.rp-reference {font-size:13px;font-weight:800;background:#eff6ff;color:#1e40af;padding:6px 10px;border-radius:8px;}
+.rp-answer-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:7px 0;}
+.rp-choice {padding:6px 2px;font-size:13px;min-height:45px;}
+.rp-answer-grid:has(> :nth-child(16)) {grid-template-columns:repeat(4,minmax(0,1fr));}
+.rp-note-filter {margin:8px 0;}
+.rp-note-filter summary {cursor:pointer;font-weight:600;font-size:14px;}
+.rp-note-filter .af-notes {margin:8px 0;}
+.rp-note-filter button[aria-pressed="true"] {background:#174b63;color:#fff;}
+.rp-choice.rp-picked {background:#dbeafe;border-color:#60a5fa;}
+.rp-audio-controls {display:flex;gap:5px;flex-wrap:wrap;}
+.rp-audio-controls button {font-size:11px;min-height:33px;padding:2px 7px;flex:1;}
+.rp-audio-controls button[hidden]{display:none;}
+.rp-results {font-size:12px;line-height:1.45;padding:6px;background:#f8fafc;border-radius:8px;max-height:140px;overflow-y:auto;}
+.rp-results p {margin:3px 0;}
+.rp-history{margin-top:7px;font-size:12px;}.rp-history summary {color:#334155;font-weight:700;cursor:pointer;}
+.rp-history p{margin:5px 0;}.rp-history button{min-height:32px;font-size:11px;}
+.rp-caption{font-size:11px;color:#64748b;margin:7px 0 0;}
+.app-shell.rp-mode .settings-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+.app-shell.rp-mode .settings-grid label:has(#keySelect) {display:none;}
+.app-shell.rp-naming .keyboard-card,.app-shell.rp-naming .answer-card {display:none;}
+.app-shell.rp-mode .ap-history-panel {display:none;}
+.app-shell.board-test .settings-card, .app-shell.board-test .tracker-strip, .app-shell.board-test .ap-history-panel {display:none;}
+.app-shell.board-test.rp-position .rp-config {display:none;}
+.app-shell.board-test .rp-examples {display:none;}
+.reference-chip {font-size:11px;line-height:1.25;flex:0 1 auto;max-width:38%;color:#1d4ed8;background:#eff6ff;border-radius:7px;padding:5px;white-space:normal;font-weight:800;}
+.reference-chip[hidden]{display:none;}
+.ap-study-panel {padding:7px;background:#fff;border-radius:9px;border:1px solid #cbd5e1;}
+.ap-study-panel[hidden]{display:none!important;}
+.ap-study-title {font-size:13px!important;font-weight:800!important;}
+.ap-study-subtitle {font-size:11px!important;color:#475569;}
+.ap-study-cards {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:7px 0;}
+.ap-study-note {font-size:12px;min-height:36px;padding:3px;overflow-wrap:anywhere;}
+.ap-study-note.due {background:#eff6ff;border-color:#93c5fd;}
+.ap-repeat-note{margin-top:7px;min-height:34px;font-size:12px;width:100%;}
+.ap-repeat-note[hidden]{display:none!important;}
+@media (max-width:390px){.rp-panel{padding:6px}.rp-config{gap:4px}.rp-choice{font-size:12px}.rp-sample-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+
+
+/* v2.2.9: all 4 violin strings vertical, 13 offsets visible, no horizontal paging. */
+.keyboard.violin-board {position:relative;min-width:0!important;width:100%!important;background:linear-gradient(90deg,#fffaf1,#f5f0e7);border:1px solid #dfd4c1;border-radius:10px;}
+.keyboard.violin-board .violin-string-line {position:absolute;right:auto;width:2px;height:auto;background:linear-gradient(180deg,#b9a992,#7f766a);z-index:0;}
+.keyboard.violin-board .violin-string-label {position:absolute;height:25px;display:grid;place-items:center;font-size:12px;pointer-events:none;}
+.keyboard.violin-board .violin-note {position:absolute;min-width:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation;padding:0;z-index:1;box-shadow:0 1px 2px #574b382b;border-radius:7px;}
+.keyboard.violin-board .violin-touch-dot {width:6px;height:6px;}
+.keyboard.violin-board .violin-note.reference {outline:3px solid #1d4ed8;outline-offset:-3px;background:#dbeafe;}
+.keyboard.violin-board .violin-note.out-of-range {opacity:.35;}
+.violin-step-label {position:absolute;left:2px;width:20px;text-align:center;font-size:10px;color:#78716c;font-weight:700;pointer-events:none;}
+.keyboard-card:has(.violin-board) .keyboard-scroller{overflow-x:hidden;overflow-y:visible;}
+@media (max-width:390px){.keyboard-card:has(.violin-board){padding:5px;}}
+
+/* Training focus: controls stay reachable; no staff or target-dependent layout. */
+[hidden] { display:none!important; }
+.app-header small { font-size:10px; color:#64748b; font-weight:500; }
+#storageWarning { color:#991b1b; background:#fee2e2; padding:8px; }
+.training-round .settings-card, .training-round .tracker-strip,
+.training-round .ap-history-panel, .training-round .rp-config,
+.training-round .rp-timbre, .training-round #rpExamples,
+.training-round .rp-history, .training-round #rpIntro { display:none; }
+.training-round .controls { grid-template-columns:1fr 1fr; position:sticky; top:0; z-index:6; background:#f4f5f7; padding:4px 0; }
+.training-round #demoButton { display:none; }
+.controls { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.controls button, .rp-audio-controls button, .ap-repeat-note, .rp-sample { min-height:44px; }
+.status { height:auto; min-height:36px; }
+.rp-timbre { display:flex; align-items:center; gap:8px; font-size:12px; margin-top:5px; }
+.rp-timbre select { flex:1; }
+.rp-progress { min-height:50px; }
+.ap-answer-buttons { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.ap-note-button { min-height:50px; }
+.rp-position .rp-reference { position:sticky; top:55px; z-index:5; }
+.answer-card:has(#referenceChip:not([hidden])) { position:sticky; top:55px; z-index:5; }
+#staff { display:none!important; }
+.training-round .app-header .status { display:none; }
+.training-round .app-header h1 { font-size:16px; }
+.training-round .app-header { margin-bottom:2px; }
+.training-round .answer-text { height:30px; line-height:26px; font-size:14px; }
+.training-round .answer-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; }
+.training-round .answer-card .answer-text { width:100%; }
+.training-round .answer-card #intervalReplayButton { min-height:36px; margin:2px; }
+.training-round.rp-position .answer-card { display:none; }
+.training-round.rp-position .rp-progress { min-height:36px; }
+.training-round.rp-position #rpReference { padding:3px 8px; }
+.training-round.rp-position .rp-audio-controls button { min-height:36px; }
+.keyboard.violin-board .violin-note { min-height:0; }
+
+/* v20.0 / v2.4.0: one visible prompt per mode, one tap per question, no scrolling in a round. */
+.app-header small { font-variant-numeric: tabular-nums; }
+.update-button { display:block; margin:4px auto 0; min-height:32px; padding:0 12px; font-size:12px; color:#1d4ed8; border-color:#93c5fd; background:#eff6ff; }
+.update-button[hidden], .training-round .update-button, .demo-running .update-button { display:none; }
+.option-row { grid-column:1/-1; display:flex; align-items:flex-start; gap:8px; font-size:12px; line-height:1.4; color:#374151; }
+.option-row input { width:18px; height:18px; margin:0; flex-shrink:0; }
+.training-round .header-top { display:none; }
+.training-round .app-header { margin-bottom:2px; }
+.training-round .app-header .status { display:block; height:auto; min-height:0; margin:0; font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* AP and RP rounds show their own prompt and feedback beside the answers. */
+.training-round.ap-mode .app-header, .training-round.rp-mode .app-header { display:none; }
+.training-round.ap-mode .controls { position:static; }
+.ap-message { margin:0 0 8px; min-height:38px; font-size:14px; line-height:19px; font-weight:700; color:#1f2937; }
+.ap-complete .ap-message { min-height:0; }
+.ap-note-button.ap-picked { background:#dbeafe; border-color:#60a5fa; }
+.ap-note-button.ap-right, .rp-choice.rp-right { background:#bbf7d0; border-color:#16a34a; }
+.ap-note-button.ap-wrong, .rp-choice.rp-wrong { background:#fecaca; border-color:#dc2626; }
+.ap-note-button.ap-picked:disabled, .ap-note-button.ap-right:disabled, .ap-note-button.ap-wrong:disabled,
+.rp-choice.rp-picked:disabled, .rp-choice.rp-right:disabled, .rp-choice.rp-wrong:disabled { opacity:1; }
+.ap-study-octaves { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px; font-size:11px; font-weight:700; color:#475569; }
+.ap-study-octave { min-height:32px; padding:0 9px; font-size:12px; }
+.ap-study-octave.current { color:#1d4ed8; background:#eff6ff; border-color:#93c5fd; }
+.ap-study-note.fresh { background:#fffbeb; border-color:#f59e0b; }
+.rp-produce { display:grid; gap:7px; margin:7px 0; }
+.rp-produce[hidden], .rp-produce-rate[hidden] { display:none!important; }
+.rp-produce-prompt { margin:0; padding:8px 10px; font-size:15px; line-height:1.35; font-weight:800; color:#1e3a8a; background:#eff6ff; border-radius:8px; }
+.rp-produce-rate { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.rp-produce button { min-height:48px; }
+.rp-mic { margin-top:6px; }
+.rp-focus { font-weight:700; color:#334155; }
+/* Board rounds: prompt, reference chip and Replay share one row above the board. */
+.training-round .answer-card { flex-wrap:nowrap; min-height:40px; }
+.training-round .answer-card .answer-text { width:auto; flex:1 1 auto; font-size:13px; }
+.training-round .reference-chip { max-width:46%; }
+.ap-configuration { grid-column:1/-1; grid-template-columns:repeat(auto-fit,minmax(92px,1fr)); align-items:end; }
+.ap-configuration .ap-picker[hidden] { display:none; }
+/* Idle: Play stays reachable at the bottom edge even when the settings are taller than the screen. */
+.app-shell:not(.training-round) .controls { position:sticky; bottom:0; z-index:5; margin:2px 0; padding:6px 0 calc(6px + env(safe-area-inset-bottom, 0px)); background:#f4f5f7; }
+.training-round .answer-card .answer-text { height:auto; max-height:32px; line-height:16px; white-space:normal; text-align:left; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+/* RP locate: counter, reference and Replay share the space above the board; nothing moves after a tap. */
+.training-round.rp-position .rp-panel { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; align-items:center; padding:5px 9px; }
+.training-round.rp-position .rp-progress { grid-column:1/-1; min-height:0; padding:0; font-size:12px; }
+.training-round.rp-position .rp-progress span { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.training-round.rp-position #rpReference { position:static; margin:0; padding:6px 8px; }
+.training-round.rp-position .rp-audio-controls { flex-wrap:nowrap; }
+.training-round.rp-position .rp-audio-controls button { flex:0 0 auto; min-height:36px; }
+.training-round.rp-position .answer-card { display:none; }
+.training-round .interval-replay-button { min-height:40px; min-width:48px; }
