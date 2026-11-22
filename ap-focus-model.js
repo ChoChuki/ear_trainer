@@ -2,7 +2,8 @@
 (function (root) {
     'use strict';
     const protocol = 7;
-    const sourceVersion = 'iowa-prototype-1';
+    const sourceVersion = 'jclive-sf2-v1';
+    const legacySourceVersion = 'iowa-prototype-1';
     const notes = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
     const order = root.APPitchScience.ORDER;
     const validSet = a => Array.isArray(a) && a.length > 0 && a.length <= 12 &&
@@ -10,7 +11,10 @@
     const sameSet = (a,b) => validSet(a) && a.length === b.length && b.every(n => a.includes(n));
     const otherInstrument = instrument => instrument === 'violin' ? 'piano' : 'violin';
     const label = midi => notes[midi % 12] + (Math.floor(midi / 12) - 1);
-    const isFocus = row => row?.protocol === protocol && row.sourceVersion === sourceVersion;
+    const isFocus = row => row?.protocol === protocol && [sourceVersion, legacySourceVersion].includes(row.sourceVersion);
+    function sampleId(instrument, pitch, version = sourceVersion) {
+        return version === legacySourceVersion ? instrument + '-' + pitch + '-1' : 'jclive-' + instrument + '-' + pitch;
+    }
     const scored = row => row.result === 'answered' || row.result === 'assisted';
     const first = row => row.result === 'answered' && row.replayed === 0;
     const isTarget = row => row.known.includes(row.pitch % 12);
@@ -95,5 +99,5 @@
             method: 'context-estimate'};
     }
     root.APFocusModel = {protocol,sourceVersion,notes,order,label,validSet,sameSet,defaults,validSettings,otherInstrument,
-        isFocus,scored,first,correct,isTarget,pickMidi,plan,counts,promotion,outputClock};
+        isFocus,sampleId,scored,first,correct,isTarget,pickMidi,plan,counts,promotion,outputClock};
 })(typeof window === 'undefined' ? globalThis : window);

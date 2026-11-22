@@ -1,22 +1,8 @@
-/* A bank holds twelve complete MP3s. Decode the original note on demand. */
+/* Focused trials use the host's instrument player, with optional noise and an onset timestamp. */
 (function (root) {
     'use strict';
-    function create(context) {
-        const cache = new Map();
+    function create(context, loadInstrumentPreset = root.loadInstrumentPreset, queueInstrumentNote = root.queueInstrumentNote) {
         let source = null, noiseSource = null, noiseBuffer = null, generation = 0;
-        function load(key, read) {
-            if (!cache.has(key)) cache.set(key, read().catch(error => { cache.delete(key); throw error; }));
-            return cache.get(key);
-        }
-        async function fetchAsset(name, json = false) {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 15000);
-            try {
-                const response = await fetch('./ap-audio/' + name, {signal:controller.signal});
-                if (!response.ok) throw Error('Audio download failed');
-                return await (json ? response.json() : response.arrayBuffer());
-            } finally {clearTimeout(timer);}
-        }
         function stop() {
             generation++;
             if (source) {try {source.stop();} catch (_) {} source = null;}
@@ -44,27 +30,21 @@
         async function play(instrument, midi, mask = false) {
             stop();
             const token = generation;
-            if (context.state !== 'running') await context.resume();
-            const id = instrument + '-' + midi + '-1';
-            const buffer = await load(id, async () => {
-                const index = await load('index', () => fetchAsset('sources.json', true));
-                const meta = index.samples.find(s => s.id === id);
-                if (index.version !== APFocusModel.sourceVersion || !meta) throw Error('Missing recording');
-                const bytes = await load(meta.bank, () => fetchAsset(meta.bank));
-                if (bytes.byteLength < meta.offset + meta.bytes) throw Error('Incomplete audio bank');
-                return context.decodeAudioData(bytes.slice(meta.offset, meta.offset + meta.bytes));
-            });
+            // Start resume within the tap handler, including on the first visit in Safari.
+            await Promise.all([context.state === 'running' ? undefined : context.resume(), loadInstrumentPreset(instrument)]);
             if (token !== generation || document.hidden || context.state !== 'running') throw Error('Playback interrupted');
-            const node = context.createBufferSource();
-            node.buffer = buffer;
-            node.connect(context.destination);
-            node.onended = () => {node.disconnect(); if (source === node) source = null;};
             const ready = context.currentTime + .04;
-            const at = mask ? playNoise(ready) : ready;
-            const clock = APFocusModel.outputClock(context, at);
-            node.start(at);
-            source = node;
-            return {...clock, id};
+            try {
+                const at = mask ? playNoise(ready) : ready;
+                const voice = queueInstrumentNote(instrument, midi, at);
+                const node = voice.audioBufferSourceNode;
+                source = node;
+                node.onended = () => {if (source === node) source = null;};
+                return {...APFocusModel.outputClock(context, voice.when), id: APFocusModel.sampleId(instrument, midi)};
+            } catch (error) {
+                stop();
+                throw error;
+            }
         }
         return {play, stop};
     }

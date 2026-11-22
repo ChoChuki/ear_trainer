@@ -1,4 +1,4 @@
-const APP_VERSION = "2.6.0";
+const APP_VERSION = "2.6.1";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -208,8 +208,8 @@ const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioContextClass();
 const player = typeof WebAudioFontPlayer === "function" ? new WebAudioFontPlayer() : null;
 
-const presetFile = instrumentMode === "violin" ? "0400_JCLive_sf2_file" : "0000_JCLive_sf2_file";
-const presetName = "_tone_" + presetFile;
+const presetFiles = { violin: "0400_JCLive_sf2_file", piano: "0000_JCLive_sf2_file" };
+const presetLoads = new Map();
 // Mean rendered pitch of each sample zone in cents against A4 = 440 Hz equal temperament,
 // measured in Chromium (frame-wise over one second; the samples carry roughly ±11 cents of
 // vibrato). Before the correction A4 sounded about 11 cents flat and neighbouring zones
@@ -218,12 +218,12 @@ const presetName = "_tone_" + presetFile;
 const VIOLIN_ZONE_CENTS = [[21,58,-4.0],[59,62,0.5],[63,66,-6.2],[67,67,-11.4],[68,70,-11.4],[71,71,-7.8],
     [72,74,-7.8],[75,78,-3.6],[79,79,3.0],[80,82,3.0],[83,86,-5.5],[87,87,2.0],[88,90,2.0]];
 let violinTuned = null;
-function demoPreset() {
-    return window[presetName];
+function demoPreset(instrument = instrumentMode) {
+    return window["_tone_" + presetFiles[instrument]];
 }
-function selectedPreset() {
-    const original = demoPreset();
-    if (instrumentMode === "piano" || !original) return original;
+function selectedPreset(instrument = instrumentMode) {
+    const original = demoPreset(instrument);
+    if (instrument === "piano" || !original) return original;
     if (!violinTuned) {
         // Shallow copies share the decoded buffers; only the fine tuning differs.
         violinTuned = {...original, zones: original.zones.map((zone) => {
@@ -233,18 +233,37 @@ function selectedPreset() {
     }
     return violinTuned;
 }
-async function loadInstrumentPreset() {
-    if (!window[presetName]) {
+async function decodeInstrument(instrument) {
+    const file = presetFiles[instrument];
+    if (!file || !player) throw new Error("Instrument unavailable");
+    if (!demoPreset(instrument)) {
         await new Promise((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = "./vendor/" + presetFile + ".js";
+            script.src = "./vendor/" + file + ".js";
             script.onload = resolve;
-            script.onerror = () => reject(new Error("Instrument sample download failed"));
+            script.onerror = () => {
+                script.remove();
+                reject(new Error("Instrument sample download failed"));
+            };
             document.head.appendChild(script);
         });
     }
-    if (!window[presetName]) throw new Error("Instrument preset missing");
-    await TrainingCore.decodePreset(player, audioContext, presetName);
+    if (!demoPreset(instrument)) throw new Error("Instrument preset missing");
+    await TrainingCore.decodePreset(player, audioContext, "_tone_" + file);
+}
+function loadInstrumentPreset(instrument = instrumentMode) {
+    if (!presetLoads.has(instrument)) {
+        presetLoads.set(instrument, decodeInstrument(instrument).catch(error => {
+            presetLoads.delete(instrument);
+            throw error;
+        }));
+    }
+    return presetLoads.get(instrument);
+}
+function queueInstrumentNote(instrument, midi, at, duration = PLAY_DURATION, volume = 0.75) {
+    const voice = player.queueWaveTable(audioContext, audioContext.destination, selectedPreset(instrument), at, midi, duration, volume);
+    if (!voice) throw new Error("Audio unavailable");
+    return voice;
 }
 
 function resolveInitialLanguage() {
@@ -934,8 +953,8 @@ async function playQuestion() {
     player.cancelQueue(audioContext);TrainingCore.cancelAudio();
     const start=audioContext.currentTime+.05;
     const pair=testMode==='interval' && reference!==null;
-    if(pair) player.queueWaveTable(audioContext,audioContext.destination,selectedPreset(),start,reference,.6,.75);
-    if(!player.queueWaveTable(audioContext,audioContext.destination,selectedPreset(),start+(pair?.8:0),target,.7,.75)) throw new Error('Audio unavailable');
+    if (pair) queueInstrumentNote(instrumentMode, reference, start, .6);
+    queueInstrumentNote(instrumentMode, target, start + (pair ? .8 : 0));
     const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
     legacyAudioReady=await TrainingCore.waitForAudio(audioContext,start+(pair?1.5:.7)+latency,()=>serial===questionSerial&&testActive&&!document.hidden);
 }
@@ -949,15 +968,7 @@ async function playTone(midi) {
     await ensureAudio();
     player.cancelQueue(audioContext); TrainingCore.cancelAudio();
 
-    player.queueWaveTable(
-        audioContext,
-        audioContext.destination,
-        selectedPreset(),
-        0,
-        midi,
-        PLAY_DURATION,
-        0.75
-    );
+    queueInstrumentNote(instrumentMode, midi, 0);
 }
 
 // Protocol 4: learning gives labelled feedback; independent checks reveal
@@ -1373,7 +1384,7 @@ async function playApLearningFeedback(pitch, correct = false) {
     const start = audioContext.currentTime + 0.04;
     // The labelled answer sounds exactly like the question that was just heard.
     if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, start, pitch, 0.7);
-    else player.queueWaveTable(audioContext, audioContext.destination, selectedPreset(), start, pitch, 0.7, 0.7);
+    else queueInstrumentNote(instrumentMode, pitch, start, PLAY_DURATION, 0.7);
     // One correct pitch only: no additional octave playback after answering.
     const waitMs = 840;
     apFeedbackTimer = window.setTimeout(() => {
@@ -1395,8 +1406,7 @@ async function playApPitch(midi, serial, withMask = true) {
     const startAt = withMask && apSession.masked
         ? TrainingCore.maskTone(audioContext, scheduledAt, AP_MASK_SECONDS) + AP_MASK_GAP : scheduledAt;
     if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, startAt, midi, PLAY_DURATION);
-    else if (!player.queueWaveTable(audioContext, audioContext.destination,
-        selectedPreset(), startAt, midi, PLAY_DURATION, 0.75)) throw new Error("Audio unavailable");
+    else queueInstrumentNote(instrumentMode, midi, startAt);
     // Browser APIs cannot observe the exact acoustic onset of a Bluetooth headset;
     // this is a scheduling + output-latency estimate, recorded explicitly as such.
     apAudioLatencyMs = 50 + 1000 * ((audioContext.outputLatency || 0) + (audioContext.baseLatency || 0));
@@ -2240,6 +2250,7 @@ initializeAudio();
 registerServiceWorker();
 APFocus.init({
     site: AP_APP_ID, context: audioContext, language: () => currentLanguage, text: t,
+    loadInstrumentPreset, queueInstrumentNote,
     onEnter() {
         if (demoRunning) cancelDemo();
         if (testActive || (apSession && !apSession.finished)) stopTest();

@@ -195,9 +195,8 @@
   $('rpStats').textContent=recent.length?recent.map(r=>`${new Date(r.at).toLocaleDateString(lang())} · ${tx(r.activity)} · ${tx(r.timbre)} · ${tx(r.direction)} · ${r.correct}/${r.total}`).join(' | '):tx('noData');
  }
  function tone(m,start,duration){
-  const preset=typeof selectedPreset === 'function'?selectedPreset():pianoPreset;
   if(session&&!session.finished&&session.timbre==='neutral')TrainingCore.neutralTone(audioContext,start,m,duration);
-  else if(!player.queueWaveTable(audioContext,audioContext.destination,preset,start,m,duration,.75))throw new Error('Audio unavailable');
+  else queueInstrumentNote(instrumentMode,m,start,duration);
  }
  async function playPair(ref,target,prelude=null){
   if(!ready)return false;

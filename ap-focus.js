@@ -136,7 +136,7 @@
             S.markPractice(host.site); TrainingTracker.activity('ap-learning');
             $('Notice').textContent = tr(instrument) + ' · ' + M.label(pitch);
             if (phase === 'home') renderModes();
-        } catch (_) {if (token === audioToken) $('Notice').textContent = tr('audioError');}
+        } catch (_) {if (token === audioToken) $('Notice').textContent = tr('exampleAudioError');}
     }
     function renderModes() {
         const fresh = !hasPastTraining && S.lastPracticeAt(host.site) === null;
@@ -221,10 +221,10 @@
         const tone = session.plan[session.rows.length];
         const prev = TrainingCore.lastQuestion(host.site)?.target ?? null;
         const pitch = M.pickMidi(tone.pc,prev);
-        trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,qualityStatus:'prototype-automated-qc',source:host.site,
+        trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
             kind:session.mode,timbre:tone.instrument,level:settings.known.length,known:[...settings.known],pitch,
-            sampleId:tone.instrument + '-' + pitch + '-1',day:S.day(),previousPitch:prev,guess:null,correct:false,
+            sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
             eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false};
         playQuestion(false);
@@ -410,11 +410,11 @@
             Number.isInteger(s.attempted) && Number.isInteger(s.planned) && s.attempted <= s.planned) &&
             data.trials.every(r => {
                 const block = byId.get(r.sessionId);
-                const match = block ? r.kind === block.kind && M.sameSet(r.known,block.known) :
+                const match = block ? r.kind === block.kind && r.sourceVersion === block.sourceVersion && M.sameSet(r.known,block.known) :
                     ['interrupted','assisted'].includes(r.result);
                 return base(r) && match && Number.isInteger(r.ordinal) && r.ordinal >= 1 && r.ordinal <= 60 &&
                     r.id === r.sessionId + '-' + r.ordinal && Number.isInteger(r.pitch) && r.pitch >= 60 && r.pitch <= 95 &&
-                    ['piano','violin'].includes(r.timbre) && r.sampleId === r.timbre + '-' + r.pitch + '-1' &&
+                    ['piano','violin'].includes(r.timbre) && r.sampleId === M.sampleId(r.timbre,r.pitch,r.sourceVersion) &&
                     ['answered','assisted','interrupted','audio-error'].includes(r.result) && Number.isInteger(r.replayed) && r.replayed >= 0 &&
                     (r.result !== 'answered' || r.known.includes(r.guess) || r.guess === 'unsure' || r.guess === 'out');
             });
@@ -437,7 +437,7 @@
         } catch (_) {if (visible) $('Notice').textContent = tr('importBad');}
     }
     function init(options) {
-        host = options; sound = APFocusAudio.create(host.context); initialized = true;
+        host = options; sound = APFocusAudio.create(host.context,host.loadInstrumentPreset,host.queueInstrumentNote); initialized = true;
         $('Add').onclick = () => {if (evidence?.ready) introduce(evidence.next);};
         $('Second').onclick = () => {
             guideInstrument = M.otherInstrument(host.site); $('Guide').open = true; $('Settings').open = true;
