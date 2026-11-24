@@ -1,31 +1,12 @@
-/* Focused trials use the host's instrument player, with optional noise and an onset timestamp. */
+/* Focused trials use the host's instrument and interference players. */
 (function (root) {
     'use strict';
     function create(context, loadInstrumentPreset = root.loadInstrumentPreset, queueInstrumentNote = root.queueInstrumentNote) {
-        let source = null, noiseSource = null, noiseBuffer = null, generation = 0;
+        let source = null, generation = 0;
         function stop() {
             generation++;
             if (source) {try {source.stop();} catch (_) {} source = null;}
-            if (noiseSource) {try {noiseSource.stop();} catch (_) {} noiseSource = null;}
-        }
-        function playNoise(at) {
-            if (!noiseBuffer) {
-                const length = Math.round(context.sampleRate * .25);
-                noiseBuffer = context.createBuffer(1, length, context.sampleRate);
-                const samples = noiseBuffer.getChannelData(0);
-                const ramp = Math.max(1, Math.round(context.sampleRate * .012));
-                for (let i = 0; i < length; i++) {
-                    const envelope = Math.min(1, i / ramp, (length - 1 - i) / ramp);
-                    samples[i] = (2 * Math.random() - 1) * .07 * envelope;
-                }
-            }
-            const noise = context.createBufferSource();
-            noise.buffer = noiseBuffer;
-            noise.connect(context.destination);
-            noise.onended = () => {noise.disconnect(); if (noiseSource === noise) noiseSource = null;};
-            noise.start(at);
-            noiseSource = noise;
-            return at + noiseBuffer.duration + .06;
+            TrainingCore.cancelAudio();
         }
         async function play(instrument, midi, mask = false) {
             stop();
@@ -35,7 +16,7 @@
             if (token !== generation || document.hidden || context.state !== 'running') throw Error('Playback interrupted');
             const ready = context.currentTime + .04;
             try {
-                const at = mask ? playNoise(ready) : ready;
+                const at = mask ? TrainingCore.maskTone(context, ready, 1) + .25 + Math.random() * .4 : ready;
                 const voice = queueInstrumentNote(instrument, midi, at);
                 const node = voice.audioBufferSourceNode;
                 source = node;

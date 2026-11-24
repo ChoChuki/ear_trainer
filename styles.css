@@ -214,6 +214,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .ap-history-panel button { margin-top:6px; }
 
 .tracker-strip{margin:5px 0;padding:6px 10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:11px;line-height:1.5}
+.daily-goal-notice {position:sticky;top:env(safe-area-inset-top,0px);z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:680px;margin:0 auto 8px;padding:10px 14px;background:#143e4d;color:#fff;border-radius:10px;font-size:1rem;box-shadow:0 2px 10px #143e4d30;}
+.daily-goal-notice[hidden] {display:none;}
+.daily-goal-notice button {flex:none;min-height:40px;color:#143e4d;background:#fff;}
 .tracker-strip p{margin:2px 0}
 .tracker-config summary{cursor:pointer;color:#374151;font-size:11px}
 .tracker-config label{display:grid;gap:3px;margin:5px 0}

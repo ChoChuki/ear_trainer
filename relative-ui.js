@@ -271,7 +271,7 @@
   if(session.records.length===session.total){finish();return;}
   const ordinal=session.records.length, previous=TrainingCore.lastQuestion(AP_APP_ID);
   let q=session.questions[ordinal];
-  if(adaptive(session.activity) || q.target===previous?.target ||
+  if(adaptive(session.activity) || TrainingCore.sameNoteName(q.target,previous?.target) ||
      (Number.isInteger(previous?.reference) && q.distance===Math.abs(previous.target-previous.reference))){
    const repair=adaptive(session.activity)?TrainingCore.takeRepair(session.repairs,ordinal):null;
    q=C.question({...session,previous,memory:state.memory,repair});

@@ -1,4 +1,4 @@
-const APP_VERSION = "2.6.1";
+const APP_VERSION = "2.7.0";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -1480,7 +1480,14 @@ function startApQuestion() {
         if (next === undefined) next=APPitchScience.makeSequence(normalOptions)[0];
         apSession.plan[apSession.records.length]=next;
     }
-    const target = apSession.plan[apSession.records.length];
+    const ordinal = apSession.records.length;
+    const previous = TrainingCore.lastQuestion(AP_APP_ID)?.target;
+    if (TrainingCore.sameNoteName(apSession.plan[ordinal],previous)) {
+        // The last question may have changed in another tab since this block was planned.
+        apSession.plan[ordinal] = APPitchScience.makeSequence({from:minMidi,to:maxMidi,total:1,
+            known:apSession.known,previousMidi:previous})[0];
+    }
+    const target = apSession.plan[ordinal];
     if (target === undefined) {finishApRound(); return;}
     releaseAllKeys(); window.clearTimeout(freeDisplayTimeout);
     player.cancelQueue(audioContext); TrainingCore.cancelAudio(); resetKeyboardColors();
@@ -1650,7 +1657,7 @@ function newQuestion() {
         const targets = [];
         const previous = TrainingCore.lastQuestion(AP_APP_ID)?.target;
         for (let pitch = minMidi; pitch <= maxMidi; pitch += 1) {
-            if (pitch !== previous) targets.push(pitch);
+            if (!TrainingCore.sameNoteName(pitch, previous)) targets.push(pitch);
         }
         if (!targets.length) {
             setStatus("distinctRangeError");

@@ -1,7 +1,9 @@
 /* Copy shared by both independent apps. */
 const TRAINING_COPY = {
   "en": {
-    "apDescription": "Independent random draws, including repeats. No answers until the round ends.",
+    "apDescription": "Consecutive targets have different note names, across all octaves. Answers appear after the round.",
+    "intervalNoRepeat": "These settings cannot give a different target note name. Select more notes or widen the interval or pitch range.",
+    "distinctRangeError": "Choose at least two different note names for consecutive questions.",
     "apLearnDesc": "Imagine each named note before listening. Recall without a timer; due notes and mistakes receive more practice.",
     "apColdDesc": "20 questions, no immediate feedback and no time limit. Compare only checks with the same level, range and sound.",
     "apColdRangeText": "Uses the range you selected (shown below). A break of at least 4 hours since the last sound on this site is tagged separately; other devices are not detected.",
@@ -59,7 +61,9 @@ const TRAINING_COPY = {
     "produceAgain": "First note again"
   },
   "zh-TW": {
-    "apDescription": "每題獨立隨機抽取，允許重複；整輪結束後才顯示答案。",
+    "apDescription": "相鄰兩題的音名不同，跨八度也會去重。整輪結束後顯示答案。",
+    "intervalNoRepeat": "目前設定無法換一個目標音名。請增加音名、放寬音程或擴大音域。",
+    "distinctRangeError": "連續出題至少需要兩個不同音名。",
     "apLearnDesc": "先在腦中回想音名對應的聲音，再試聽。回憶不限時；到期音與錯音會增加練習。",
     "apColdDesc": "20題，不限時、不即時公布答案。僅比較相同難度、音域與音色的成績。",
     "apColdRangeText": "使用你選擇的音域（見下方）。本網站上次發聲後間隔至少4小時會另行標記；無法偵測其他裝置。",
@@ -117,7 +121,9 @@ const TRAINING_COPY = {
     "produceAgain": "重聽第一個音"
   },
   "ja": {
-    "apDescription": "各問を独立に抽選します。同じ音も続きます。正解は終了後に表示。",
+    "apDescription": "オクターブが違っても同じ音名は連続しません。正解は終了後に表示します。",
+    "intervalNoRepeat": "別の目標音名を選べません。音名を追加するか、音程または音域を広げてください。",
+    "distinctRangeError": "出題には異なる音名が2つ以上必要です。",
     "apLearnDesc": "音名から音を思い浮かべてから試聴。時間制限なし。復習時期の音と間違えた音を多めに練習。",
     "apColdDesc": "20問、時間制限と途中の正解表示なし。同じレベル・音域・音色の結果どうしで比較してください。",
     "apColdRangeText": "選択中の音域を使います（下に表示）。このサイトで最後に音を鳴らしてから4時間以上あいた場合は区別して記録します。他の端末は検知できません。",
@@ -175,7 +181,9 @@ const TRAINING_COPY = {
     "produceAgain": "1音目をもう一度"
   },
   "de": {
-    "apDescription": "Unabhängige Zufallsauswahl mit Wiederholungen. Lösungen erst am Rundenende.",
+    "apDescription": "Aufeinanderfolgende Zieltöne haben auch in verschiedenen Oktaven verschiedene Namen. Auflösung am Rundenende.",
+    "intervalNoRepeat": "Kein anderer Zieltonname möglich. Wähle mehr Töne, Intervalle oder einen größeren Tonumfang.",
+    "distinctRangeError": "Wähle mindestens zwei verschiedene Tonnamen.",
     "apLearnDesc": "Den benannten Ton erst vorstellen, dann anhören. Ohne Zeitlimit; fällige und falsche Töne werden häufiger geübt.",
     "apColdDesc": "20 Fragen ohne Zeitlimit oder sofortige Lösung. Nur Tests mit gleicher Stufe, gleichem Tonumfang und gleichem Klang vergleichen.",
     "apColdRangeText": "Verwendet den gewählten Tonumfang (siehe unten). Pausen ab 4 Stunden seit dem letzten Ton auf dieser Seite werden markiert. Andere Geräte werden nicht erkannt.",
@@ -233,7 +241,9 @@ const TRAINING_COPY = {
     "produceAgain": "Ersten Ton wiederholen"
   },
   "it": {
-    "apDescription": "Estrazioni indipendenti, anche con ripetizioni. Soluzioni solo a fine turno.",
+    "apDescription": "Due note consecutive hanno nomi diversi anche in ottave diverse. Soluzioni a fine turno.",
+    "intervalNoRepeat": "Non è possibile scegliere un altro nome di nota. Aggiungi note oppure amplia gli intervalli o l’estensione.",
+    "distinctRangeError": "Scegli almeno due nomi di nota diversi.",
     "apLearnDesc": "Immagina la nota prima di ascoltarla. Richiamo senza limite; più pratica per note da ripassare ed errori.",
     "apColdDesc": "20 domande senza limite né feedback immediato. Confronta solo verifiche con lo stesso livello, la stessa estensione e lo stesso timbro.",
     "apColdRangeText": "Usa l’estensione selezionata (vedi sotto). Le pause di almeno 4 ore dall’ultimo suono su questo sito sono indicate a parte; altri dispositivi non sono rilevati.",
@@ -291,7 +301,9 @@ const TRAINING_COPY = {
     "produceAgain": "Riascolta la prima nota"
   },
   "el": {
-    "apDescription": "Ανεξάρτητη τυχαία επιλογή, με επαναλήψεις. Απαντήσεις στο τέλος.",
+    "apDescription": "Διαδοχικές νότες έχουν διαφορετικά ονόματα ακόμη και σε διαφορετικές οκτάβες. Απαντήσεις στο τέλος.",
+    "intervalNoRepeat": "Δεν υπάρχει άλλος στόχος με διαφορετικό όνομα. Πρόσθεσε νότες ή διεύρυνε τα διαστήματα ή την έκταση.",
+    "distinctRangeError": "Επίλεξε τουλάχιστον δύο διαφορετικά ονόματα νοτών.",
     "apLearnDesc": "Φαντάσου τη νότα πριν την ακούσεις. Χωρίς χρονικό όριο· περισσότερη εξάσκηση σε λάθη και προγραμματισμένες επαναλήψεις.",
     "apColdDesc": "20 ερωτήσεις χωρίς χρονικό όριο ή άμεση απάντηση. Σύγκρινε μόνο ελέγχους με ίδιο επίπεδο, ίδια έκταση και ίδιο ηχόχρωμα.",
     "apColdRangeText": "Χρησιμοποιεί την έκταση που επέλεξες (βλ. παρακάτω). Οι παύσεις τουλάχιστον 4 ωρών από τον τελευταίο ήχο σε αυτόν τον ιστότοπο σημειώνονται χωριστά. Άλλες συσκευές δεν ανιχνεύονται.",

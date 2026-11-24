@@ -113,7 +113,7 @@
         const refs = [];
         for (let ref=first; ref<=last; ref++) {
           const target=ref+signed;
-          if (target===previous?.target) continue;
+          if (TrainingCore.sameNoteName(target,previous?.target)) continue;
           if (!filter || (filter.has(ref%12) && filter.has(target%12))) refs.push(ref);
         }
         if (!refs.length) continue;

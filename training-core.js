@@ -7,6 +7,9 @@
   for (let i=0; i<items.length; i++) { pick -= weights[i]; if (pick < 0) return items[i]; }
   return items[items.length-1];
  }
+ function sameNoteName(pitch, previous) {
+  return Number.isInteger(pitch) && Number.isInteger(previous) && pitch % 12 === previous % 12;
+ }
  // Rungs 1-4 (1, 3, 12, 60 min) can be earned inside one sitting. Day-scale rungs
  // need a recall made after a break ("cold"): a success right after labelled
  // feedback may rest on the previous note rather than on long-term memory.
@@ -136,5 +139,5 @@
   return at + duration;
  }
  function cancelAudio() { for (const voice of voices) { try {voice.stop();} catch (_) {} } voices.clear(); }
- root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, cancelAudio};
+ root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, sameNoteName, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, cancelAudio};
 })(typeof window !== 'undefined' ? window : globalThis);

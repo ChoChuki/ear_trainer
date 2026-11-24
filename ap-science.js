@@ -22,10 +22,7 @@
         const last = Math.floor((to - 11) / 12) * 12 + 11;
         return first <= last ? {from:first,to:last} : null;
     }
-    // Avoid exact MIDI repeats between adjacent AP questions (including between
-    // rounds), while retaining a weighted random distribution over every legal
-    // pitch. On a single octave, repeating the *same* pitch class may sometimes
-    // be impossible; this constraint then necessarily changes conditional odds.
+    // The answer is a pitch class: F4 and F5 are the same answer.
     function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null}) {
         if (!Number.isInteger(from)||!Number.isInteger(to)||from<0||to>127||to<from||
             !Number.isInteger(total)||total<1) return [];
@@ -56,8 +53,8 @@
         const result=[];
         let prior=previousMidi;
         for (let i=0;i<total;i++) {
-            const eligible=weightedNotes.filter(note=>note.midi!==prior);
-            if (!eligible.length) return []; // e.g. forced repair in a single octave
+            const eligible=weightedNotes.filter(note=>!TrainingCore.sameNoteName(note.midi,prior));
+            if (!eligible.length) return []; // defer a repair of the preceding answer
             const next=TrainingCore.choose(eligible,eligible.map(note=>note.weight)).midi;
             result.push(next); prior=next;
         }

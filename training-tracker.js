@@ -1,4 +1,4 @@
-/* Optional cross-device training clock.  Both independent PWAs use this exact file.
+/* Daily training clock shared by both instruments, with optional cross-device sync.
  * Only explicit training events count; Demo and idle time never do.
  * Cloud synchronization requires deploying the companion Cloudflare Worker and
  * entering the same 128-bit pairing key and endpoint on every site/device.
@@ -8,6 +8,7 @@
     const START_DATE = '2026-10-29', EXEMPT = '2026-10-30';
     const GOAL = 3600000, IDLE = 75000, SEGMENT_MAX = 60000;
     const STORAGE = 'musik-training-tracker-v1';
+    const GOAL_DAY_KEY = 'musik-training-60-minute-reminder-day';
     const fmt = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit'});
     const jstDate = (ms = Date.now()) => {
         const parts=Object.fromEntries(fmt.formatToParts(new Date(ms)).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
@@ -20,6 +21,12 @@
         segments: Array.isArray(stored.segments) ? stored.segments : [],
         pending: [...(Array.isArray(stored.pending) ? stored.pending : []), ...(stored.checkpoint && stored.checkpoint.end > stored.checkpoint.start ? [stored.checkpoint] : [])], remote: stored.remote || null};
     let active = null, lastAction = 0, uploadBusy = false, pollBusy = false;
+    let announcedDay = null, noticeDay = null, goalTimer;
+    const goalText = {
+        en:['You’ve practised for 60 minutes today.','Got it'], 'zh-TW':['今天的練習已累計滿 60 分鐘。','知道了'],
+        ja:['今日の練習時間が合計60分に達しました。','閉じる'], de:['Du hast heute 60 Minuten geübt.','Schließen'],
+        it:['Oggi hai raggiunto 60 minuti di pratica.','Chiudi'], el:['Συμπλήρωσες 60 λεπτά εξάσκησης σήμερα.','Κλείσιμο']
+    };
     const LANGUAGE_TEXT = {
       "en": ["Training time sync", "Shared Cloudflare Worker HTTPS URL", "Personal pairing code (same on both sites and devices)", "Save sync settings", "Copy pairing code", "Local only · not synced", "Cloud sync configured", "Active training", "min", "Pending uploads", "Not configured: sites and devices cannot share progress.", "Pairing code copied; paste the same code in your other site/device.", "Settings saved. Syncing…", "Saved as local-only time.", "Enter an HTTPS URL and a 32-digit hexadecimal pairing code.", "Historical overdue", "Exempt"],
       "de": ["Trainingszeit-Synchronisierung", "Gemeinsame Cloudflare-Worker-HTTPS-Adresse", "Privater Kopplungscode (auf allen Geräten identisch)", "Einstellungen speichern", "Kopplungscode kopieren", "Nur lokal · nicht synchronisiert", "Cloud-Sync konfiguriert", "Aktives Training", "Min.", "Uploads ausstehend", "Ohne Server keine geräteübergreifende Synchronisierung.", "Kopplungscode kopiert; auf anderen Geräten einfügen.", "Einstellungen gespeichert. Synchronisiere…", "Nur lokal gespeichert.", "HTTPS-Adresse und 32-stelligen Hexadezimalcode eingeben.", "Historischer Rückstand", "Befreit"],
@@ -75,10 +82,19 @@
         return [base,base+86400000];
     }
     function todayMs(rows, date = jstDate()) {return unionMs(rows,...bounds(date));}
-    function endActive() {
+    function advanceActive(now) {
         if (!active) return;
-        const end = Math.max(active.start,Math.min(Date.now(),lastAction + IDLE,active.start+SEGMENT_MAX));
-        active.end = Math.max(active.end,end);
+        const end = Math.max(active.end,Math.min(now,lastAction + IDLE));
+        while (end - active.start >= SEGMENT_MAX) {
+            const boundary = active.start + SEGMENT_MAX;
+            state.pending.push({...active,end:boundary});
+            active = {id:id(),start:boundary,end:boundary};
+        }
+        active.end = end;
+    }
+    function endActive(now = Date.now()) {
+        if (!active) return;
+        advanceActive(now);
         if (active.end > active.start) state.pending.push({...active});
         active = null; save();
     }
@@ -86,7 +102,8 @@
         if (!['question','answer','free-play','ap-learning','ap-check','ap-answer','staff-replay'].includes(kind)) return;
         if (document.hidden || document.querySelector('.app-shell.demo-running')) return;
         const now = Date.now();
-        if (active && (now - lastAction >= IDLE || now - active.start >= SEGMENT_MAX)) endActive();
+        if (active && now - lastAction >= IDLE) endActive(now);
+        else advanceActive(now);
         lastAction = now;
         if (!active) active = {id:id(), start:now,end:now};
         save();render();
@@ -97,14 +114,9 @@
             pause(); return;
         }
         if (active) {
-            active.end = Math.max(active.end, Math.min(Date.now(),lastAction+IDLE,active.start+SEGMENT_MAX));
-            if (Date.now() >= lastAction + IDLE) endActive();
-            else if (Date.now() >= active.start + SEGMENT_MAX) {
-                endActive();
-                // Continued recent activity should not stop being counted at 60 seconds.
-                active = {id:id(),start:Date.now(),end:Date.now()};
-                save();
-            } else save();
+            const now = Date.now();
+            if (now >= lastAction + IDLE) endActive(now);
+            else {advanceActive(now); save();}
         }
         render();
     }
@@ -120,9 +132,34 @@
             synced: Boolean(state.endpoint && state.key && state.remote?.date === date), localMs,
             remoteMs, pending: state.pending.length + (active ? 1 : 0)};
     }
+    function updateGoalNotice(s) {
+        const notice = document.getElementById('dailyGoalNotice');
+        if (!notice) return;
+        if (noticeDay && noticeDay !== s.date) {notice.hidden = true; noticeDay = null;}
+        if (s.ms < GOAL || document.hidden || (document.hasFocus && !document.hasFocus())) return;
+        if (announcedDay !== s.date) {
+            try {announcedDay = localStorage.getItem(GOAL_DAY_KEY);} catch (_) {}
+            if (announcedDay !== s.date) {
+                announcedDay = noticeDay = s.date;
+                try {localStorage.setItem(GOAL_DAY_KEY,s.date);} catch (_) {}
+                notice.hidden = false;
+                if (typeof navigator.vibrate === 'function') navigator.vibrate([90,70,90]);
+            }
+        }
+        if (noticeDay !== s.date || notice.hidden) return;
+        const [message,dismiss] = goalText[language];
+        const label = document.getElementById('dailyGoalText');
+        if (label.textContent !== message) label.textContent = message;
+        document.getElementById('dailyGoalDismiss').textContent = dismiss;
+    }
     function render() {
         const s = summary();
-        const minutes = (s.ms/60000).toFixed(1);
+        clearTimeout(goalTimer);
+        const remaining = GOAL - s.localMs;
+        if (active && !document.hidden && s.ms < GOAL && remaining > 0 && remaining <= 3000)
+            goalTimer = setTimeout(tick,remaining);
+        updateGoalNotice(s);
+        const minutes = (Math.floor(s.ms/6000)/10).toFixed(1);
         const pct = Math.min(100,Math.floor(100*s.ms/GOAL));
         const text = document.getElementById('trackerStatus');
         if (text) text.textContent = `${translate(7)} ${minutes}/60 ${translate(8)} · ${pct}% · ${translate(s.synced?6:5)}`;
@@ -210,6 +247,9 @@
     }
     function setup() {
         const status=document.getElementById('trackerStatus'); if(!status) return;
+        document.getElementById('dailyGoalDismiss').addEventListener('click',() => {
+            document.getElementById('dailyGoalNotice').hidden = true;
+        });
         document.getElementById('trackerSave').addEventListener('click',setConfig);
         document.getElementById('trackerCopy').addEventListener('click',async() => {
             try {await navigator.clipboard.writeText(ensurePairing());
@@ -222,6 +262,7 @@
         root.addEventListener('training-pause',pause);
         document.addEventListener('visibilitychange',()=>{if(document.hidden)pause(); else {poll();render();}});
         root.addEventListener('blur',pause);
+        root.addEventListener('focus',render);
         root.addEventListener('pagehide',pause);
         setInterval(tick, 3000);
         setInterval(()=>{flush();poll();},15000);

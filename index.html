@@ -14,6 +14,10 @@
     <link rel="stylesheet" href="./ap-focus.css">
 </head>
 <body>
+    <aside id="dailyGoalNotice" class="daily-goal-notice" hidden>
+        <strong id="dailyGoalText" role="alert"></strong>
+        <button type="button" class="secondary" id="dailyGoalDismiss">OK</button>
+    </aside>
     <main class="app-shell">
         <header class="app-header">
             <div class="header-top">
@@ -47,6 +51,8 @@
             <div class="af-head"><div><p class="af-instrument" id="focusInstrument"></p><h2 id="focusTitle"></h2></div><a href="#tools" data-af="back"></a></div>
             <div id="focusHome" hidden>
                 <p id="focusDaily"></p>
+                <fieldset class="af-octaves"><legend data-af="octaves"></legend><div id="focusOctaves" class="af-notes"></div></fieldset>
+                <p id="focusRangeHint" class="af-muted" role="status" hidden></p>
                 <div id="focusModes" class="af-modes"></div>
                 <div class="af-group"><strong data-af="set"></strong><span id="focusCurrent"></span><button class="primary" type="button" id="focusAdd" hidden></button></div>
                 <details id="focusGuide"><summary data-af="examples"></summary><div id="focusExamples"></div></details>
@@ -64,7 +70,7 @@
                 <div id="focusInvite" class="af-group" hidden><span id="focusInvitation"></span><button class="secondary" id="focusSecond" type="button" data-af="second"></button></div>
                 <details id="focusEvidence"><summary data-af="evidence"></summary>
                     <p id="focusProgress"></p><p id="focusRates"></p><p id="focusFirst"></p>
-                    <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option><option>4</option><option>5</option><option>6</option></select></div>
+                    <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option></select></div>
                     <table><thead><tr><th data-af="note"></th><th data-af="practice"></th><th data-af="check"></th><th data-af="days"></th></tr></thead><tbody id="focusStats"></tbody></table>
                     <p class="af-muted" data-af="recordHelp"></p><p class="af-muted" data-af="countsLocal"></p>
                     <div class="af-actions"><button class="secondary" type="button" id="focusBackup" data-af="backup"></button><button class="secondary" type="button" id="focusRestore" data-af="restore"></button><input type="file" id="focusFile" hidden accept=".json,application/json"></div>
@@ -77,6 +83,7 @@
                 <p class="af-muted" id="focusAnswerHint" data-af="helpAnswer"></p>
                 <div class="af-actions">
                     <button type="button" class="primary" id="focusNext"></button>
+                    <button type="button" class="secondary" id="focusRelative" data-af="relative"></button>
                     <button type="button" class="secondary" id="focusReplay" data-af="replay"></button>
                     <button type="button" class="secondary" id="focusAnswerSound" data-af="answerSound"></button>
                     <button type="button" class="af-plain" id="focusFault" data-af="audio"></button>
@@ -199,7 +206,7 @@
                         </div>
                     </div>
                     <label class="option-row" id="apMaskRow"><input id="apMaskCheck" type="checkbox" checked><span id="apMaskText">Short burst of random tones before each question</span></label>
-                    <p id="apDescription" class="ap-description">Independent random draws, including repeats. Answers appear after the round.</p>
+                    <p id="apDescription" class="ap-description">Consecutive targets have different note names. Answers appear after the round.</p>
                     <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
                 </div>
                 <label class="option-row" id="autoNextRow"><input id="autoNextCheck" type="checkbox" checked><span id="autoNextText">Continue automatically after each answer</span></label>

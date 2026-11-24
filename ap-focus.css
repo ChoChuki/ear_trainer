@@ -22,6 +22,9 @@
 #focusPanel summary {font-weight:600;padding:5px 0;}
 .af-notes,.af-actions,.af-example,.af-filters {display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0;}
 #focusPanel .af-notes button {min-width:47px; flex:0 1 auto;}
+.af-octaves {margin:.75rem 0; padding:0; border:0; min-width:0;}
+.af-octaves legend {font-weight:650; padding:0;}
+#focusPanel #focusOctaves button {min-width:42px; padding:6px 10px;}
 #focusPanel button[aria-pressed="true"] {background:#174b63; color:white;}
 .af-option {margin:8px 0;}
 .af-option input[type=number] {width:5em;}
