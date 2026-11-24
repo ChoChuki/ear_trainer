@@ -1,4 +1,4 @@
-const APP_VERSION = "2.7.0";
+const APP_VERSION = "2.8.0";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -989,10 +989,11 @@ let apAudioLatencyMs = 0;
 const AP_COLD_MIN_REST_MS = 4 * 3600 * 1000; // conservative product assumption, not a validated cut-off
 // Protocol 5: interference burst, neighbouring "Other" notes, spacing that needs
 // after-break evidence, selectable round length and sound, automatic continue.
-const AP_PROTOCOL = 6;
-const AP_MASK_SECONDS = 1;
-const AP_MASK_GAP = 0.25;
-const AP_MASK_KEY = "ear-ap-mask";
+// Protocol 7: note names drawn independently of the previous question, successive notes
+// more than an octave apart where the range allows, 2.4 s pitch-memory reset.
+const AP_PROTOCOL = 7;
+// A new key turns the stronger reset on once for everyone; it can still be switched off.
+const AP_MASK_KEY = "ear-ap-mask-v2";
 const AUTO_NEXT_KEY = "ear-auto-next";
 let apHideColdAnswers = false;
 let apStudyOctave = null; // C of the octave played by the labelled study cards
@@ -1402,9 +1403,11 @@ async function playApPitch(midi, serial, withMask = true) {
         currentMidi !== midi || !apSession || apSession.finished || document.hidden) return;
     player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     const scheduledAt = audioContext.currentTime + 0.05;
-    // The interference burst precedes each new question, never a replay of the same note.
+    // The pitch-memory reset precedes each new question, never a replay of the same note.
+    const range = apSession.effectiveRange || [minMidi, maxMidi];
     const startAt = withMask && apSession.masked
-        ? TrainingCore.maskTone(audioContext, scheduledAt, AP_MASK_SECONDS) + AP_MASK_GAP : scheduledAt;
+        ? TrainingCore.resetTones(audioContext, scheduledAt, {previous: apSession.previousTarget,
+            low: range[0], high: range[1]}) + TrainingCore.resetGap() : scheduledAt;
     if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, startAt, midi, PLAY_DURATION);
     else queueInstrumentNote(instrumentMode, midi, startAt);
     // Browser APIs cannot observe the exact acoustic onset of a Bluetooth headset;
@@ -1482,11 +1485,13 @@ function startApQuestion() {
     }
     const ordinal = apSession.records.length;
     const previous = TrainingCore.lastQuestion(AP_APP_ID)?.target;
-    if (TrainingCore.sameNoteName(apSession.plan[ordinal],previous)) {
-        // The last question may have changed in another tab since this block was planned.
-        apSession.plan[ordinal] = APPitchScience.makeSequence({from:minMidi,to:maxMidi,total:1,
-            known:apSession.known,previousMidi:previous})[0];
+    // The last question may have changed in another tab since this block was planned.
+    // The planned name stays; only its register is chosen again against the real previous note.
+    if (apSession.plan[ordinal] !== undefined) {
+        apSession.plan[ordinal] = APPitchScience.makeSequence({from:minMidi,to:maxMidi,total:1,known:apSession.known,
+            previousMidi:previous,forcedPC:apSession.plan[ordinal] % 12})[0] ?? apSession.plan[ordinal];
     }
+    apSession.previousTarget = Number.isInteger(previous) ? previous : null;
     const target = apSession.plan[ordinal];
     if (target === undefined) {finishApRound(); return;}
     releaseAllKeys(); window.clearTimeout(freeDisplayTimeout);
@@ -1554,7 +1559,8 @@ async function exportApCSV() {
     const fields = ["protocol", "timbre", "repair", "replayed", "sessionId", "day", "kind", "level", "ordinal", "pitch", "guess", "result", "correct", "rtMs", "playedAt", "submittedAt", "audibleLatencyEstimateMs", "previousPitch", "eligibleCold", "afterBreak", "source", "resetSoundOn", "pointerTimeStamp",
         "pointerX", "pointerY", "buttonIndex", "baseLatencyRaw", "outputLatencyRaw",
         "sampleRate", "outputDevice", "hiddenCount", "gapSincePracticeMs", "coldSourceRange",
-        "known", "sampleId", "sourceVersion", "qualityStatus", "firstOfDay", "assistedRtMs", "timing"];
+        "known", "sampleId", "sourceVersion", "qualityStatus", "firstOfDay", "assistedRtMs", "timing",
+        "limitMs", "lateGuess", "reset", "jump"];
     const csv = [fields.join(","), ...rows.map((row) => fields.map((name) => {
         const v = row[name] === undefined || row[name] === null ? "" : String(row[name]);
         return `"${v.replaceAll('"', '""')}"`;

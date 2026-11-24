@@ -54,6 +54,7 @@
                 <fieldset class="af-octaves"><legend data-af="octaves"></legend><div id="focusOctaves" class="af-notes"></div></fieldset>
                 <p id="focusRangeHint" class="af-muted" role="status" hidden></p>
                 <div id="focusModes" class="af-modes"></div>
+                <p id="focusRules" class="af-muted"></p>
                 <div class="af-group"><strong data-af="set"></strong><span id="focusCurrent"></span><button class="primary" type="button" id="focusAdd" hidden></button></div>
                 <details id="focusGuide"><summary data-af="examples"></summary><div id="focusExamples"></div></details>
                 <details id="focusSettings"><summary data-af="settings"></summary>
@@ -61,6 +62,8 @@
                     <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
                     <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
                     <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
+                    <label class="af-option"><span data-af="limit"></span><select id="focusLimit"><option value="strict"></option><option value="relaxed"></option><option value="off"></option></select></label>
+                    <p class="af-muted" data-af="limitHelp"></p>
                     <label class="af-option"><span data-af="share"></span><select id="focusShare"><option value="0">0%</option><option value="0.2">20%</option><option value="0.5">50%</option></select></label>
                     <details><summary data-af="thresholds"></summary>
                         <label class="af-option"><span data-af="hit"></span><input id="focusHit" type="number" min="50" max="100"></label>
@@ -79,6 +82,7 @@
             <div id="focusRound" hidden>
                 <p class="af-instrument" id="focusIndex"></p>
                 <p class="af-live" id="focusPrompt" role="status" aria-live="polite"></p>
+                <div class="af-timer" id="focusTimer" aria-hidden="true" hidden><span></span></div>
                 <div id="focusAnswers" class="af-notes"></div>
                 <p class="af-muted" id="focusAnswerHint" data-af="helpAnswer"></p>
                 <div class="af-actions">

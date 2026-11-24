@@ -1,6 +1,7 @@
-/* Focused trials use the host's instrument and interference players. */
+/* Focused trials use the host's instrument and the shared pitch-memory reset. */
 (function (root) {
     'use strict';
+    const LONG_RESET_SECONDS = 20;
     function create(context, loadInstrumentPreset = root.loadInstrumentPreset, queueInstrumentNote = root.queueInstrumentNote) {
         let source = null, generation = 0;
         function stop() {
@@ -8,7 +9,10 @@
             if (source) {try {source.stop();} catch (_) {} source = null;}
             TrainingCore.cancelAudio();
         }
-        async function play(instrument, midi, mask = false) {
+        // reset: null plays the note directly; {previous, low, high} plays the short reset
+        // first; {long: true} plays a 20-second Shepard glide, which Wong et al. (2025)
+        // placed between labelled sample tones and a block without feedback.
+        async function play(instrument, midi, reset = null) {
             stop();
             const token = generation;
             // Start resume within the tap handler, including on the first visit in Safari.
@@ -16,7 +20,14 @@
             if (token !== generation || document.hidden || context.state !== 'running') throw Error('Playback interrupted');
             const ready = context.currentTime + .04;
             try {
-                const at = mask ? TrainingCore.maskTone(context, ready, 1) + .25 + Math.random() * .4 : ready;
+                let at = ready;
+                if (reset) {
+                    const options = reset === true ? {} : reset;
+                    at = options.long
+                        ? TrainingCore.shepardGlide(context, ready, LONG_RESET_SECONDS, {direction: Math.random() < .5 ? -1 : 1})
+                        : TrainingCore.resetTones(context, ready, options);
+                    at += TrainingCore.resetGap();
+                }
                 const voice = queueInstrumentNote(instrument, midi, at);
                 const node = voice.audioBufferSourceNode;
                 source = node;
@@ -29,5 +40,5 @@
         }
         return {play, stop};
     }
-    root.APFocusAudio = {create};
+    root.APFocusAudio = {create, LONG_RESET_SECONDS};
 })(window);

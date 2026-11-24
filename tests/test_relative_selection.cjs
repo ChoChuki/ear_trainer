@@ -22,7 +22,7 @@ for (const [site,low,high] of [['violin',55,88], ['piano',36,95]]) {
             const round=C.createRound({low,high,activity,total:100,previous});
             assert(!round.error);
             for (const q of round.questions) {
-                assert.notEqual(q.target,previous?.target);
+                assert(!app.TrainingCore.sameNoteName(q.target,previous?.target));
                 if(previous?.reference!=null) assert.notEqual(q.distance,Math.abs(previous.target-previous.reference));
                 references.add(q.reference); targets.add(q.target); intervals.add(q.distance); previous=q;
             }
@@ -38,7 +38,7 @@ for(const activity of ['test','practice','melody','review']) {
     let previous=before;
     for(const q of block.questions){
         for(const note of [q.reference,q.target,q.prelude].filter(n=>n!=null)) assert(note>=60&&note<=72&&pcs.includes(note%12));
-        assert.notEqual(q.target,previous.target); previous=q;
+        assert.notEqual(q.target%12,previous.target%12); previous=q;
     }
 }
 const prior={reference:60,target:62};
@@ -47,6 +47,7 @@ for(let n=0;n<100;n++) {
     assert.notEqual(q.target,62);assert.equal(q.distance,1);assert(!q.repair);
 }
 assert.equal(C.drawPair({low:60,high:61,distances:[1],direction:'higher',previous:{reference:60,target:61}}),null);
+assert.equal(C.drawPair({low:48,high:84,distances:[12],pitchClasses:[0],previous:{target:72}}),null);
 let previous=prior;
 for(let n=0;n<300;n++){
     const q=C.drawPair({low:60,high:72,distances:[2],previous});assert(q);assert.equal(q.distance,2);assert.notEqual(q.target,previous.target);previous=q;

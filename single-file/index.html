@@ -226,6 +226,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .ap-history-panel button { margin-top:6px; }
 
 .tracker-strip{margin:5px 0;padding:6px 10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:11px;line-height:1.5}
+.daily-goal-notice {position:sticky;top:env(safe-area-inset-top,0px);z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:680px;margin:0 auto 8px;padding:10px 14px;background:#143e4d;color:#fff;border-radius:10px;font-size:1rem;box-shadow:0 2px 10px #143e4d30;}
+.daily-goal-notice[hidden] {display:none;}
+.daily-goal-notice button {flex:none;min-height:40px;color:#143e4d;background:#fff;}
 .tracker-strip p{margin:2px 0}
 .tracker-config summary{cursor:pointer;color:#374151;font-size:11px}
 .tracker-config label{display:grid;gap:3px;margin:5px 0}
@@ -417,6 +420,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 #focusPanel summary {font-weight:600;padding:5px 0;}
 .af-notes,.af-actions,.af-example,.af-filters {display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0;}
 #focusPanel .af-notes button {min-width:47px; flex:0 1 auto;}
+.af-octaves {margin:.75rem 0; padding:0; border:0; min-width:0;}
+.af-octaves legend {font-weight:650; padding:0;}
+#focusPanel #focusOctaves button {min-width:42px; padding:6px 10px;}
 #focusPanel button[aria-pressed="true"] {background:#174b63; color:white;}
 .af-option {margin:8px 0;}
 .af-option input[type=number] {width:5em;}
@@ -428,10 +434,17 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 #focusCurrent {font-variant-numeric:tabular-nums;}
 #focusReview li {margin:5px 0;}
 #focusPanel button:focus-visible,#focusPanel a:focus-visible,#focusPanel summary:focus-visible {outline:3px solid #0076af;outline-offset:2px;}
+.af-timer {height:6px; margin:-.35rem 0 .7rem; border-radius:3px; background:#e2e6e9; overflow:hidden;}
+.af-timer span {display:block; height:100%; background:#174b63; transform-origin:left center;}
+#focusRules {margin-top:-4px;}
 
 </style>
 </head>
 <body>
+    <aside id="dailyGoalNotice" class="daily-goal-notice" hidden>
+        <strong id="dailyGoalText" role="alert"></strong>
+        <button type="button" class="secondary" id="dailyGoalDismiss">OK</button>
+    </aside>
     <main class="app-shell">
         <header class="app-header">
             <div class="header-top">
@@ -465,7 +478,10 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
             <div class="af-head"><div><p class="af-instrument" id="focusInstrument"></p><h2 id="focusTitle"></h2></div><a href="#tools" data-af="back"></a></div>
             <div id="focusHome" hidden>
                 <p id="focusDaily"></p>
+                <fieldset class="af-octaves"><legend data-af="octaves"></legend><div id="focusOctaves" class="af-notes"></div></fieldset>
+                <p id="focusRangeHint" class="af-muted" role="status" hidden></p>
                 <div id="focusModes" class="af-modes"></div>
+                <p id="focusRules" class="af-muted"></p>
                 <div class="af-group"><strong data-af="set"></strong><span id="focusCurrent"></span><button class="primary" type="button" id="focusAdd" hidden></button></div>
                 <details id="focusGuide"><summary data-af="examples"></summary><div id="focusExamples"></div></details>
                 <details id="focusSettings"><summary data-af="settings"></summary>
@@ -473,6 +489,8 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                     <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
                     <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
                     <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
+                    <label class="af-option"><span data-af="limit"></span><select id="focusLimit"><option value="strict"></option><option value="relaxed"></option><option value="off"></option></select></label>
+                    <p class="af-muted" data-af="limitHelp"></p>
                     <label class="af-option"><span data-af="share"></span><select id="focusShare"><option value="0">0%</option><option value="0.2">20%</option><option value="0.5">50%</option></select></label>
                     <details><summary data-af="thresholds"></summary>
                         <label class="af-option"><span data-af="hit"></span><input id="focusHit" type="number" min="50" max="100"></label>
@@ -482,7 +500,7 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                 <div id="focusInvite" class="af-group" hidden><span id="focusInvitation"></span><button class="secondary" id="focusSecond" type="button" data-af="second"></button></div>
                 <details id="focusEvidence"><summary data-af="evidence"></summary>
                     <p id="focusProgress"></p><p id="focusRates"></p><p id="focusFirst"></p>
-                    <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option><option>4</option><option>5</option><option>6</option></select></div>
+                    <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option></select></div>
                     <table><thead><tr><th data-af="note"></th><th data-af="practice"></th><th data-af="check"></th><th data-af="days"></th></tr></thead><tbody id="focusStats"></tbody></table>
                     <p class="af-muted" data-af="recordHelp"></p><p class="af-muted" data-af="countsLocal"></p>
                     <div class="af-actions"><button class="secondary" type="button" id="focusBackup" data-af="backup"></button><button class="secondary" type="button" id="focusRestore" data-af="restore"></button><input type="file" id="focusFile" hidden accept=".json,application/json"></div>
@@ -491,10 +509,12 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
             <div id="focusRound" hidden>
                 <p class="af-instrument" id="focusIndex"></p>
                 <p class="af-live" id="focusPrompt" role="status" aria-live="polite"></p>
+                <div class="af-timer" id="focusTimer" aria-hidden="true" hidden><span></span></div>
                 <div id="focusAnswers" class="af-notes"></div>
                 <p class="af-muted" id="focusAnswerHint" data-af="helpAnswer"></p>
                 <div class="af-actions">
                     <button type="button" class="primary" id="focusNext"></button>
+                    <button type="button" class="secondary" id="focusRelative" data-af="relative"></button>
                     <button type="button" class="secondary" id="focusReplay" data-af="replay"></button>
                     <button type="button" class="secondary" id="focusAnswerSound" data-af="answerSound"></button>
                     <button type="button" class="af-plain" id="focusFault" data-af="audio"></button>
@@ -617,7 +637,7 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                         </div>
                     </div>
                     <label class="option-row" id="apMaskRow"><input id="apMaskCheck" type="checkbox" checked><span id="apMaskText">Short burst of random tones before each question</span></label>
-                    <p id="apDescription" class="ap-description">Independent random draws, including repeats. Answers appear after the round.</p>
+                    <p id="apDescription" class="ap-description">Consecutive targets have different note names. Answers appear after the round.</p>
                     <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
                 </div>
                 <label class="option-row" id="autoNextRow"><input id="autoNextCheck" type="checkbox" checked><span id="autoNextText">Continue automatically after each answer</span></label>
@@ -4163,6 +4183,9 @@ DEMO_SCORES.piano = {
   for (let i=0; i<items.length; i++) { pick -= weights[i]; if (pick < 0) return items[i]; }
   return items[items.length-1];
  }
+ function sameNoteName(pitch, previous) {
+  return Number.isInteger(pitch) && Number.isInteger(previous) && pitch % 12 === previous % 12;
+ }
  // Rungs 1-4 (1, 3, 12, 60 min) can be earned inside one sitting. Day-scale rungs
  // need a recall made after a break ("cold"): a success right after labelled
  // feedback may rest on the previous note rather than on long-term memory.
@@ -4271,28 +4294,125 @@ DEMO_SCORES.piano = {
   oscillator.onended = () => { voices.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
   oscillator.start(at); oscillator.stop(at+duration);
  }
- // Interference burst: random, non-tempered pips disturb the echo of the previous
- // note (cf. Deutsch 1970). It reduces, but cannot rule out, relative-pitch carry-over.
- function maskTone(context, at, duration = 1) {
-  const pip = .09, count = Math.max(4, Math.floor(duration / .1));
-  for (let i = 0; i < count; i++) {
-   const start = at + i * (duration / count);
+ // Register of the next note: more than an octave away from the previous note whenever
+ // the candidates allow it, otherwise as far as possible. Pitch-naming tests separate
+ // successive tones this way to blunt interval judgements (e.g. the pre/post tests of
+ // Wong et al. 2025). Only the octave is chosen here, never the note name.
+ function farPitch(candidates, previous, min = 13) {
+  if (!candidates.length) return undefined;
+  if (!Number.isInteger(previous)) return choose(candidates);
+  const far = candidates.filter(p => Math.abs(p - previous) >= min);
+  if (far.length) return choose(far);
+  const best = Math.max(...candidates.map(p => Math.abs(p - previous)));
+  return choose(candidates.filter(p => Math.abs(p - previous) === best));
+ }
+ const hz = midi => 440 * 2 ** ((midi - 69) / 12);
+ function track(source, ...nodes) {
+  voices.add(source);
+  source.onended = () => {
+   voices.delete(source);
+   for (const node of [source, ...nodes]) { try { node.disconnect(); } catch (_) {} }
+  };
+ }
+ // Shepard-type glide (Shepard 1964): octave-spaced partials under a fixed spectral
+ // envelope move continuously through every chroma, so there is no stable pitch left
+ // to keep as a reference. A partial re-enters at the far end only where it is silent.
+ function shepardGlide(context, at, seconds, {octavesPerSecond = .3, direction = -1, level = .07} = {}) {
+  const base = 27.5, span = 8, centre = 4, width = 1.15;
+  const speed = octavesPerSecond * (direction < 0 ? -1 : 1), offset = Math.random();
+  function segment(t0, t1, x0, x1) {
+   const duration = t1 - t0;
+   if (duration < .02) return;
    const oscillator = context.createOscillator(), gain = context.createGain();
-   oscillator.type = 'triangle';
-   oscillator.frequency.value = 180 * Math.pow(2200 / 180, Math.random());
-   gain.gain.setValueAtTime(0, start);
-   gain.gain.linearRampToValueAtTime(.11, start + .008);
-   gain.gain.setValueAtTime(.11, start + pip - .012);
-   gain.gain.linearRampToValueAtTime(0, start + pip);
+   oscillator.type = 'sine';
+   oscillator.frequency.setValueAtTime(base * 2 ** x0, at + t0);
+   oscillator.frequency.exponentialRampToValueAtTime(base * 2 ** x1, at + t1);
+   const points = Math.max(4, Math.ceil(duration * 50)), curve = new Float32Array(points);
+   for (let i = 0; i < points; i++) {
+    const u = i / (points - 1), t = t0 + u * duration, x = x0 + (x1 - x0) * u;
+    const fade = Math.max(0, Math.min(1, t / .08, (seconds - t) / .12));
+    curve[i] = level * fade * Math.exp(-.5 * ((x - centre) / width) ** 2);
+   }
+   gain.gain.setValueCurveAtTime(curve, at + t0, duration);
    oscillator.connect(gain); gain.connect(context.destination);
-   voices.add(oscillator);
-   oscillator.onended = () => { voices.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
-   oscillator.start(start); oscillator.stop(start + pip);
+   track(oscillator, gain);
+   oscillator.start(at + t0); oscillator.stop(at + t1);
   }
-  return at + duration;
+  for (let k = 0; k < span; k++) {
+   let t = 0, x = (k + offset) % span;
+   while (t < seconds - 1e-3) {
+    const wrap = speed < 0 ? x / -speed : (span - x) / speed;
+    const t1 = Math.min(seconds, t + wrap);
+    segment(t, t1, x, x + speed * (t1 - t));
+    t = t1; x = speed < 0 ? span : 0;
+   }
+  }
+  return at + seconds;
+ }
+ function blip(context, start, duration, frequency, type) {
+  const oscillator = context.createOscillator(), gain = context.createGain();
+  const peak = type === 'sawtooth' ? .05 : .09, nodes = [gain];
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(peak, start + .008);
+  gain.gain.setValueAtTime(peak, start + Math.max(.01, duration - .025));
+  gain.gain.linearRampToValueAtTime(0, start + duration);
+  if (type === 'sawtooth' && context.createBiquadFilter) {
+   const filter = context.createBiquadFilter();
+   filter.type = 'lowpass'; filter.frequency.setValueAtTime(Math.min(4000, frequency * 4), start);
+   oscillator.connect(filter); filter.connect(gain); nodes.push(filter);
+  } else oscillator.connect(gain);
+  gain.connect(context.destination);
+  track(oscillator, ...nodes);
+  oscillator.start(start); oscillator.stop(start + duration);
+ }
+ // Pitch-memory reset before a new question. Unlabelled, non-tempered tones spread over
+ // the practice register; about 40% fall 0.3-1.2 semitones from the previous note, where
+ // an intervening tone disturbs its memory most (Deutsch 1970, 1972). A fast Shepard glide
+ // then sweeps every chroma. It weakens, but cannot rule out, relative-pitch carry-over.
+ function resetTones(context, at, {previous = null, low = 60, high = 84, seconds = 2.4} = {}) {
+  let lo = Math.max(110, hz(low) / 1.2), hi = Math.min(3000, hz(high) * 1.2);
+  if (!(hi > lo * 2)) {
+   const middle = Math.min(2000, Math.max(160, Math.sqrt(hz(low) * hz(high))));
+   lo = middle / Math.SQRT2; hi = middle * Math.SQRT2;
+  }
+  const known = Number.isInteger(previous);
+  const nearby = known && hz(previous) >= 90 && hz(previous) <= 3200;
+  // A tone matching the previous note (in any octave) would refresh its memory instead.
+  const echoes = f => {
+   if (!known) return false;
+   const cents = ((1200 * Math.log2(f / hz(previous))) % 1200 + 1200) % 1200;
+   return Math.min(cents, 1200 - cents) < 30;
+  };
+  const band = () => {
+   let f;
+   for (let i = 0; i < 12; i++) { f = lo * (hi / lo) ** Math.random(); if (!echoes(f)) break; }
+   return f;
+  };
+  const glide = Math.min(.9, seconds * .4), end = seconds - glide + .1;
+  for (const stream of [0, 1]) {
+   let t = stream ? .05 + Math.random() * .08 : 0;
+   while (t < end - .07) {
+    const duration = Math.min(.06 + Math.random() * .12, end - t);
+    const frequency = nearby && Math.random() < .4
+     ? hz(previous + (Math.random() < .5 ? -1 : 1) * (.3 + Math.random() * .9))
+     : band();
+    blip(context, at + t, duration, frequency, stream ? 'sawtooth' : 'triangle');
+    t += duration + .02 + Math.random() * .07;
+   }
+  }
+  shepardGlide(context, at + seconds - glide, glide, {octavesPerSecond: 1.3, direction: Math.random() < .5 ? -1 : 1, level: .06});
+  return at + seconds;
+ }
+ // A variable silence lets the reset fade and keeps the onset unpredictable.
+ const resetGap = () => .7 + Math.random() * .5;
+ // Earlier releases called the reset maskTone; the name stays for compatibility.
+ function maskTone(context, at, duration = 2.4, previous = null, low, high) {
+  return resetTones(context, at, {previous, low, high, seconds: duration});
  }
  function cancelAudio() { for (const voice of voices) { try {voice.stop();} catch (_) {} } voices.clear(); }
- root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, cancelAudio};
+ root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, sameNoteName, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, resetTones, resetGap, shepardGlide, farPitch, cancelAudio};
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -4300,7 +4420,9 @@ DEMO_SCORES.piano = {
 /* Copy shared by both independent apps. */
 const TRAINING_COPY = {
   "en": {
-    "apDescription": "Independent random draws, including repeats. No answers until the round ends.",
+    "apDescription": "Each note name is drawn independently of the previous question; successive notes are more than an octave apart when the range allows. Answers appear after the round.",
+    "intervalNoRepeat": "These settings cannot give a different target note name. Select more notes or widen the interval or pitch range.",
+    "distinctRangeError": "Choose at least two different note names for consecutive questions.",
     "apLearnDesc": "Imagine each named note before listening. Recall without a timer; due notes and mistakes receive more practice.",
     "apColdDesc": "20 questions, no immediate feedback and no time limit. Compare only checks with the same level, range and sound.",
     "apColdRangeText": "Uses the range you selected (shown below). A break of at least 4 hours since the last sound on this site is tagged separately; other devices are not detected.",
@@ -4358,7 +4480,9 @@ const TRAINING_COPY = {
     "produceAgain": "First note again"
   },
   "zh-TW": {
-    "apDescription": "每題獨立隨機抽取，允許重複；整輪結束後才顯示答案。",
+    "apDescription": "每題音名獨立抽選，與上一題無關；音域允許時，相鄰兩題相距一個八度以上。整輪結束後顯示答案。",
+    "intervalNoRepeat": "目前設定無法換一個目標音名。請增加音名、放寬音程或擴大音域。",
+    "distinctRangeError": "連續出題至少需要兩個不同音名。",
     "apLearnDesc": "先在腦中回想音名對應的聲音，再試聽。回憶不限時；到期音與錯音會增加練習。",
     "apColdDesc": "20題，不限時、不即時公布答案。僅比較相同難度、音域與音色的成績。",
     "apColdRangeText": "使用你選擇的音域（見下方）。本網站上次發聲後間隔至少4小時會另行標記；無法偵測其他裝置。",
@@ -4416,7 +4540,9 @@ const TRAINING_COPY = {
     "produceAgain": "重聽第一個音"
   },
   "ja": {
-    "apDescription": "各問を独立に抽選します。同じ音も続きます。正解は終了後に表示。",
+    "apDescription": "音名は前の問題と無関係に選ばれ、音域が許せば連続する音は1オクターブ以上離れます。正解は終了後に表示します。",
+    "intervalNoRepeat": "別の目標音名を選べません。音名を追加するか、音程または音域を広げてください。",
+    "distinctRangeError": "出題には異なる音名が2つ以上必要です。",
     "apLearnDesc": "音名から音を思い浮かべてから試聴。時間制限なし。復習時期の音と間違えた音を多めに練習。",
     "apColdDesc": "20問、時間制限と途中の正解表示なし。同じレベル・音域・音色の結果どうしで比較してください。",
     "apColdRangeText": "選択中の音域を使います（下に表示）。このサイトで最後に音を鳴らしてから4時間以上あいた場合は区別して記録します。他の端末は検知できません。",
@@ -4474,7 +4600,9 @@ const TRAINING_COPY = {
     "produceAgain": "1音目をもう一度"
   },
   "de": {
-    "apDescription": "Unabhängige Zufallsauswahl mit Wiederholungen. Lösungen erst am Rundenende.",
+    "apDescription": "Jeder Tonname wird unabhängig von der vorigen Aufgabe gewählt; wenn der Umfang es erlaubt, liegen aufeinanderfolgende Töne mehr als eine Oktave auseinander. Auflösung am Rundenende.",
+    "intervalNoRepeat": "Kein anderer Zieltonname möglich. Wähle mehr Töne, Intervalle oder einen größeren Tonumfang.",
+    "distinctRangeError": "Wähle mindestens zwei verschiedene Tonnamen.",
     "apLearnDesc": "Den benannten Ton erst vorstellen, dann anhören. Ohne Zeitlimit; fällige und falsche Töne werden häufiger geübt.",
     "apColdDesc": "20 Fragen ohne Zeitlimit oder sofortige Lösung. Nur Tests mit gleicher Stufe, gleichem Tonumfang und gleichem Klang vergleichen.",
     "apColdRangeText": "Verwendet den gewählten Tonumfang (siehe unten). Pausen ab 4 Stunden seit dem letzten Ton auf dieser Seite werden markiert. Andere Geräte werden nicht erkannt.",
@@ -4532,7 +4660,9 @@ const TRAINING_COPY = {
     "produceAgain": "Ersten Ton wiederholen"
   },
   "it": {
-    "apDescription": "Estrazioni indipendenti, anche con ripetizioni. Soluzioni solo a fine turno.",
+    "apDescription": "Ogni nome è estratto indipendentemente dalla domanda precedente; se l’estensione lo consente, note consecutive distano più di un’ottava. Soluzioni a fine turno.",
+    "intervalNoRepeat": "Non è possibile scegliere un altro nome di nota. Aggiungi note oppure amplia gli intervalli o l’estensione.",
+    "distinctRangeError": "Scegli almeno due nomi di nota diversi.",
     "apLearnDesc": "Immagina la nota prima di ascoltarla. Richiamo senza limite; più pratica per note da ripassare ed errori.",
     "apColdDesc": "20 domande senza limite né feedback immediato. Confronta solo verifiche con lo stesso livello, la stessa estensione e lo stesso timbro.",
     "apColdRangeText": "Usa l’estensione selezionata (vedi sotto). Le pause di almeno 4 ore dall’ultimo suono su questo sito sono indicate a parte; altri dispositivi non sono rilevati.",
@@ -4590,7 +4720,9 @@ const TRAINING_COPY = {
     "produceAgain": "Riascolta la prima nota"
   },
   "el": {
-    "apDescription": "Ανεξάρτητη τυχαία επιλογή, με επαναλήψεις. Απαντήσεις στο τέλος.",
+    "apDescription": "Κάθε όνομα επιλέγεται ανεξάρτητα από την προηγούμενη ερώτηση· όταν η έκταση το επιτρέπει, διαδοχικές νότες απέχουν πάνω από μία οκτάβα. Απαντήσεις στο τέλος.",
+    "intervalNoRepeat": "Δεν υπάρχει άλλος στόχος με διαφορετικό όνομα. Πρόσθεσε νότες ή διεύρυνε τα διαστήματα ή την έκταση.",
+    "distinctRangeError": "Επίλεξε τουλάχιστον δύο διαφορετικά ονόματα νοτών.",
     "apLearnDesc": "Φαντάσου τη νότα πριν την ακούσεις. Χωρίς χρονικό όριο· περισσότερη εξάσκηση σε λάθη και προγραμματισμένες επαναλήψεις.",
     "apColdDesc": "20 ερωτήσεις χωρίς χρονικό όριο ή άμεση απάντηση. Σύγκρινε μόνο ελέγχους με ίδιο επίπεδο, ίδια έκταση και ίδιο ηχόχρωμα.",
     "apColdRangeText": "Χρησιμοποιεί την έκταση που επέλεξες (βλ. παρακάτω). Οι παύσεις τουλάχιστον 4 ωρών από τον τελευταίο ήχο σε αυτόν τον ιστότοπο σημειώνονται χωριστά. Άλλες συσκευές δεν ανιχνεύονται.",
@@ -4677,10 +4809,10 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const last = Math.floor((to - 11) / 12) * 12 + 11;
         return first <= last ? {from:first,to:last} : null;
     }
-    // Avoid exact MIDI repeats between adjacent AP questions (including between
-    // rounds), while retaining a weighted random distribution over every legal
-    // pitch. On a single octave, repeating the *same* pitch class may sometimes
-    // be impossible; this constraint then necessarily changes conditional odds.
+    // The answer is a pitch class: F4 and F5 are the same answer.
+    // Each note name is drawn without looking at the previous question, so the
+    // previous answer never rules a name in or out. Only the register depends on
+    // the previous note: more than an octave away whenever the range allows.
     function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null}) {
         if (!Number.isInteger(from)||!Number.isInteger(to)||from<0||to>127||to<from||
             !Number.isInteger(total)||total<1) return [];
@@ -4699,21 +4831,20 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const otherWeight=own.reduce((a,b)=>a+b,0)/own.length;
         const foil=outside.map(c=>{const gap=Math.min(...active.map(a=>chromaDistance(a,c)));return gap<=1?3:gap===2?2:1;});
         const foilTotal=foil.reduce((a,b)=>a+b,0);
-        const weightedNotes=[];
+        const names=[], weights=[];
         for (const pc of classes) {
             if (forcedPC !== null && pc !== forcedPC) continue;
             const learnedIndex=active.indexOf(pc), outsideIndex=outside.indexOf(pc);
             const weight=learnedIndex>=0 ? own[learnedIndex]
                 : (foilTotal ? otherWeight*foil[outsideIndex]/foilTotal : 0);
-            if (weight<=0) continue;
-            for (const octave of common) weightedNotes.push({midi:12*octave+pc,weight:weight/common.length});
+            if (weight>0) {names.push(pc); weights.push(weight);}
         }
+        if (!names.length) return [];
         const result=[];
         let prior=previousMidi;
         for (let i=0;i<total;i++) {
-            const eligible=weightedNotes.filter(note=>note.midi!==prior);
-            if (!eligible.length) return []; // e.g. forced repair in a single octave
-            const next=TrainingCore.choose(eligible,eligible.map(note=>note.weight)).midi;
+            const pc=TrainingCore.choose(names,weights);
+            const next=TrainingCore.farPitch(common.map(octave=>12*octave+pc),prior);
             result.push(next); prior=next;
         }
         return result;
@@ -4836,7 +4967,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
 
 </script>
     <script>
-/* Optional cross-device training clock.  Both independent PWAs use this exact file.
+/* Daily training clock shared by both instruments, with optional cross-device sync.
  * Only explicit training events count; Demo and idle time never do.
  * Cloud synchronization requires deploying the companion Cloudflare Worker and
  * entering the same 128-bit pairing key and endpoint on every site/device.
@@ -4846,6 +4977,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     const START_DATE = '2026-10-29', EXEMPT = '2026-10-30';
     const GOAL = 3600000, IDLE = 75000, SEGMENT_MAX = 60000;
     const STORAGE = 'musik-training-tracker-v1';
+    const GOAL_DAY_KEY = 'musik-training-60-minute-reminder-day';
     const fmt = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit'});
     const jstDate = (ms = Date.now()) => {
         const parts=Object.fromEntries(fmt.formatToParts(new Date(ms)).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
@@ -4858,6 +4990,12 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         segments: Array.isArray(stored.segments) ? stored.segments : [],
         pending: [...(Array.isArray(stored.pending) ? stored.pending : []), ...(stored.checkpoint && stored.checkpoint.end > stored.checkpoint.start ? [stored.checkpoint] : [])], remote: stored.remote || null};
     let active = null, lastAction = 0, uploadBusy = false, pollBusy = false;
+    let announcedDay = null, noticeDay = null, goalTimer;
+    const goalText = {
+        en:['You’ve practised for 60 minutes today.','Got it'], 'zh-TW':['今天的練習已累計滿 60 分鐘。','知道了'],
+        ja:['今日の練習時間が合計60分に達しました。','閉じる'], de:['Du hast heute 60 Minuten geübt.','Schließen'],
+        it:['Oggi hai raggiunto 60 minuti di pratica.','Chiudi'], el:['Συμπλήρωσες 60 λεπτά εξάσκησης σήμερα.','Κλείσιμο']
+    };
     const LANGUAGE_TEXT = {
       "en": ["Training time sync", "Shared Cloudflare Worker HTTPS URL", "Personal pairing code (same on both sites and devices)", "Save sync settings", "Copy pairing code", "Local only · not synced", "Cloud sync configured", "Active training", "min", "Pending uploads", "Not configured: sites and devices cannot share progress.", "Pairing code copied; paste the same code in your other site/device.", "Settings saved. Syncing…", "Saved as local-only time.", "Enter an HTTPS URL and a 32-digit hexadecimal pairing code.", "Historical overdue", "Exempt"],
       "de": ["Trainingszeit-Synchronisierung", "Gemeinsame Cloudflare-Worker-HTTPS-Adresse", "Privater Kopplungscode (auf allen Geräten identisch)", "Einstellungen speichern", "Kopplungscode kopieren", "Nur lokal · nicht synchronisiert", "Cloud-Sync konfiguriert", "Aktives Training", "Min.", "Uploads ausstehend", "Ohne Server keine geräteübergreifende Synchronisierung.", "Kopplungscode kopiert; auf anderen Geräten einfügen.", "Einstellungen gespeichert. Synchronisiere…", "Nur lokal gespeichert.", "HTTPS-Adresse und 32-stelligen Hexadezimalcode eingeben.", "Historischer Rückstand", "Befreit"],
@@ -4913,10 +5051,19 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         return [base,base+86400000];
     }
     function todayMs(rows, date = jstDate()) {return unionMs(rows,...bounds(date));}
-    function endActive() {
+    function advanceActive(now) {
         if (!active) return;
-        const end = Math.max(active.start,Math.min(Date.now(),lastAction + IDLE,active.start+SEGMENT_MAX));
-        active.end = Math.max(active.end,end);
+        const end = Math.max(active.end,Math.min(now,lastAction + IDLE));
+        while (end - active.start >= SEGMENT_MAX) {
+            const boundary = active.start + SEGMENT_MAX;
+            state.pending.push({...active,end:boundary});
+            active = {id:id(),start:boundary,end:boundary};
+        }
+        active.end = end;
+    }
+    function endActive(now = Date.now()) {
+        if (!active) return;
+        advanceActive(now);
         if (active.end > active.start) state.pending.push({...active});
         active = null; save();
     }
@@ -4924,7 +5071,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         if (!['question','answer','free-play','ap-learning','ap-check','ap-answer','staff-replay'].includes(kind)) return;
         if (document.hidden || document.querySelector('.app-shell.demo-running')) return;
         const now = Date.now();
-        if (active && (now - lastAction >= IDLE || now - active.start >= SEGMENT_MAX)) endActive();
+        if (active && now - lastAction >= IDLE) endActive(now);
+        else advanceActive(now);
         lastAction = now;
         if (!active) active = {id:id(), start:now,end:now};
         save();render();
@@ -4935,14 +5083,9 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             pause(); return;
         }
         if (active) {
-            active.end = Math.max(active.end, Math.min(Date.now(),lastAction+IDLE,active.start+SEGMENT_MAX));
-            if (Date.now() >= lastAction + IDLE) endActive();
-            else if (Date.now() >= active.start + SEGMENT_MAX) {
-                endActive();
-                // Continued recent activity should not stop being counted at 60 seconds.
-                active = {id:id(),start:Date.now(),end:Date.now()};
-                save();
-            } else save();
+            const now = Date.now();
+            if (now >= lastAction + IDLE) endActive(now);
+            else {advanceActive(now); save();}
         }
         render();
     }
@@ -4958,9 +5101,34 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             synced: Boolean(state.endpoint && state.key && state.remote?.date === date), localMs,
             remoteMs, pending: state.pending.length + (active ? 1 : 0)};
     }
+    function updateGoalNotice(s) {
+        const notice = document.getElementById('dailyGoalNotice');
+        if (!notice) return;
+        if (noticeDay && noticeDay !== s.date) {notice.hidden = true; noticeDay = null;}
+        if (s.ms < GOAL || document.hidden || (document.hasFocus && !document.hasFocus())) return;
+        if (announcedDay !== s.date) {
+            try {announcedDay = localStorage.getItem(GOAL_DAY_KEY);} catch (_) {}
+            if (announcedDay !== s.date) {
+                announcedDay = noticeDay = s.date;
+                try {localStorage.setItem(GOAL_DAY_KEY,s.date);} catch (_) {}
+                notice.hidden = false;
+                if (typeof navigator.vibrate === 'function') navigator.vibrate([90,70,90]);
+            }
+        }
+        if (noticeDay !== s.date || notice.hidden) return;
+        const [message,dismiss] = goalText[language];
+        const label = document.getElementById('dailyGoalText');
+        if (label.textContent !== message) label.textContent = message;
+        document.getElementById('dailyGoalDismiss').textContent = dismiss;
+    }
     function render() {
         const s = summary();
-        const minutes = (s.ms/60000).toFixed(1);
+        clearTimeout(goalTimer);
+        const remaining = GOAL - s.localMs;
+        if (active && !document.hidden && s.ms < GOAL && remaining > 0 && remaining <= 3000)
+            goalTimer = setTimeout(tick,remaining);
+        updateGoalNotice(s);
+        const minutes = (Math.floor(s.ms/6000)/10).toFixed(1);
         const pct = Math.min(100,Math.floor(100*s.ms/GOAL));
         const text = document.getElementById('trackerStatus');
         if (text) text.textContent = `${translate(7)} ${minutes}/60 ${translate(8)} · ${pct}% · ${translate(s.synced?6:5)}`;
@@ -5048,6 +5216,9 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     }
     function setup() {
         const status=document.getElementById('trackerStatus'); if(!status) return;
+        document.getElementById('dailyGoalDismiss').addEventListener('click',() => {
+            document.getElementById('dailyGoalNotice').hidden = true;
+        });
         document.getElementById('trackerSave').addEventListener('click',setConfig);
         document.getElementById('trackerCopy').addEventListener('click',async() => {
             try {await navigator.clipboard.writeText(ensurePairing());
@@ -5060,6 +5231,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         root.addEventListener('training-pause',pause);
         document.addEventListener('visibilitychange',()=>{if(document.hidden)pause(); else {poll();render();}});
         root.addEventListener('blur',pause);
+        root.addEventListener('focus',render);
         root.addEventListener('pagehide',pause);
         setInterval(tick, 3000);
         setInterval(()=>{flush();poll();},15000);
@@ -5209,7 +5381,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const refs = [];
         for (let ref=first; ref<=last; ref++) {
           const target=ref+signed;
-          if (target===previous?.target) continue;
+          if (TrainingCore.sameNoteName(target,previous?.target)) continue;
           if (!filter || (filter.has(ref%12) && filter.has(target%12))) refs.push(ref);
         }
         if (!refs.length) continue;
@@ -5677,7 +5849,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
   if(session.records.length===session.total){finish();return;}
   const ordinal=session.records.length, previous=TrainingCore.lastQuestion(AP_APP_ID);
   let q=session.questions[ordinal];
-  if(adaptive(session.activity) || q.target===previous?.target ||
+  if(adaptive(session.activity) || TrainingCore.sameNoteName(q.target,previous?.target) ||
      (Number.isInteger(previous?.reference) && q.distance===Math.abs(previous.target-previous.reference))){
    const repair=adaptive(session.activity)?TrainingCore.takeRepair(session.repairs,ordinal):null;
    q=C.question({...session,previous,memory:state.memory,repair});
@@ -5888,7 +6060,13 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         learn: ['Active learning','主動學習','学習','Lernen','Apprendimento','Ενεργή μάθηση'],
         consolidate: ['Consolidate','鞏固練習','定着練習','Festigen','Consolidamento','Εμπέδωση'],
         firstVisit: ['On your first day, hear your labelled notes and try active learning. Start with an independent check on later days.','第一天可以先聽有音名的示範，再做主動學習。之後每天第一次練習時，先做獨立檢查。','初日は音名つきの見本を聞いてから学習しましょう。翌日からは、その日最初に独立チェックを行います。','Höre am ersten Tag die beschrifteten Töne und beginne mit dem Lernen. Starte an den folgenden Tagen mit einem Test.','Il primo giorno ascolta gli esempi con il nome e inizia a esercitarti. Nei giorni successivi comincia con una verifica.','Την πρώτη μέρα άκουσε τις νότες με το όνομά τους. Τις επόμενες ημέρες ξεκίνα με έλεγχο.'],
-        mask: ['Brief unpitched noise between questions','題目之間播放短暫的無音高噪聲','問題の間に短いノイズを入れる','Kurzes Rauschen zwischen den Aufgaben','Breve rumore tra le domande','Σύντομος θόρυβος ανάμεσα στις ερωτήσεις'],
+        mask: ['Pitch-memory reset before each question (recommended)','每題前播放清除音高記憶的干擾音（建議開啟）','各問題の前に音の記憶を消す妨害音（推奨）','Störklänge vor jeder Aufgabe löschen das Tongedächtnis (empfohlen)','Suoni che cancellano la memoria del tono prima di ogni domanda (consigliato)','Ήχοι που σβήνουν τη μνήμη τόνου πριν από κάθε ερώτηση (συνιστάται)'],
+        octaves: ['Practice octaves','練習八度','練習するオクターブ','Übungsoktaven','Ottave da esercitare','Οκτάβες εξάσκησης'],
+        rangeHint: ['Choose octaves that cover every note in your learning set and at least two different note names.','所選八度須涵蓋學習音集的每個音，並至少能播放兩個不同音名。','学習中の音がすべて含まれ、異なる音名が2つ以上あるオクターブを選んでください。','Wähle Oktaven mit allen Lerntönen und mindestens zwei verschiedenen Notennamen.','Scegli ottave che comprendano tutte le note in studio e almeno due nomi diversi.','Επίλεξε οκτάβες με όλες τις νότες εκμάθησης και τουλάχιστον δύο διαφορετικά ονόματα.'],
+        mixRange: ['Range for both instruments: {range}','兩種樂器共用的音域為 {range}','両方の楽器で使える音域は {range} です','Gemeinsamer Tonumfang beider Instrumente: {range}','Estensione comune ai due strumenti: {range}','Κοινή έκταση των δύο οργάνων: {range}'],
+        relative: ['I used an interval','我是靠音程推算的','音程から推測した','Aus dem Intervall abgeleitet','Ho usato un intervallo','Χρησιμοποίησα διάστημα'],
+        relativeSaved: ['Recorded as interval-based','已記為音程推算','音程からの推測として記録しました','Als aus dem Intervall abgeleitet erfasst','Registrato come dedotto da un intervallo','Καταγράφηκε ως απάντηση βάσει διαστήματος'],
+        relativeCount: ['By interval: {n}','音程推算 {n} 題','音程から推測 {n}問','Aus Intervallen abgeleitet: {n}','Per intervallo: {n}','Με διάστημα: {n}'],
         coldToday: ['Start today with one independent check, before playing examples.','今天先做一次獨立檢查，再聽示範音。','見本を聞く前に、今日最初のチェックを始めましょう。','Beginne heute mit einem Test vor den Hörbeispielen.','Inizia con una verifica prima di ascoltare gli esempi.','Ξεκίνα σήμερα με έναν έλεγχο πριν ακούσεις παραδείγματα.'],
         warmToday: ['You have heard a sound today. Continue with active learning.','今天已聽過練習音，可以繼續主動學習。','今日はすでに音を聞きました。学習を続けましょう。','Du hast heute schon einen Ton gehört. Übe im Lernmodus weiter.','Oggi hai già ascoltato un suono. Continua con l’apprendimento.','Έχεις ήδη ακούσει ήχο σήμερα. Συνέχισε με ενεργή μάθηση.'],
         coldHelp: ['12 notes · one listen · answers at the end','12 題 · 每題一次 · 整組結束後看答案','12問・再生は各1回・答えは最後に表示','12 Töne · einmal hören · Auflösung am Ende','12 note · un ascolto · risposte alla fine','12 νότες · μία ακρόαση · απαντήσεις στο τέλος'],
@@ -5915,7 +6093,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         days: ['Check days','檢查天數','チェック日数','Testtage','Giorni di verifica','Ημέρες ελέγχου'],
         dayFirst: ['First sound of the day · {hits}/{n} correct','每日第一聲 · 答對 {hits}/{n}','その日の最初の音・正答 {hits}/{n}','Erster Ton des Tages · {hits}/{n} richtig','Primo suono del giorno · {hits}/{n} esatti','Πρώτος ήχος ημέρας · {hits}/{n} σωστά'],
         all: ['All octaves','全部八度','全オクターブ','Alle Oktaven','Tutte le ottave','Όλες οι οκτάβες'],
-        recordHelp: ['Hits require the exact name on the first listen. Counts include targets heard with help.','首次聆聽答對音名才算命中。分母包含重播過的目標音。','最初の再生で音名が正しければ正答。分母には再生し直した対象音も含みます。','Ein Treffer erfordert die richtige Erstantwort. Der Nenner enthält wiederholte Zieltöne.','Un centro richiede il nome esatto al primo ascolto. Il totale include le note bersaglio riascoltate.','Επιτυχία σημαίνει σωστό όνομα στην πρώτη ακρόαση. Το σύνολο περιλαμβάνει νότες που ακούστηκαν ξανά.'],
+        recordHelp: ['Hits require the exact name on the first listen, within the answer window. Counts include targets heard with help or answered too late.','命中須在首次聆聽、作答時限內答出正確音名。計數包含重聽輔助及超時的題目。','正解は、1回目の再生で制限時間内に正しい音名を答えた場合のみです。聞き直した問題と時間切れの問題も回数に含みます。','Treffer verlangen den exakten Namen beim ersten Hören innerhalb des Antwortfensters. Gezählt werden auch Zieltöne mit Hilfe oder zu später Antwort.','Un centro richiede il nome esatto al primo ascolto, entro il tempo di risposta. Il conteggio include le note ascoltate con aiuto o con risposta tardiva.','Επιτυχία σημαίνει το σωστό όνομα με την πρώτη ακρόαση, μέσα στο χρονικό όριο. Μετρούν και οι νότες με βοήθεια ή με καθυστερημένη απάντηση.'],
         play: ['Play note','播放題目','問題の音を再生','Ton abspielen','Ascolta la nota','Αναπαραγωγή νότας'],
         next: ['Next note','下一題','次の問題','Nächster Ton','Nota successiva','Επόμενη νότα'],
         replay: ['Replay','重播','もう一度','Wiederholen','Riascolta','Επανάληψη'],
@@ -5941,7 +6119,22 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         restore: ['Import AP backup','匯入 AP 備份','AP バックアップを読み込む','AP-Sicherung importieren','Importa backup AP','Εισαγωγή αντιγράφου AP'],
         importOk: ['Backup merged.','已合併備份。','バックアップを統合しました。','Sicherung zusammengeführt.','Backup unito.','Το αντίγραφο συγχωνεύτηκε.'],
         importBad: ['Choose a focused AP backup from this instrument’s site.','請選擇來自同一樂器網站的集中訓練備份。','同じ楽器サイトの集中練習バックアップを選んでください。','Wähle eine AP-Sicherung dieser Instrumentenseite.','Scegli un backup AP dal sito dello stesso strumento.','Επίλεξε αντίγραφο AP από τον ιστότοπο του ίδιου οργάνου.'],
-        countsLocal: ['AP answers stay in this browser. Training time uses your existing sync settings.','AP 答題記錄保存在此瀏覽器。訓練時長沿用原有同步設定。','回答はこのブラウザに保存されます。練習時間には既存の同期設定を使用します。','AP-Antworten bleiben in diesem Browser. Für die Übungszeit gelten die bisherigen Sync-Einstellungen.','Le risposte restano in questo browser. Il tempo usa le impostazioni di sincronizzazione esistenti.','Οι απαντήσεις μένουν σε αυτόν τον περιηγητή. Ο χρόνος ακολουθεί τις υπάρχουσες ρυθμίσεις συγχρονισμού.']
+        countsLocal: ['AP answers stay in this browser. Training time uses your existing sync settings.','AP 答題記錄保存在此瀏覽器。訓練時長沿用原有同步設定。','回答はこのブラウザに保存されます。練習時間には既存の同期設定を使用します。','AP-Antworten bleiben in diesem Browser. Für die Übungszeit gelten die bisherigen Sync-Einstellungen.','Le risposte restano in questo browser. Il tempo usa le impostazioni di sincronizzazione esistenti.','Οι απαντήσεις μένουν σε αυτόν τον περιηγητή. Ο χρόνος ακολουθεί τις υπάρχουσες ρυθμίσεις συγχρονισμού.'],
+        limit: ['Answer window','作答時限','回答時間','Antwortfenster','Tempo di risposta','Χρόνος απάντησης'],
+        limitStrict: ['Strict · {s}','嚴格 · {s}','厳格 · {s}','Streng · {s}','Rigoroso · {s}','Αυστηρό · {s}'],
+        limitRelaxed: ['Relaxed · {s}','寬鬆 · {s}','ゆるめ · {s}','Großzügig · {s}','Ampio · {s}','Χαλαρό · {s}'],
+        limitOff: ['No limit · intervals can creep in','不限時 · 容易變成音程推算','制限なし · 音程で推測しやすい','Ohne Limit · Intervall-Ableitung möglich','Senza limite · gli intervalli possono intromettersi','Χωρίς όριο · εύκολα μπαίνουν τα διαστήματα'],
+        limitHelp: ['Strict uses the windows of Wong et al. (2025): about 1.2 s with one learned name, rising to 2 s with twelve. A later answer counts as a miss, because working a name out from an interval takes longer than recognising it.','嚴格模式採用 Wong 等人（2025）的時限：學一個音約 1.2 秒，學滿十二個音約 2 秒。超時的回答算錯，因為用音程推算比直接辨認慢。','厳格モードは Wong ら（2025）の制限時間を使います。学習中の音が1つなら約1.2秒、12個で約2秒です。音程から推測すると直接聞き分けるより時間がかかるため、時間切れの回答は不正解になります。','Streng nutzt die Zeitfenster von Wong et al. (2025): etwa 1,2 s bei einem gelernten Namen, bis 2 s bei zwölf. Spätere Antworten zählen als Fehler, denn einen Namen aus einem Intervall abzuleiten dauert länger, als ihn zu erkennen.','Rigoroso usa le finestre di Wong et al. (2025): circa 1,2 s con un nome appreso, fino a 2 s con dodici. Una risposta più tarda conta come errore, perché dedurre un nome da un intervallo richiede più tempo che riconoscerlo.','Το αυστηρό χρησιμοποιεί τα χρονικά όρια των Wong κ.ά. (2025): περίπου 1,2 δ. με ένα όνομα, έως 2 δ. με δώδεκα. Μια πιο αργή απάντηση μετρά ως λάθος, γιατί ο υπολογισμός από διάστημα διαρκεί περισσότερο από την αναγνώριση.'],
+        rules: ['Answer within {s}. Later answers count as misses.','請在 {s}內作答，超時算答錯。','{s}以内に答えてください。時間切れは不正解になります。','Antworte innerhalb von {s}. Spätere Antworten zählen als Fehler.','Rispondi entro {s}. Le risposte più tarde contano come errori.','Απάντησε μέσα σε {s}. Οι πιο αργές απαντήσεις μετρούν ως λάθη.'],
+        rulesOff: ['No answer window: notes can still be worked out from intervals.','目前不限時：仍可能靠音程推算出答案。','制限時間なし：音程から推測できてしまいます。','Kein Antwortfenster: Töne lassen sich weiterhin aus Intervallen ableiten.','Nessun limite di tempo: le note si possono ancora dedurre dagli intervalli.','Χωρίς χρονικό όριο: οι νότες μπορούν ακόμη να υπολογιστούν από διαστήματα.'],
+        tooSlow: ['Too slow','超時','時間切れ','Zu langsam','Troppo tardi','Πολύ αργά'],
+        timeUp: ['Time’s up · counted as a miss','時間到 · 記為答錯','時間切れ · 不正解として記録','Zeit abgelaufen · als Fehler gezählt','Tempo scaduto · contato come errore','Τέλος χρόνου · μετρά ως λάθος'],
+        lateCount: ['too slow {n}','超時 {n} 題','時間切れ {n}問','zu langsam {n}','troppo tardi {n}','πολύ αργά {n}'],
+        medianTime: ['median time {s}','反應時間中位數 {s}','反応時間の中央値 {s}','Median-Antwortzeit {s}','tempo mediano {s}','διάμεσος χρόνος {s}'],
+        resetting: ['Reset tones… the note follows','干擾音播放中，接著是題目音…','妨害音のあとに出題します…','Störklänge … dann folgt der Ton','Suoni di disturbo… poi la nota','Ήχοι παρεμβολής… ακολουθεί η νότα'],
+        clearing: ['Clearing labelled notes from memory (20 s)…','正在清除剛聽過的有名稱音的記憶（20 秒）…','音名つきの音の記憶を消しています（20秒）…','Beschriftete Töne werden aus dem Gedächtnis gelöscht (20 s) …','Cancello dalla memoria le note con il nome (20 s)…','Σβήνω από τη μνήμη τις νότες με όνομα (20 δ.)…'],
+        jumpHint: ['Choose octaves spanning three octaves so that successive notes can stay more than an octave apart.','所選八度須橫跨三個八度，相鄰兩題才能保持相距一個八度以上。','連続する音を1オクターブ以上離すには、3オクターブにわたる範囲を選んでください。','Wähle Oktaven über drei Oktaven, damit aufeinanderfolgende Töne mehr als eine Oktave auseinanderliegen können.','Scegli ottave che coprano tre ottave, così note consecutive possono distare più di un’ottava.','Επίλεξε οκτάβες που καλύπτουν τρεις οκτάβες, ώστε διαδοχικές νότες να απέχουν πάνω από μία οκτάβα.'],
+        sec: ['{s} s','{s} 秒','{s}秒','{s} s','{s} s','{s} δ']
     };
     function t(lang,key,args = {}) {
         let value = lines[key][Math.max(0,languages.indexOf(lang))];
@@ -5962,31 +6155,82 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
 /* The focused AP course uses the same pitch classes, database and clock as the host. */
 (function (root) {
     'use strict';
-    const protocol = 7;
+    // Protocol 8: note names independent of the previous question, successive notes more
+    // than an octave apart, a timed answer window and a longer pitch-memory reset.
+    // Protocol 7 rows stay readable but no longer count towards a new-note suggestion.
+    const protocol = 8;
+    const readable = [7, 8];
     const sourceVersion = 'jclive-sf2-v1';
     const legacySourceVersion = 'iowa-prototype-1';
     const notes = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+    const limits = {violin: [55,108], piano: [21,108]};
+    const octaveOf = pitch => Math.floor(pitch / 12) - 1;
     const order = root.APPitchScience.ORDER;
     const validSet = a => Array.isArray(a) && a.length > 0 && a.length <= 12 &&
         a.every(n => Number.isInteger(n) && n >= 0 && n < 12) && new Set(a).size === a.length;
     const sameSet = (a,b) => validSet(a) && a.length === b.length && b.every(n => a.includes(n));
     const otherInstrument = instrument => instrument === 'violin' ? 'piano' : 'violin';
-    const label = midi => notes[midi % 12] + (Math.floor(midi / 12) - 1);
-    const isFocus = row => row?.protocol === protocol && [sourceVersion, legacySourceVersion].includes(row.sourceVersion);
+    const label = midi => notes[midi % 12] + octaveOf(midi);
+    const isFocus = row => readable.includes(row?.protocol) && [sourceVersion, legacySourceVersion].includes(row.sourceVersion);
     function sampleId(instrument, pitch, version = sourceVersion) {
         return version === legacySourceVersion ? instrument + '-' + pitch + '-1' : 'jclive-' + instrument + '-' + pitch;
     }
     const scored = row => row.result === 'answered' || row.result === 'assisted';
+    // A late answer is an attempt without a hit, like a wrong one.
+    const attempted = row => scored(row) || row.result === 'relative' || row.result === 'timeout';
     const first = row => row.result === 'answered' && row.replayed === 0;
     const isTarget = row => row.known.includes(row.pitch % 12);
     const correct = row => row.result === 'answered' && row.guess === (isTarget(row) ? row.pitch % 12 : 'out');
     function defaults(known = [5]) {
-        return {known: [...known], share: 0, size: 24, hit: 75, falseAlarm: 25};
+        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 'strict'};
     }
-    function validSettings(s) {
+    // Answer windows of Wong et al. (2025): 1,183 ms with one learned name, rising
+    // linearly to 2,028 ms with twelve. Answers after the window count as misses, which
+    // leaves little time to work a name out from an interval. 150 ms covers touch input
+    // and the uncertainty of the audible-onset estimate; "relaxed" adds 0.7 s.
+    const windows = ['strict', 'relaxed', 'off'];
+    function answerWindow(limit, names) {
+        if (limit === 'off') return null;
+        const k = Math.max(1, Math.min(12, names));
+        return Math.round(1183 + (2028 - 1183) * (k - 1) / 11 + 150 + (limit === 'relaxed' ? 700 : 0));
+    }
+    function octaveChoices(instrument) {
+        const [low, high] = limits[instrument];
+        return Array.from({length: octaveOf(high) - octaveOf(low) + 1}, (_, i) => octaveOf(low) + i);
+    }
+    function validSettings(s, instrument) {
         return s && validSet(s.known) && [0, .2, .5].includes(s.share) && [12,24,36,48,60].includes(s.size) &&
+            (s.octaves === undefined || (Array.isArray(s.octaves) && s.octaves.length > 0 &&
+                new Set(s.octaves).size === s.octaves.length && s.octaves.every(o => octaveChoices(instrument).includes(o)))) &&
             Number.isInteger(s.hit) && s.hit >= 50 && s.hit <= 100 &&
-            Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50;
+            Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50 &&
+            (s.limit === undefined || windows.includes(s.limit));
+    }
+    function supports(instrument, pitch, version = sourceVersion) {
+        if (!limits[instrument] || !Number.isInteger(pitch)) return false;
+        const [low, high] = version === legacySourceVersion ? [60,95] : limits[instrument];
+        return pitch >= low && pitch <= high;
+    }
+    function pitchPool(octaves, instrument, mixed = false) {
+        const [low, high] = limits[instrument];
+        const pitches = [];
+        for (let midi = low; midi <= high; midi++) {
+            if (octaves.includes(octaveOf(midi)) && (!mixed || supports(otherInstrument(instrument), midi))) pitches.push(midi);
+        }
+        return pitches;
+    }
+    function rangeText(pitches) {
+        const ranges = [];
+        for (let i = 0; i < pitches.length; i++) {
+            const start = pitches[i];
+            while (pitches[i+1] === pitches[i]+1) i++;
+            ranges.push(start === pitches[i] ? label(start) : label(start) + '–' + label(pitches[i]));
+        }
+        return ranges.join(' · ');
+    }
+    function playable(pitches, known) {
+        const pcs = new Set(pitches.map(p => p % 12));
+        return pcs.size >= 2 && known.every(pc => pcs.has(pc));
     }
     function shuffle(items) {
         const result = [...items];
@@ -5996,15 +6240,27 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         }
         return result;
     }
-    function pickMidi(pc, previous) {
-        return root.TrainingCore.choose([60 + pc, 72 + pc, 84 + pc].filter(n => n !== previous));
+    // The planned name is kept; only its octave depends on the most recent sound
+    // (the last labelled example if one followed the last question).
+    function pickMidi(pc, pitches, previous, known, example = null) {
+        const recent = Number.isInteger(example) ? example : previous;
+        const preferred = pitches.filter(p => p % 12 === pc);
+        if (preferred.length) return TrainingCore.farPitch(preferred, recent);
+        // Another tab or a changed range can remove the planned name from the pool.
+        const sameGroup = pitches.filter(p => known.includes(p % 12) === known.includes(pc));
+        return TrainingCore.farPitch(sameGroup.length ? sameGroup : pitches, recent);
     }
-    function plan(settings, mode, instrument, weights = {}) {
+    function plan(settings, mode, instrument, weights = {}, previousMidi = null) {
         const n = mode === 'cold' ? 12 : settings.size;
         const known = settings.known;
-        const outside = order.filter(pc => !known.includes(pc));
-        const nOther = outside.length ? Math.round(n / 4) : 0;
-        const nTarget = n - nOther;
+        const pitches = pitchPool(settings.octaves, instrument, mode !== 'cold' && settings.share > 0);
+        if (!playable(pitches, known)) return [];
+        const available = new Set(pitches.map(p => p % 12));
+        const outside = order.filter(pc => available.has(pc) && !known.includes(pc));
+        let nTarget = outside.length ? n - Math.round(n / 4) : n;
+        // A single name keeps a little over a third of the block, as in earlier releases.
+        if (known.length === 1) nTarget = Math.round(n * (.34 + Math.random() * .07));
+        const nOther = n - nTarget;
         const extra = mode === 'learn' ? Math.min(Math.floor(nTarget / 5), Math.max(0, nTarget - known.length)) : 0;
         let targetPCs = [];
         while (targetPCs.length < nTarget - extra) targetPCs.push(...shuffle(known));
@@ -6016,26 +6272,37 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             const d = Math.min(...known.map(k => root.APPitchScience.chromaDistance(pc,k)));
             return d === 1 ? 3 : d === 2 ? 2 : 1;
         });
-        for (let i = 0; i < nOther; i++) targetPCs.push(root.TrainingCore.choose(outside,foilWeights));
+        const remaining = Array(12).fill(0);
+        for (const pc of targetPCs) remaining[pc]++;
+        for (let i = 0; i < nOther; i++) {
+            const eligible = outside.filter(pc => remaining[pc] < n/2);  // no single outside name dominates
+            const pc = TrainingCore.choose(eligible, eligible.map(pc => foilWeights[outside.indexOf(pc)]));
+            remaining[pc]++;
+        }
         const secondary = mode === 'cold' ? 0 : Math.round(n * settings.share);
         const instruments = shuffle([...Array(secondary).fill(otherInstrument(instrument)), ...Array(n - secondary).fill(instrument)]);
-        return shuffle(targetPCs).map((pc,i) => ({pc, instrument: instruments[i]}));
+        // Plain shuffle: a name may follow itself, so the previous answer carries no
+        // information about the next one (no "never the same name twice" rule).
+        const names = shuffle(remaining.flatMap((count, pc) => Array(count).fill(pc)));
+        return instruments.map((name, i) => ({pc: names[i], instrument: name}));
     }
     function counts(rows) {
-        const usable = rows.filter(scored);
+        const usable = rows.filter(attempted);
         const targets = usable.filter(isTarget);
         const outsiders = usable.filter(row => !isTarget(row) && first(row));
         return {hits: targets.filter(row => first(row) && correct(row)).length, targets: targets.length,
             alarms: outsiders.filter(row => row.known.includes(row.guess)).length, outside: outsiders.length,
-            assisted: usable.filter(row => row.replayed > 0).length, total: usable.length};
+            assisted: usable.filter(row => row.replayed > 0).length, total: usable.length,
+            late: usable.filter(row => row.result === 'timeout').length};
     }
     function promotion(rows, sessions, settings, instrument, now = Date.now()) {
-        const blocks = sessions.filter(s => isFocus(s) && s.completed && s.source === instrument &&
+        const practiced = new Set(rows.filter(r => isFocus(r) && r.timbre === instrument && first(r)).map(r => r.sessionId));
+        const blocks = sessions.filter(s => isFocus(s) && s.protocol === protocol && practiced.has(s.id) && s.completed && s.source === instrument &&
             ['learn','consolidate'].includes(s.kind) && sameSet(s.known, settings.known) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a,b) => b.started - a.started).slice(0,6);
         const ids = new Set(blocks.map(s => s.id));
-        const recent = rows.filter(r => isFocus(r) && ids.has(r.sessionId) && r.timbre === instrument && scored(r));
+        const recent = rows.filter(r => isFocus(r) && ids.has(r.sessionId) && r.timbre === instrument && attempted(r));
         const perNote = settings.known.map(pc => {
             const items = recent.filter(r => r.pitch % 12 === pc);
             return {pc, first: items.filter(first).length,
@@ -6053,48 +6320,33 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const stamp = ctx.getOutputTimestamp?.();
         if (stamp && stamp.performanceTime > 0 && stamp.contextTime > 0) {
             const when = stamp.performanceTime + (start - stamp.contextTime) * 1000;
-            if (Number.isFinite(when) && when >= now - 10 && when < now + 1500)
+            if (Number.isFinite(when) && when >= now - 10 && when < now + 1500 + 1000 * (start - ctx.currentTime))
                 return {when, method: 'output-estimate'};
         }
         return {when: now + (start - ctx.currentTime + (ctx.outputLatency || ctx.baseLatency || 0)) * 1000,
             method: 'context-estimate'};
     }
-    root.APFocusModel = {protocol,sourceVersion,notes,order,label,validSet,sameSet,defaults,validSettings,otherInstrument,
-        isFocus,sampleId,scored,first,correct,isTarget,pickMidi,plan,counts,promotion,outputClock};
+    root.APFocusModel = {protocol,sourceVersion,notes,order,label,validSet,sameSet,defaults,windows,answerWindow,validSettings,otherInstrument,
+        isFocus,sampleId,scored,attempted,first,correct,isTarget,octaveChoices,octaveOf,supports,pitchPool,rangeText,playable,pickMidi,plan,counts,promotion,outputClock};
 })(typeof window === 'undefined' ? globalThis : window);
 
 </script>
     <script>
-/* Focused trials use the host's instrument player, with optional noise and an onset timestamp. */
+/* Focused trials use the host's instrument and the shared pitch-memory reset. */
 (function (root) {
     'use strict';
+    const LONG_RESET_SECONDS = 20;
     function create(context, loadInstrumentPreset = root.loadInstrumentPreset, queueInstrumentNote = root.queueInstrumentNote) {
-        let source = null, noiseSource = null, noiseBuffer = null, generation = 0;
+        let source = null, generation = 0;
         function stop() {
             generation++;
             if (source) {try {source.stop();} catch (_) {} source = null;}
-            if (noiseSource) {try {noiseSource.stop();} catch (_) {} noiseSource = null;}
+            TrainingCore.cancelAudio();
         }
-        function playNoise(at) {
-            if (!noiseBuffer) {
-                const length = Math.round(context.sampleRate * .25);
-                noiseBuffer = context.createBuffer(1, length, context.sampleRate);
-                const samples = noiseBuffer.getChannelData(0);
-                const ramp = Math.max(1, Math.round(context.sampleRate * .012));
-                for (let i = 0; i < length; i++) {
-                    const envelope = Math.min(1, i / ramp, (length - 1 - i) / ramp);
-                    samples[i] = (2 * Math.random() - 1) * .07 * envelope;
-                }
-            }
-            const noise = context.createBufferSource();
-            noise.buffer = noiseBuffer;
-            noise.connect(context.destination);
-            noise.onended = () => {noise.disconnect(); if (noiseSource === noise) noiseSource = null;};
-            noise.start(at);
-            noiseSource = noise;
-            return at + noiseBuffer.duration + .06;
-        }
-        async function play(instrument, midi, mask = false) {
+        // reset: null plays the note directly; {previous, low, high} plays the short reset
+        // first; {long: true} plays a 20-second Shepard glide, which Wong et al. (2025)
+        // placed between labelled sample tones and a block without feedback.
+        async function play(instrument, midi, reset = null) {
             stop();
             const token = generation;
             // Start resume within the tap handler, including on the first visit in Safari.
@@ -6102,7 +6354,14 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             if (token !== generation || document.hidden || context.state !== 'running') throw Error('Playback interrupted');
             const ready = context.currentTime + .04;
             try {
-                const at = mask ? playNoise(ready) : ready;
+                let at = ready;
+                if (reset) {
+                    const options = reset === true ? {} : reset;
+                    at = options.long
+                        ? TrainingCore.shepardGlide(context, ready, LONG_RESET_SECONDS, {direction: Math.random() < .5 ? -1 : 1})
+                        : TrainingCore.resetTones(context, ready, options);
+                    at += TrainingCore.resetGap();
+                }
                 const voice = queueInstrumentNote(instrument, midi, at);
                 const node = voice.audioBufferSourceNode;
                 source = node;
@@ -6115,7 +6374,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         }
         return {play, stop};
     }
-    root.APFocusAudio = {create};
+    root.APFocusAudio = {create, LONG_RESET_SECONDS};
 })(window);
 
 </script>
@@ -6128,12 +6387,19 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     let host, sound, settings, session = null, trial = null, lastBlock = null;
     let phase = 'home', visible = false, initialized = false, screenToken = 0, audioToken = 0;
     let autoTimer, pendingWrites = Promise.resolve(), firstOnset = null, lastOnset = null;
-    let guideInstrument, guideNote, displayInstrument, evidence, hasPastTraining;
+    // Answer window of the current question (performance-clock time) and its timer.
+    let deadline = null, deadlineTimer, pressedAt = null, pendingReset = null;
+    // Last labelled sound (example, "Hear the answer" or learning feedback). A block without
+    // feedback that starts soon afterwards opens with the long reset.
+    let labelledAt = 0;
+    let guideInstrument, guideNote, displayInstrument, evidence, hasPastTraining, lastExample = null;
     const trials = new Map(), sessions = new Map();
     const kv = k => 'ap-focus-' + k + '-' + host.site;
     const tr = (key, args) => APFocusCopy.t(host.language(), key, args);
     const read = key => {try {return JSON.parse(localStorage.getItem(key));} catch (_) {return null;}};
     const percent = n => n === null ? '—' : Math.round(n * 100) + '%';
+    const seconds = ms => tr('sec',{s:new Intl.NumberFormat(host.language(),{minimumFractionDigits:1,maximumFractionDigits:1}).format(ms / 1000)});
+    const LABEL_MEMORY_MS = 5 * 60000;
     const firstSoundToday = () => {
         const at = S.lastPracticeAt(host.site);
         return at === null || S.day(new Date(at)) !== S.day();
@@ -6160,8 +6426,9 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         if (store === 'sessions') {
             return !existing.completed && (incoming.completed || incoming.attempted > existing.attempted);
         }
-        if (existing.result === 'answered') return false;
-        if (incoming.result === 'answered') return true;
+        const final = row => row.result === 'answered' || row.result === 'timeout';
+        if (final(existing)) return false;
+        if (final(incoming)) return true;
         return (incoming.submittedAt || incoming.playedAt || 0) > (existing.submittedAt || existing.playedAt || 0) ||
             (incoming.replayed > existing.replayed && existing.submittedAt === null);
     }
@@ -6187,7 +6454,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     }
     function updateSettings(changes) {
         const next = {...settings, ...changes};
-        if (!M.validSettings(next) || !TrainingCore.write(kv('settings'), next)) return;
+        if (!M.validSettings(next,host.site) || !TrainingCore.write(kv('settings'), next)) return;
         settings = next;
         guideNote = settings.known.includes(guideNote) ? guideNote : settings.known.at(-1);
         render();
@@ -6201,7 +6468,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         await recoverJournal();
         hasPastTraining = rows.length > 0 || blocks.length > 0 || trials.size > 0;
         const saved = read(kv('settings'));
-        if (M.validSettings(saved)) settings = saved;
+        if (M.validSettings(saved,host.site)) settings = {...M.defaults(), ...saved};
         else {
             const oldLevel = read('ap-course-v1-' + host.site)?.level;
             const previous = blocks.filter(s => ['learn','cold'].includes(s.kind) && (M.validSet(s.known) || Number.isInteger(s.level)))
@@ -6240,10 +6507,10 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         }
         box.append(names);
         const sounds = document.createElement('div'); sounds.className = 'af-example';
-        for (const base of [60,72,84]) {
-            const midi = base + guideNote;
+        for (const midi of M.pitchPool(settings.octaves,guideInstrument).filter(p => p % 12 === guideNote)) {
             sounds.append(button('▶ ' + M.label(midi), () => demo(guideInstrument, midi)));
         }
+        if (!sounds.children.length) sounds.textContent = tr('rangeHint');
         box.append(sounds);
         if (guideInstrument !== host.site && settings.share === 0) {
             box.append(button(tr('mix20'), () => updateSettings({share:.2}), 'primary'));
@@ -6255,6 +6522,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         try {
             await sound.play(instrument,pitch);
             if (token !== audioToken) return;
+            lastExample = pitch; labelledAt = Date.now();
             S.markPractice(host.site); TrainingTracker.activity('ap-learning');
             $('Notice').textContent = tr(instrument) + ' · ' + M.label(pitch);
             if (phase === 'home') renderModes();
@@ -6264,23 +6532,35 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const fresh = !hasPastTraining && S.lastPracticeAt(host.site) === null;
         const cold = firstSoundToday(), preferred = cold && !fresh ? 'cold' : 'learn';
         $('Daily').textContent = tr(fresh ? 'firstVisit' : cold ? 'coldToday' : 'warmToday');
+        const primary = M.pitchPool(settings.octaves,host.site);
+        const practice = settings.share ? M.pitchPool(settings.octaves,host.site,true) : primary;
+        const validPrimary = M.playable(primary,settings.known), validPractice = M.playable(practice,settings.known);
+        const hints = [];
+        if (practice.length !== primary.length) hints.push(tr('mixRange',{range:M.rangeText(practice) || '—'}));
+        if (!validPrimary || !validPractice) hints.push(tr('rangeHint'));
+        // Successive notes can only stay more than an octave apart across three octaves.
+        else if (practice.at(-1) - practice[0] < 35) hints.push(tr('jumpHint'));
+        $('RangeHint').hidden = !hints.length; $('RangeHint').textContent = hints.join(' · ');
         $('Modes').replaceChildren(...modes.map(mode => {
             const b = button('', () => start(mode), mode === preferred ? 'primary' : 'secondary');
+            b.disabled = !(mode === 'cold' ? validPrimary : validPractice);
             const title = document.createElement('strong'); title.textContent = tr(mode);
             const hint = document.createElement('small');
             hint.textContent = tr({cold:'coldHelp',learn:'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
             b.dataset.mode = mode; b.append(title,hint); return b;
         }));
+        const limitMs = M.answerWindow(settings.limit, settings.known.length);
+        $('Rules').textContent = limitMs === null ? tr('rulesOff') : tr('rules',{s:seconds(limitMs)});
     }
     function renderEvidence() {
         evidence = progress();
         $('Progress').textContent = tr('progress',{blocks:evidence.blocks,first:Math.min(...evidence.perNote.map(p => p.first)),outside:evidence.outside});
         $('Rates').textContent = tr('rates',{hit:evidence.blocks ? percent(evidence.hit) : '—',fa:percent(evidence.fa)});
         const oct = $('FilterOctave').value;
-        const list = [...trials.values()].filter(r => M.scored(r) && r.timbre === displayInstrument &&
+        const list = [...trials.values()].filter(r => M.attempted(r) && r.timbre === displayInstrument &&
             (oct === 'all' || Math.floor(r.pitch / 12) - 1 === Number(oct)));
-        const daily = list.filter(r => r.kind === 'cold' && r.firstOfDay && M.first(r));
-        $('First').textContent = tr('dayFirst',{hits:daily.filter(M.correct).length,n:daily.length});
+        const daily = list.filter(r => r.kind === 'cold' && r.firstOfDay);
+        $('First').textContent = tr('dayFirst',{hits:daily.filter(r => M.first(r) && M.correct(r)).length,n:daily.length});
         const body = $('Stats'); body.replaceChildren();
         for (const pc of M.order) {
             const pool = list.filter(r => r.pitch % 12 === pc && M.isTarget(r));
@@ -6298,6 +6578,17 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     }
     function renderHome() {
         renderModes();
+        $('Octaves').replaceChildren(...M.octaveChoices(host.site).map(o => {
+            const on = settings.octaves.includes(o);
+            const pitches = M.pitchPool([o],host.site), range = M.rangeText(pitches);
+            const b = button(pitches.length === 12 ? String(o) : range, () => {
+                updateSettings({octaves:on ? settings.octaves.filter(x => x !== o) : [...settings.octaves,o].sort((a,b)=>a-b)});
+                $('Octaves').querySelector('[data-octave="' + o + '"]')?.focus();
+            });
+            b.dataset.octave = String(o); b.title = range; b.setAttribute('aria-label',range);
+            b.setAttribute('aria-pressed',String(on)); b.disabled = on && settings.octaves.length === 1;
+            return b;
+        }));
         $('Current').textContent = settings.known.map(pc => M.notes[pc]).join(' · ');
         $('Picker').replaceChildren(...M.notes.map((name,pc) => {
             const on = settings.known.includes(pc);
@@ -6309,31 +6600,73 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         $('Auto').checked = document.getElementById('autoNextCheck').checked;
         $('AutoText').textContent = host.text('autoNextText');
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
+        for (const option of $('Limit').options) {
+            const ms = M.answerWindow(option.value, settings.known.length);
+            option.textContent = ms === null ? tr('limitOff') : tr(option.value === 'strict' ? 'limitStrict' : 'limitRelaxed',{s:seconds(ms)});
+        }
+        $('Limit').value = settings.limit;
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
         $('Invitation').textContent = tr('secondHint',{instrument:tr(M.otherInstrument(host.site))});
         $('FilterTimbre').replaceChildren(...[host.site,M.otherInstrument(host.site)].map(inst => new Option(tr(inst),inst)));
         $('FilterTimbre').value = displayInstrument;
-        $('FilterOctave').options[0].textContent = tr('all');
+        renderOctaveFilter();
         guide(); renderEvidence();
+    }
+    function renderOctaveFilter() {
+        const filter = $('FilterOctave'), old = filter.value, choices = M.octaveChoices(displayInstrument);
+        filter.replaceChildren(new Option(tr('all'),'all'),...choices.map(o => new Option(String(o),String(o))));
+        filter.value = old !== 'all' && choices.includes(Number(old)) && old !== '' ? old : 'all';
     }
     function summaryRecord(complete) {
         const items = session.rows;
-        const eligible = items.filter(M.scored);
+        const eligible = items.filter(M.attempted);
         const good = eligible.filter(r => M.first(r) && M.correct(r));
         const times = good.map(r => r.rtMs).filter(Number.isFinite).sort((a,b) => a-b);
         return {id:session.id, protocol:M.protocol, sourceVersion:M.sourceVersion, source:host.site, kind:session.mode,
             started:session.started, day:session.day, finished:Date.now(), completed:complete,
-            interrupted:!complete || items.some(r => !M.scored(r)), attempted:items.length, total:eligible.length,
+            interrupted:!complete || items.some(r => ['interrupted','audio-error'].includes(r.result)), attempted:items.length, total:eligible.length,
             planned:session.plan.length, correct:good.length, medianRt:times.length ? times[Math.floor(times.length/2)] : null,
-            known:[...settings.known], level:settings.known.length, share:session.mode === 'cold' ? 0 : settings.share, timbre:host.site, effectiveRange:[60,95],
+            known:[...settings.known], level:settings.known.length, share:session.mode === 'cold' ? 0 : settings.share, timbre:host.site,
+            octaves:[...settings.octaves], effectiveRange:[session.pitches[0],session.pitches.at(-1)],
+            relative:items.filter(r => r.result === 'relative').length,
+            late:items.filter(r => r.result === 'timeout').length, limit:settings.limit,
+            limitMs:M.answerWindow(settings.limit,settings.known.length), resetOn:$('Mask').checked,
             eligible:items.some(r => r.firstOfDay && r.kind === 'cold' && M.first(r))};
     }
-    function stopSound() {++audioToken; sound.stop(); clearTimeout(autoTimer);}
+    function stopSound() {++audioToken; sound.stop(); clearTimeout(autoTimer); disarm();}
+    function disarm() {
+        clearTimeout(deadlineTimer); deadline = null; pressedAt = null;
+        if (initialized) $('Timer').hidden = true;
+    }
+    // A visible countdown: names that take longer than the window are worked out, not heard.
+    function arm(row) {
+        clearTimeout(deadlineTimer);
+        const total = row.limitMs, left = deadline - performance.now();
+        const bar = $('Timer'), fill = bar.firstElementChild;
+        bar.hidden = false;
+        fill.style.transition = 'none';
+        fill.style.transform = 'scaleX(' + Math.max(0, Math.min(1, left / total)) + ')';
+        void fill.offsetWidth;
+        fill.style.transition = 'transform ' + Math.max(0, Math.round(left)) + 'ms linear';
+        fill.style.transform = 'scaleX(0)';
+        const check = () => {
+            if (trial !== row || phase !== 'answer' || deadline === null) return;
+            // A finger already on a button before the deadline still decides the answer.
+            if (pressedAt !== null && pressedAt <= deadline && performance.now() - deadline < 800) {
+                deadlineTimer = setTimeout(check, 60); return;
+            }
+            submit('timeout', deadline);
+        };
+        deadlineTimer = setTimeout(check, Math.max(0, left) + 30);
+    }
     function start(mode) {
         stopSound(); $('Notice').textContent = ''; $('Guide').open = false;
         const weights = Object.fromEntries(APMemory.due(host.site,settings.known).map(p => [p.pc,TrainingCore.weight(p)]));
+        const previous = TrainingCore.lastQuestion(host.site)?.target;
+        const plan = M.plan(settings,mode,host.site,weights,previous);
+        if (!plan.length) {renderHome(); return;}
         session = {id:host.site + '-focus-' + (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)),
-            mode, started:Date.now(), day:S.day(), rows:[], plan:M.plan(settings,mode,host.site,weights)};
+            mode, started:Date.now(), day:S.day(), rows:[], plan, pitches:M.pitchPool(settings.octaves,host.site,mode !== 'cold' && settings.share > 0)};
         lastBlock = null; trial = null; next();
     }
     function next() {
@@ -6342,13 +6675,15 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         stopSound(); $('Notice').textContent = ''; firstOnset = lastOnset = null;
         const tone = session.plan[session.rows.length];
         const prev = TrainingCore.lastQuestion(host.site)?.target ?? null;
-        const pitch = M.pickMidi(tone.pc,prev);
+        const pitch = M.pickMidi(tone.pc,session.pitches,prev,settings.known,lastExample);
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
             kind:session.mode,timbre:tone.instrument,level:settings.known.length,known:[...settings.known],pitch,
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
-            eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false};
+            eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false,
+            reset:null,limitMs:null,lateGuess:null,
+            jump:Number.isInteger(lastExample ?? prev) ? Math.abs(pitch - (lastExample ?? prev)) : null};
         playQuestion(false);
     }
     async function playQuestion(replay) {
@@ -6356,13 +6691,21 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         clearTimeout(autoTimer);
         if (replay) {
             trial.replayed++; trial.result = 'assisted';
+            disarm();  // a replayed note is already assisted, so it is not timed
             save('trials',trial);  // Keep a request for help even if the tab is closed before a response.
         }
+        const row = trial;
+        const mask = !replay && $('Mask').checked && (row.ordinal > 1 || !firstSoundToday());
+        const long = mask && row.ordinal === 1 && session.mode !== 'learn' && labelledAt > 0 &&
+            Date.now() - labelledAt < LABEL_MEMORY_MS;
+        pendingReset = mask ? (long ? 'long' : 'short') : null;
         phase = 'loading'; render();
-        const token = ++audioToken, row = trial;
+        const token = ++audioToken;
         try {
-            const mask = !replay && row.ordinal > 1 && $('Mask').checked;
-            const clock = await sound.play(row.timbre,row.pitch,mask);
+            const reset = mask ? {long, previous:lastExample ?? row.previousPitch,
+                low:session.pitches[0], high:session.pitches.at(-1)} : null;
+            const clock = await sound.play(row.timbre,row.pitch,reset);
+            if (long) labelledAt = 0;
             if (token !== audioToken || row !== trial) return;
             const now = Date.now(), last = S.lastPracticeAt(host.site);
             if (!replay) {
@@ -6372,27 +6715,38 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
                 row.gapSincePracticeMs = last === null ? null : Math.max(0,row.playedAt - last);
                 row.firstOfDay = row.kind === 'cold' && row.ordinal === 1 && firstSoundToday();
                 row.eligibleCold = row.firstOfDay; row.timing = clock.method; row.resetSoundOn = mask;
-                host.remember(row.pitch);
+                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit,settings.known.length);
                 save('trials',row); // A reload before the response leaves an excluded trial.
             }
             lastOnset = clock.when;
-            S.markPractice(host.site);
             TrainingTracker.activity(row.kind === 'learn' ? 'ap-learning' : 'ap-check');
             const delay = Math.max(0, clock.when - performance.now());
             await new Promise(resolve => setTimeout(resolve, delay));
             if (token !== audioToken || row !== trial) return;
             if (document.hidden || host.context.state !== 'running') {invalidate('interrupted'); return;}
-            phase = 'answer'; render();
+            if (!replay) {host.remember(row.pitch); lastExample = null;}
+            S.markPractice(host.site);
+            pendingReset = null; phase = 'answer'; render();
+            if (!replay && row.limitMs !== null) {deadline = firstOnset + row.limitMs; arm(row);}
         } catch (_) {if (token === audioToken && row === trial) invalidate('audio-error');}
     }
     function submit(guess, when) {
         if (phase !== 'answer' || !trial || when < lastOnset) return;
+        // Past the window the note counts as missed, whatever is chosen afterwards.
+        const late = guess === 'timeout' || (deadline !== null && !trial.replayed && when > deadline);
         stopSound();
-        trial.guess = guess; trial.result = 'answered'; trial.correct = M.correct(trial);
+        const inferred = !late && guess === 'relative';
+        if (late) {
+            trial.guess = null; trial.result = 'timeout'; trial.correct = false;
+            trial.lateGuess = guess === 'timeout' ? null : guess;
+        } else {
+            trial.guess = inferred ? null : guess; trial.result = inferred ? 'relative' : 'answered'; trial.correct = M.correct(trial);
+        }
         trial.submittedAt = Date.now();
         if (trial.replayed) trial.assistedRtMs = Math.max(0,Math.round(when - lastOnset));
-        else trial.rtMs = Math.max(0,Math.round(when - firstOnset));
-        if (trial.timbre === host.site && session.mode === 'learn') {
+        else if (guess !== 'timeout') trial.rtMs = Math.max(0,Math.round(when - firstOnset));
+        if (session.mode === 'learn') labelledAt = Date.now();  // the name is shown now
+        if (!inferred && trial.timbre === host.site && session.mode === 'learn') {
             const pc = trial.pitch % 12;
             if (M.isTarget(trial)) APMemory.record(host.site,pc,trial.correct,Date.now(),!M.first(trial),false);
             if (Number.isInteger(guess) && guess !== pc) APMemory.confuse(host.site,guess,pc);
@@ -6429,13 +6783,16 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
-        if (loading) prompt.textContent = tr('wait');
+        const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
+        if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
+        else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
+        else if (trial.result === 'timeout') prompt.textContent = session.mode === 'learn' ? tr('tooSlow') + ' · ' + named() : tr('timeUp');
         else if (trial.result !== 'answered') prompt.textContent = tr(trial.result === 'audio-error' ? 'audioError' : 'interrupted');
         else if (session.mode !== 'learn') prompt.textContent = tr('recorded');
         else {
-            const label = M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
-            prompt.textContent = tr(trial.correct ? 'right' : 'wrong') + ' · ' + label + (trial.replayed ? ' · ' + tr('aided') : '');
+            prompt.textContent = tr(trial.correct ? 'right' : 'wrong') + ' · ' + named() +
+                (trial.replayed ? ' · ' + tr('aided') : Number.isFinite(trial.rtMs) ? ' · ' + seconds(trial.rtMs) : '');
         }
         const choices = [...settings.known];
         if (choices.length < 12) choices.push('out');
@@ -6445,10 +6802,11 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             b.textContent = answerLabel(choice); b.dataset.answer = String(choice);
             b.disabled = phase !== 'answer';
             let touched = null;
-            b.addEventListener('pointerdown', e => {touched = e.timeStamp;});
-            b.addEventListener('pointercancel', () => {touched = null;});
+            b.addEventListener('pointerdown', e => {touched = pressedAt = e.timeStamp;});
+            b.addEventListener('pointercancel', () => {touched = pressedAt = null;});
             b.addEventListener('click', e => {
                 const at = e.detail && touched !== null ? touched : e.timeStamp;
+                pressedAt = null;
                 submit(choice,Math.abs(at - performance.now()) < 60000 ? at : performance.now());
             });
             return b;
@@ -6457,15 +6815,22 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         $('AnswerHint').hidden = done || settings.known.length === 12;
         $('Next').hidden = !done;
         $('Next').textContent = tr(trial.ordinal === session.plan.length ? 'results' : 'next');
+        if (phase !== 'answer') $('Timer').hidden = true;
         $('Fault').hidden = phase !== 'answer';
+        $('Relative').hidden = phase !== 'answer';
         $('Replay').hidden = session.mode === 'cold' || phase !== 'answer';
-        $('AnswerSound').hidden = session.mode !== 'learn' || !done || trial.result !== 'answered';
+        $('AnswerSound').hidden = session.mode !== 'learn' || !done || !['answered','relative','timeout'].includes(trial.result);
     }
     function renderSummary() {
         if (!lastBlock) return;
         const c = M.counts(lastBlock.rows);
         $('SummaryTitle').textContent = tr(lastBlock.mode) + ' · ' + lastBlock.rows.length + '/' + lastBlock.plan.length;
         $('Score').textContent = tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted});
+        const inferred = lastBlock.rows.filter(r => r.result === 'relative').length;
+        if (inferred) $('Score').textContent += ' · ' + tr('relativeCount',{n:inferred});
+        if (c.late) $('Score').textContent += ' · ' + tr('lateCount',{n:c.late});
+        const times = lastBlock.rows.filter(r => M.first(r) && M.correct(r)).map(r => r.rtMs).filter(Number.isFinite).sort((a,b) => a-b);
+        if (times.length) $('Score').textContent += ' · ' + tr('medianTime',{s:seconds(times[Math.floor(times.length/2)])});
         const goHome = () => {stopSound(); phase = 'home'; lastBlock = null; $('Notice').textContent = ''; render();};
         const actions = $('Continue'); actions.replaceChildren();
         const rec = progress();
@@ -6476,13 +6841,17 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         $('Review').replaceChildren(...lastBlock.rows.map(row => {
             const li = document.createElement('li');
             li.textContent = row.ordinal + ' · ' + tr(row.timbre) + ' ' + M.label(row.pitch) + ' · ' +
-                (M.scored(row) ? tr('answer') + ' ' + answerLabel(row.guess) + (row.replayed ? ' · ' + tr('aided') : '') :
-                    tr(row.result === 'audio-error' ? 'audioError' : 'interrupted'));
+                (M.scored(row) ? tr('answer') + ' ' + answerLabel(row.guess) +
+                    (row.replayed ? ' · ' + tr('aided') : Number.isFinite(row.rtMs) ? ' · ' + seconds(row.rtMs) : '') :
+                    row.result === 'timeout' ? tr('tooSlow') + (row.lateGuess === null || row.lateGuess === undefined ? '' :
+                        ' · ' + tr('answer') + ' ' + (row.lateGuess === 'relative' ? tr('relative') : answerLabel(row.lateGuess))) :
+                    tr(row.result === 'relative' ? 'relative' : row.result === 'audio-error' ? 'audioError' : 'interrupted'));
             return li;
         }));
     }
     function render() {
         if (!visible || !settings) return;
+        $('Instrument').textContent = tr(host.site) + ' · ' + M.rangeText(session?.pitches || M.pitchPool(settings.octaves,host.site));
         $('Home').hidden = phase !== 'home'; $('Round').hidden = !session; $('Summary').hidden = phase !== 'summary';
         document.querySelector('.app-shell').classList.toggle('focus-round',!!session);
         if (session) renderRound();
@@ -6511,7 +6880,6 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     function translate() {
         if (!initialized) return;
         $('Entry').textContent = tr('focus'); $('Title').textContent = tr('focus');
-        $('Instrument').textContent = tr(host.site) + ' · C4–B6';
         $('Panel').querySelectorAll('[data-af]').forEach(el => {el.textContent = tr(el.dataset.af);});
         render();
     }
@@ -6523,7 +6891,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url),1500);
     }
     function validBackup(data) {
-        if (data?.format !== 'focused-ap' || data.version !== 1 || data.site !== host.site || !M.validSettings(data.settings) ||
+        if (data?.format !== 'focused-ap' || data.version !== 1 || data.site !== host.site || !M.validSettings(data.settings,host.site) ||
             !Array.isArray(data.trials) || !Array.isArray(data.sessions)) return false;
         const base = r => M.isFocus(r) && r.source === host.site && typeof r.id === 'string' &&
             r.id.startsWith(host.site + '-focus-') && typeof r.day === 'string' && modes.includes(r.kind) && M.validSet(r.known);
@@ -6535,9 +6903,9 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
                 const match = block ? r.kind === block.kind && r.sourceVersion === block.sourceVersion && M.sameSet(r.known,block.known) :
                     ['interrupted','assisted'].includes(r.result);
                 return base(r) && match && Number.isInteger(r.ordinal) && r.ordinal >= 1 && r.ordinal <= 60 &&
-                    r.id === r.sessionId + '-' + r.ordinal && Number.isInteger(r.pitch) && r.pitch >= 60 && r.pitch <= 95 &&
+                    r.id === r.sessionId + '-' + r.ordinal && M.supports(r.timbre,r.pitch,r.sourceVersion) &&
                     ['piano','violin'].includes(r.timbre) && r.sampleId === M.sampleId(r.timbre,r.pitch,r.sourceVersion) &&
-                    ['answered','assisted','interrupted','audio-error'].includes(r.result) && Number.isInteger(r.replayed) && r.replayed >= 0 &&
+                    ['answered','relative','assisted','interrupted','audio-error','timeout'].includes(r.result) && Number.isInteger(r.replayed) && r.replayed >= 0 &&
                     (r.result !== 'answered' || r.known.includes(r.guess) || r.guess === 'unsure' || r.guess === 'out');
             });
     }
@@ -6554,7 +6922,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
                 fresh.forEach(r => map.set(r.id,r));
             }
             if (token !== screenToken || phase !== 'home') return;
-            updateSettings(data.settings);
+            updateSettings({...M.defaults(), ...data.settings});
             $('Notice').textContent = tr('importOk');
         } catch (_) {if (visible) $('Notice').textContent = tr('importBad');}
     }
@@ -6568,6 +6936,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         for (const [id,key] of [['Size','size'],['Share','share'],['Hit','hit'],['Fa','falseAlarm']]) {
             $(id).onchange = () => {updateSettings({[key]:Number($(id).value)}); $(id).value = settings[key];};
         }
+        $('Limit').onchange = () => {updateSettings({limit:$('Limit').value}); $('Limit').value = settings.limit;};
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;
             original.dispatchEvent(new Event('change'));
@@ -6576,10 +6945,11 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             const original = document.getElementById('apMaskCheck'); original.checked = $('Mask').checked;
             original.dispatchEvent(new Event('change'));
         };
-        $('FilterTimbre').onchange = () => {displayInstrument = $('FilterTimbre').value; renderEvidence();};
+        $('FilterTimbre').onchange = () => {displayInstrument = $('FilterTimbre').value; renderOctaveFilter(); renderEvidence();};
         $('FilterOctave').onchange = renderEvidence;
         $('Next').onclick = () => {if (phase === 'done') next();};
         $('Replay').onclick = () => playQuestion(true);
+        $('Relative').onclick = () => submit('relative',performance.now());
         $('Fault').onclick = () => invalidate('audio-error');
         $('AnswerSound').onclick = () => {if (trial && phase === 'done') demo(trial.timbre,trial.pitch);};
         $('End').onclick = () => finish();
@@ -6615,7 +6985,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
 
 </script>
     <script>
-const APP_VERSION = "2.6.1";
+const APP_VERSION = "2.8.0";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -7606,10 +7976,11 @@ let apAudioLatencyMs = 0;
 const AP_COLD_MIN_REST_MS = 4 * 3600 * 1000; // conservative product assumption, not a validated cut-off
 // Protocol 5: interference burst, neighbouring "Other" notes, spacing that needs
 // after-break evidence, selectable round length and sound, automatic continue.
-const AP_PROTOCOL = 6;
-const AP_MASK_SECONDS = 1;
-const AP_MASK_GAP = 0.25;
-const AP_MASK_KEY = "ear-ap-mask";
+// Protocol 7: note names drawn independently of the previous question, successive notes
+// more than an octave apart where the range allows, 2.4 s pitch-memory reset.
+const AP_PROTOCOL = 7;
+// A new key turns the stronger reset on once for everyone; it can still be switched off.
+const AP_MASK_KEY = "ear-ap-mask-v2";
 const AUTO_NEXT_KEY = "ear-auto-next";
 let apHideColdAnswers = false;
 let apStudyOctave = null; // C of the octave played by the labelled study cards
@@ -8019,9 +8390,11 @@ async function playApPitch(midi, serial, withMask = true) {
         currentMidi !== midi || !apSession || apSession.finished || document.hidden) return;
     player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     const scheduledAt = audioContext.currentTime + 0.05;
-    // The interference burst precedes each new question, never a replay of the same note.
+    // The pitch-memory reset precedes each new question, never a replay of the same note.
+    const range = apSession.effectiveRange || [minMidi, maxMidi];
     const startAt = withMask && apSession.masked
-        ? TrainingCore.maskTone(audioContext, scheduledAt, AP_MASK_SECONDS) + AP_MASK_GAP : scheduledAt;
+        ? TrainingCore.resetTones(audioContext, scheduledAt, {previous: apSession.previousTarget,
+            low: range[0], high: range[1]}) + TrainingCore.resetGap() : scheduledAt;
     if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, startAt, midi, PLAY_DURATION);
     else queueInstrumentNote(instrumentMode, midi, startAt);
     // Browser APIs cannot observe the exact acoustic onset of a Bluetooth headset;
@@ -8097,7 +8470,16 @@ function startApQuestion() {
         if (next === undefined) next=APPitchScience.makeSequence(normalOptions)[0];
         apSession.plan[apSession.records.length]=next;
     }
-    const target = apSession.plan[apSession.records.length];
+    const ordinal = apSession.records.length;
+    const previous = TrainingCore.lastQuestion(AP_APP_ID)?.target;
+    // The last question may have changed in another tab since this block was planned.
+    // The planned name stays; only its register is chosen again against the real previous note.
+    if (apSession.plan[ordinal] !== undefined) {
+        apSession.plan[ordinal] = APPitchScience.makeSequence({from:minMidi,to:maxMidi,total:1,known:apSession.known,
+            previousMidi:previous,forcedPC:apSession.plan[ordinal] % 12})[0] ?? apSession.plan[ordinal];
+    }
+    apSession.previousTarget = Number.isInteger(previous) ? previous : null;
+    const target = apSession.plan[ordinal];
     if (target === undefined) {finishApRound(); return;}
     releaseAllKeys(); window.clearTimeout(freeDisplayTimeout);
     player.cancelQueue(audioContext); TrainingCore.cancelAudio(); resetKeyboardColors();
@@ -8164,7 +8546,8 @@ async function exportApCSV() {
     const fields = ["protocol", "timbre", "repair", "replayed", "sessionId", "day", "kind", "level", "ordinal", "pitch", "guess", "result", "correct", "rtMs", "playedAt", "submittedAt", "audibleLatencyEstimateMs", "previousPitch", "eligibleCold", "afterBreak", "source", "resetSoundOn", "pointerTimeStamp",
         "pointerX", "pointerY", "buttonIndex", "baseLatencyRaw", "outputLatencyRaw",
         "sampleRate", "outputDevice", "hiddenCount", "gapSincePracticeMs", "coldSourceRange",
-        "known", "sampleId", "sourceVersion", "qualityStatus", "firstOfDay", "assistedRtMs", "timing"];
+        "known", "sampleId", "sourceVersion", "qualityStatus", "firstOfDay", "assistedRtMs", "timing",
+        "limitMs", "lateGuess", "reset", "jump"];
     const csv = [fields.join(","), ...rows.map((row) => fields.map((name) => {
         const v = row[name] === undefined || row[name] === null ? "" : String(row[name]);
         return `"${v.replaceAll('"', '""')}"`;
@@ -8267,7 +8650,7 @@ function newQuestion() {
         const targets = [];
         const previous = TrainingCore.lastQuestion(AP_APP_ID)?.target;
         for (let pitch = minMidi; pitch <= maxMidi; pitch += 1) {
-            if (pitch !== previous) targets.push(pitch);
+            if (!TrainingCore.sameNoteName(pitch, previous)) targets.push(pitch);
         }
         if (!targets.length) {
             setStatus("distinctRangeError");

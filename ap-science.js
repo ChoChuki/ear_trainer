@@ -23,6 +23,9 @@
         return first <= last ? {from:first,to:last} : null;
     }
     // The answer is a pitch class: F4 and F5 are the same answer.
+    // Each note name is drawn without looking at the previous question, so the
+    // previous answer never rules a name in or out. Only the register depends on
+    // the previous note: more than an octave away whenever the range allows.
     function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null}) {
         if (!Number.isInteger(from)||!Number.isInteger(to)||from<0||to>127||to<from||
             !Number.isInteger(total)||total<1) return [];
@@ -41,21 +44,20 @@
         const otherWeight=own.reduce((a,b)=>a+b,0)/own.length;
         const foil=outside.map(c=>{const gap=Math.min(...active.map(a=>chromaDistance(a,c)));return gap<=1?3:gap===2?2:1;});
         const foilTotal=foil.reduce((a,b)=>a+b,0);
-        const weightedNotes=[];
+        const names=[], weights=[];
         for (const pc of classes) {
             if (forcedPC !== null && pc !== forcedPC) continue;
             const learnedIndex=active.indexOf(pc), outsideIndex=outside.indexOf(pc);
             const weight=learnedIndex>=0 ? own[learnedIndex]
                 : (foilTotal ? otherWeight*foil[outsideIndex]/foilTotal : 0);
-            if (weight<=0) continue;
-            for (const octave of common) weightedNotes.push({midi:12*octave+pc,weight:weight/common.length});
+            if (weight>0) {names.push(pc); weights.push(weight);}
         }
+        if (!names.length) return [];
         const result=[];
         let prior=previousMidi;
         for (let i=0;i<total;i++) {
-            const eligible=weightedNotes.filter(note=>!TrainingCore.sameNoteName(note.midi,prior));
-            if (!eligible.length) return []; // defer a repair of the preceding answer
-            const next=TrainingCore.choose(eligible,eligible.map(note=>note.weight)).midi;
+            const pc=TrainingCore.choose(names,weights);
+            const next=TrainingCore.farPitch(common.map(octave=>12*octave+pc),prior);
             result.push(next); prior=next;
         }
         return result;

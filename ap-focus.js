@@ -6,12 +6,19 @@
     let host, sound, settings, session = null, trial = null, lastBlock = null;
     let phase = 'home', visible = false, initialized = false, screenToken = 0, audioToken = 0;
     let autoTimer, pendingWrites = Promise.resolve(), firstOnset = null, lastOnset = null;
+    // Answer window of the current question (performance-clock time) and its timer.
+    let deadline = null, deadlineTimer, pressedAt = null, pendingReset = null;
+    // Last labelled sound (example, "Hear the answer" or learning feedback). A block without
+    // feedback that starts soon afterwards opens with the long reset.
+    let labelledAt = 0;
     let guideInstrument, guideNote, displayInstrument, evidence, hasPastTraining, lastExample = null;
     const trials = new Map(), sessions = new Map();
     const kv = k => 'ap-focus-' + k + '-' + host.site;
     const tr = (key, args) => APFocusCopy.t(host.language(), key, args);
     const read = key => {try {return JSON.parse(localStorage.getItem(key));} catch (_) {return null;}};
     const percent = n => n === null ? '—' : Math.round(n * 100) + '%';
+    const seconds = ms => tr('sec',{s:new Intl.NumberFormat(host.language(),{minimumFractionDigits:1,maximumFractionDigits:1}).format(ms / 1000)});
+    const LABEL_MEMORY_MS = 5 * 60000;
     const firstSoundToday = () => {
         const at = S.lastPracticeAt(host.site);
         return at === null || S.day(new Date(at)) !== S.day();
@@ -38,8 +45,9 @@
         if (store === 'sessions') {
             return !existing.completed && (incoming.completed || incoming.attempted > existing.attempted);
         }
-        if (existing.result === 'answered') return false;
-        if (incoming.result === 'answered') return true;
+        const final = row => row.result === 'answered' || row.result === 'timeout';
+        if (final(existing)) return false;
+        if (final(incoming)) return true;
         return (incoming.submittedAt || incoming.playedAt || 0) > (existing.submittedAt || existing.playedAt || 0) ||
             (incoming.replayed > existing.replayed && existing.submittedAt === null);
     }
@@ -133,7 +141,7 @@
         try {
             await sound.play(instrument,pitch);
             if (token !== audioToken) return;
-            lastExample = pitch;
+            lastExample = pitch; labelledAt = Date.now();
             S.markPractice(host.site); TrainingTracker.activity('ap-learning');
             $('Notice').textContent = tr(instrument) + ' · ' + M.label(pitch);
             if (phase === 'home') renderModes();
@@ -149,6 +157,8 @@
         const hints = [];
         if (practice.length !== primary.length) hints.push(tr('mixRange',{range:M.rangeText(practice) || '—'}));
         if (!validPrimary || !validPractice) hints.push(tr('rangeHint'));
+        // Successive notes can only stay more than an octave apart across three octaves.
+        else if (practice.at(-1) - practice[0] < 35) hints.push(tr('jumpHint'));
         $('RangeHint').hidden = !hints.length; $('RangeHint').textContent = hints.join(' · ');
         $('Modes').replaceChildren(...modes.map(mode => {
             const b = button('', () => start(mode), mode === preferred ? 'primary' : 'secondary');
@@ -158,6 +168,8 @@
             hint.textContent = tr({cold:'coldHelp',learn:'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
             b.dataset.mode = mode; b.append(title,hint); return b;
         }));
+        const limitMs = M.answerWindow(settings.limit, settings.known.length);
+        $('Rules').textContent = limitMs === null ? tr('rulesOff') : tr('rules',{s:seconds(limitMs)});
     }
     function renderEvidence() {
         evidence = progress();
@@ -207,6 +219,11 @@
         $('Auto').checked = document.getElementById('autoNextCheck').checked;
         $('AutoText').textContent = host.text('autoNextText');
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
+        for (const option of $('Limit').options) {
+            const ms = M.answerWindow(option.value, settings.known.length);
+            option.textContent = ms === null ? tr('limitOff') : tr(option.value === 'strict' ? 'limitStrict' : 'limitRelaxed',{s:seconds(ms)});
+        }
+        $('Limit').value = settings.limit;
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
         $('Invitation').textContent = tr('secondHint',{instrument:tr(M.otherInstrument(host.site))});
         $('FilterTimbre').replaceChildren(...[host.site,M.otherInstrument(host.site)].map(inst => new Option(tr(inst),inst)));
@@ -231,9 +248,36 @@
             known:[...settings.known], level:settings.known.length, share:session.mode === 'cold' ? 0 : settings.share, timbre:host.site,
             octaves:[...settings.octaves], effectiveRange:[session.pitches[0],session.pitches.at(-1)],
             relative:items.filter(r => r.result === 'relative').length,
+            late:items.filter(r => r.result === 'timeout').length, limit:settings.limit,
+            limitMs:M.answerWindow(settings.limit,settings.known.length), resetOn:$('Mask').checked,
             eligible:items.some(r => r.firstOfDay && r.kind === 'cold' && M.first(r))};
     }
-    function stopSound() {++audioToken; sound.stop(); clearTimeout(autoTimer);}
+    function stopSound() {++audioToken; sound.stop(); clearTimeout(autoTimer); disarm();}
+    function disarm() {
+        clearTimeout(deadlineTimer); deadline = null; pressedAt = null;
+        if (initialized) $('Timer').hidden = true;
+    }
+    // A visible countdown: names that take longer than the window are worked out, not heard.
+    function arm(row) {
+        clearTimeout(deadlineTimer);
+        const total = row.limitMs, left = deadline - performance.now();
+        const bar = $('Timer'), fill = bar.firstElementChild;
+        bar.hidden = false;
+        fill.style.transition = 'none';
+        fill.style.transform = 'scaleX(' + Math.max(0, Math.min(1, left / total)) + ')';
+        void fill.offsetWidth;
+        fill.style.transition = 'transform ' + Math.max(0, Math.round(left)) + 'ms linear';
+        fill.style.transform = 'scaleX(0)';
+        const check = () => {
+            if (trial !== row || phase !== 'answer' || deadline === null) return;
+            // A finger already on a button before the deadline still decides the answer.
+            if (pressedAt !== null && pressedAt <= deadline && performance.now() - deadline < 800) {
+                deadlineTimer = setTimeout(check, 60); return;
+            }
+            submit('timeout', deadline);
+        };
+        deadlineTimer = setTimeout(check, Math.max(0, left) + 30);
+    }
     function start(mode) {
         stopSound(); $('Notice').textContent = ''; $('Guide').open = false;
         const weights = Object.fromEntries(APMemory.due(host.site,settings.known).map(p => [p.pc,TrainingCore.weight(p)]));
@@ -256,7 +300,9 @@
             kind:session.mode,timbre:tone.instrument,level:settings.known.length,known:[...settings.known],pitch,
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
-            eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false};
+            eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false,
+            reset:null,limitMs:null,lateGuess:null,
+            jump:Number.isInteger(lastExample ?? prev) ? Math.abs(pitch - (lastExample ?? prev)) : null};
         playQuestion(false);
     }
     async function playQuestion(replay) {
@@ -264,13 +310,21 @@
         clearTimeout(autoTimer);
         if (replay) {
             trial.replayed++; trial.result = 'assisted';
+            disarm();  // a replayed note is already assisted, so it is not timed
             save('trials',trial);  // Keep a request for help even if the tab is closed before a response.
         }
+        const row = trial;
+        const mask = !replay && $('Mask').checked && (row.ordinal > 1 || !firstSoundToday());
+        const long = mask && row.ordinal === 1 && session.mode !== 'learn' && labelledAt > 0 &&
+            Date.now() - labelledAt < LABEL_MEMORY_MS;
+        pendingReset = mask ? (long ? 'long' : 'short') : null;
         phase = 'loading'; render();
-        const token = ++audioToken, row = trial;
+        const token = ++audioToken;
         try {
-            const mask = !replay && $('Mask').checked && (row.ordinal > 1 || !firstSoundToday());
-            const clock = await sound.play(row.timbre,row.pitch,mask);
+            const reset = mask ? {long, previous:lastExample ?? row.previousPitch,
+                low:session.pitches[0], high:session.pitches.at(-1)} : null;
+            const clock = await sound.play(row.timbre,row.pitch,reset);
+            if (long) labelledAt = 0;
             if (token !== audioToken || row !== trial) return;
             const now = Date.now(), last = S.lastPracticeAt(host.site);
             if (!replay) {
@@ -280,6 +334,7 @@
                 row.gapSincePracticeMs = last === null ? null : Math.max(0,row.playedAt - last);
                 row.firstOfDay = row.kind === 'cold' && row.ordinal === 1 && firstSoundToday();
                 row.eligibleCold = row.firstOfDay; row.timing = clock.method; row.resetSoundOn = mask;
+                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit,settings.known.length);
                 save('trials',row); // A reload before the response leaves an excluded trial.
             }
             lastOnset = clock.when;
@@ -290,17 +345,26 @@
             if (document.hidden || host.context.state !== 'running') {invalidate('interrupted'); return;}
             if (!replay) {host.remember(row.pitch); lastExample = null;}
             S.markPractice(host.site);
-            phase = 'answer'; render();
+            pendingReset = null; phase = 'answer'; render();
+            if (!replay && row.limitMs !== null) {deadline = firstOnset + row.limitMs; arm(row);}
         } catch (_) {if (token === audioToken && row === trial) invalidate('audio-error');}
     }
     function submit(guess, when) {
         if (phase !== 'answer' || !trial || when < lastOnset) return;
+        // Past the window the note counts as missed, whatever is chosen afterwards.
+        const late = guess === 'timeout' || (deadline !== null && !trial.replayed && when > deadline);
         stopSound();
-        const inferred = guess === 'relative';
-        trial.guess = inferred ? null : guess; trial.result = inferred ? 'relative' : 'answered'; trial.correct = M.correct(trial);
+        const inferred = !late && guess === 'relative';
+        if (late) {
+            trial.guess = null; trial.result = 'timeout'; trial.correct = false;
+            trial.lateGuess = guess === 'timeout' ? null : guess;
+        } else {
+            trial.guess = inferred ? null : guess; trial.result = inferred ? 'relative' : 'answered'; trial.correct = M.correct(trial);
+        }
         trial.submittedAt = Date.now();
         if (trial.replayed) trial.assistedRtMs = Math.max(0,Math.round(when - lastOnset));
-        else trial.rtMs = Math.max(0,Math.round(when - firstOnset));
+        else if (guess !== 'timeout') trial.rtMs = Math.max(0,Math.round(when - firstOnset));
+        if (session.mode === 'learn') labelledAt = Date.now();  // the name is shown now
         if (!inferred && trial.timbre === host.site && session.mode === 'learn') {
             const pc = trial.pitch % 12;
             if (M.isTarget(trial)) APMemory.record(host.site,pc,trial.correct,Date.now(),!M.first(trial),false);
@@ -338,14 +402,16 @@
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
-        if (loading) prompt.textContent = tr('wait');
+        const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
+        if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
         else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
+        else if (trial.result === 'timeout') prompt.textContent = session.mode === 'learn' ? tr('tooSlow') + ' · ' + named() : tr('timeUp');
         else if (trial.result !== 'answered') prompt.textContent = tr(trial.result === 'audio-error' ? 'audioError' : 'interrupted');
         else if (session.mode !== 'learn') prompt.textContent = tr('recorded');
         else {
-            const label = M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
-            prompt.textContent = tr(trial.correct ? 'right' : 'wrong') + ' · ' + label + (trial.replayed ? ' · ' + tr('aided') : '');
+            prompt.textContent = tr(trial.correct ? 'right' : 'wrong') + ' · ' + named() +
+                (trial.replayed ? ' · ' + tr('aided') : Number.isFinite(trial.rtMs) ? ' · ' + seconds(trial.rtMs) : '');
         }
         const choices = [...settings.known];
         if (choices.length < 12) choices.push('out');
@@ -355,10 +421,11 @@
             b.textContent = answerLabel(choice); b.dataset.answer = String(choice);
             b.disabled = phase !== 'answer';
             let touched = null;
-            b.addEventListener('pointerdown', e => {touched = e.timeStamp;});
-            b.addEventListener('pointercancel', () => {touched = null;});
+            b.addEventListener('pointerdown', e => {touched = pressedAt = e.timeStamp;});
+            b.addEventListener('pointercancel', () => {touched = pressedAt = null;});
             b.addEventListener('click', e => {
                 const at = e.detail && touched !== null ? touched : e.timeStamp;
+                pressedAt = null;
                 submit(choice,Math.abs(at - performance.now()) < 60000 ? at : performance.now());
             });
             return b;
@@ -367,10 +434,11 @@
         $('AnswerHint').hidden = done || settings.known.length === 12;
         $('Next').hidden = !done;
         $('Next').textContent = tr(trial.ordinal === session.plan.length ? 'results' : 'next');
+        if (phase !== 'answer') $('Timer').hidden = true;
         $('Fault').hidden = phase !== 'answer';
         $('Relative').hidden = phase !== 'answer';
         $('Replay').hidden = session.mode === 'cold' || phase !== 'answer';
-        $('AnswerSound').hidden = session.mode !== 'learn' || !done || !['answered','relative'].includes(trial.result);
+        $('AnswerSound').hidden = session.mode !== 'learn' || !done || !['answered','relative','timeout'].includes(trial.result);
     }
     function renderSummary() {
         if (!lastBlock) return;
@@ -379,6 +447,9 @@
         $('Score').textContent = tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted});
         const inferred = lastBlock.rows.filter(r => r.result === 'relative').length;
         if (inferred) $('Score').textContent += ' · ' + tr('relativeCount',{n:inferred});
+        if (c.late) $('Score').textContent += ' · ' + tr('lateCount',{n:c.late});
+        const times = lastBlock.rows.filter(r => M.first(r) && M.correct(r)).map(r => r.rtMs).filter(Number.isFinite).sort((a,b) => a-b);
+        if (times.length) $('Score').textContent += ' · ' + tr('medianTime',{s:seconds(times[Math.floor(times.length/2)])});
         const goHome = () => {stopSound(); phase = 'home'; lastBlock = null; $('Notice').textContent = ''; render();};
         const actions = $('Continue'); actions.replaceChildren();
         const rec = progress();
@@ -389,7 +460,10 @@
         $('Review').replaceChildren(...lastBlock.rows.map(row => {
             const li = document.createElement('li');
             li.textContent = row.ordinal + ' · ' + tr(row.timbre) + ' ' + M.label(row.pitch) + ' · ' +
-                (M.scored(row) ? tr('answer') + ' ' + answerLabel(row.guess) + (row.replayed ? ' · ' + tr('aided') : '') :
+                (M.scored(row) ? tr('answer') + ' ' + answerLabel(row.guess) +
+                    (row.replayed ? ' · ' + tr('aided') : Number.isFinite(row.rtMs) ? ' · ' + seconds(row.rtMs) : '') :
+                    row.result === 'timeout' ? tr('tooSlow') + (row.lateGuess === null || row.lateGuess === undefined ? '' :
+                        ' · ' + tr('answer') + ' ' + (row.lateGuess === 'relative' ? tr('relative') : answerLabel(row.lateGuess))) :
                     tr(row.result === 'relative' ? 'relative' : row.result === 'audio-error' ? 'audioError' : 'interrupted'));
             return li;
         }));
@@ -450,7 +524,7 @@
                 return base(r) && match && Number.isInteger(r.ordinal) && r.ordinal >= 1 && r.ordinal <= 60 &&
                     r.id === r.sessionId + '-' + r.ordinal && M.supports(r.timbre,r.pitch,r.sourceVersion) &&
                     ['piano','violin'].includes(r.timbre) && r.sampleId === M.sampleId(r.timbre,r.pitch,r.sourceVersion) &&
-                    ['answered','relative','assisted','interrupted','audio-error'].includes(r.result) && Number.isInteger(r.replayed) && r.replayed >= 0 &&
+                    ['answered','relative','assisted','interrupted','audio-error','timeout'].includes(r.result) && Number.isInteger(r.replayed) && r.replayed >= 0 &&
                     (r.result !== 'answered' || r.known.includes(r.guess) || r.guess === 'unsure' || r.guess === 'out');
             });
     }
@@ -481,6 +555,7 @@
         for (const [id,key] of [['Size','size'],['Share','share'],['Hit','hit'],['Fa','falseAlarm']]) {
             $(id).onchange = () => {updateSettings({[key]:Number($(id).value)}); $(id).value = settings[key];};
         }
+        $('Limit').onchange = () => {updateSettings({limit:$('Limit').value}); $('Limit').value = settings.limit;};
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;
             original.dispatchEvent(new Event('change'));

@@ -36,3 +36,6 @@
 #focusCurrent {font-variant-numeric:tabular-nums;}
 #focusReview li {margin:5px 0;}
 #focusPanel button:focus-visible,#focusPanel a:focus-visible,#focusPanel summary:focus-visible {outline:3px solid #0076af;outline-offset:2px;}
+.af-timer {height:6px; margin:-.35rem 0 .7rem; border-radius:3px; background:#e2e6e9; overflow:hidden;}
+.af-timer span {display:block; height:100%; background:#174b63; transform-origin:left center;}
+#focusRules {margin-top:-4px;}
