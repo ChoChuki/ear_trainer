@@ -72,3 +72,8 @@
 .af-panel input.af-seconds {width:6.5em; text-align:right;}
 .limit-picker input {width:100%;}
 .af-panel input.af-seconds:focus-visible, .limit-picker input:focus-visible {outline:3px solid #0076af; outline-offset:1px;}
+
+/* 2.8.6: names in the learning set (they need an octave) carry a ring; any other name answers "other" at once. */
+.af-panel .af-keys button.af-set {box-shadow:inset 0 0 0 2px #0f6d8f;}
+.af-panel .af-keys button.af-black.af-set {box-shadow:inset 0 0 0 2px #8fd3ee;}
+.af-panel .af-two button[aria-pressed="true"] {box-shadow:0 0 0 3px #9fd0e4;}

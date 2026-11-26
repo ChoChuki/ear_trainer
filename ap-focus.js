@@ -99,12 +99,14 @@
                 Number.isInteger(level) && level >= 1 && level <= 12 ? S.learned(level) : [5];
             settings = M.defaults(known);
         }
-        // 2.8.4: the window is typed in seconds and kept in ms; null is no limit.
-        const typed = M.answerWindow(settings.limit);
-        if (typed !== settings.limit) {
-            settings.limit = typed;
-            TrainingCore.write(kv('settings'), settings);
+        // 2.8.6: the default window moved from 1.3 s to 2.5 s; an older default moves once, a typed value stays.
+        const before = JSON.stringify(settings);
+        settings.limit = M.answerWindow(settings.limit);
+        if (settings.limitVersion !== 3) {
+            if (settings.limit === 1300 || settings.limit === 1333) settings.limit = 2500;
+            settings.limitVersion = 3;
         }
+        if (JSON.stringify(settings) !== before) TrainingCore.write(kv('settings'), settings);
     }
     function progress() {
         return M.promotion([...trials.values()], [...sessions.values()], settings, host.site);
@@ -173,7 +175,7 @@
             b.disabled = !(mode === 'cold' ? validPrimary : validPractice);
             const title = document.createElement('strong'); title.textContent = tr(mode);
             const hint = document.createElement('small');
-            hint.textContent = tr({cold:'coldHelp',learn:settings.responseMode === 'name' ? 'learnExact' : 'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
+            hint.textContent = tr({cold:'coldHelp',learn:'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
             b.dataset.mode = mode; b.append(title,hint); return b;
         }));
         const windowMs = M.answerWindow(settings.limit);
@@ -237,7 +239,6 @@
         $('AutoText').textContent = host.text('autoNextText');
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
         $('Repeats').checked = settings.allowRepeats;
-        $('Recognition').checked = settings.responseMode === 'set';
         if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
         $('Limit').placeholder = tr('limitNone');
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
@@ -300,12 +301,12 @@
         const previous = TrainingCore.lastQuestion(host.site)?.target;
         const plan = M.plan(settings,mode,host.site,weights,previous);
         if (!plan.length) {renderHome(); return;}
-        const responseMode = mode === 'cold' ? 'name' : settings.responseMode;
-        const names = M.namesFor(responseMode, settings.known);
+        const responseMode = 'set';  // 2.8.6: judged against the learning set in every mode
+        const names = M.namesFor(mode === 'cold' ? 'name' : 'set', settings.known);
         const pitches = M.pitchPool(settings.octaves,host.site,mode !== 'cold' && settings.share > 0);
         session = {id:host.site + '-focus-' + (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)),
             mode, started:Date.now(), day:S.day(), rows:[], plan, pitches, names, responseMode,
-            known:mode === 'cold' ? names : [...settings.known], poolSize:new Set(pitches.map(p => p % 12)).size,
+            known:mode === 'cold' ? names : [...settings.known], learned:[...settings.known], poolSize:new Set(pitches.map(p => p % 12)).size,
             octaves:[...new Set(pitches.map(M.octaveOf))].sort((a,b) => a - b)};
         lastBlock = null; trial = null; next();
     }
@@ -320,7 +321,7 @@
             {allowRepeats:settings.allowRepeats, blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
-            kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],pitch,
+            kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],learned:[...(session.learned || session.known)],pitch,
             responseMode:session.responseMode,allowRepeats:settings.allowRepeats,poolSize:session.poolSize,firstRecorded:false,
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
@@ -444,7 +445,7 @@
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
-        const named = () => M.label(trial.pitch) + (M.exactTask(trial) || M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
+        const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
         if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
         else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
@@ -473,6 +474,8 @@
         };
         const pick = (kind, value, at) => {
             if (phase !== 'answer') return;
+            // 2.8.6: a name outside the learning set means "other" at once; only names in the set need an octave.
+            if (kind === 'name' && !session.learned.includes(value)) {submit(value, at); return;}
             if (kind === 'name') pickName = value; else pickOctave = value;
             if (pickName !== null && pickOctave !== null) submit({pc:pickName, octave:pickOctave}, at);
             else renderRound();
@@ -484,7 +487,7 @@
         const keys = group('af-keys', tr('noteGroup')), octaves = group('af-octave-row', tr('octaveGroup')), extra = group('af-extra');
         for (const pc of [1,3,6,8,10,0,2,4,5,7,9,11]) {
             const black = [1,3,6,8,10].includes(pc), b = document.createElement('button');
-            b.className = black ? 'secondary af-black' : 'secondary';
+            b.className = (black ? 'secondary af-black' : 'secondary') + (session.learned.includes(pc) ? ' af-set' : '');
             b.textContent = M.notes[pc]; b.dataset.answer = String(pc);
             b.style.gridRow = black ? '1' : '2'; b.style.gridColumn = KEY_COLUMN[pc] + ' / span 2';
             b.setAttribute('aria-pressed', String(pickName === pc));
@@ -496,14 +499,14 @@
             b.setAttribute('aria-pressed', String(pickOctave === o));
             octaves.append(tap(b, at => pick('octave', o, at)));
         }
-        for (const choice of session.mode === 'cold' ? ['unsure'] : ['out','unsure']) {
+        for (const choice of ['out','unsure']) {
             const b = document.createElement('button'); b.className = 'secondary';
             b.textContent = answerLabel(choice); b.dataset.answer = choice;
             extra.append(tap(b, at => submit(choice, at)));
         }
         $('Answers').className = 'af-two';
         $('Answers').replaceChildren(keys, octaves, extra); $('Answers').hidden = done;
-        $('AnswerHint').textContent = tr(session.mode === 'cold' ? 'helpCold' : 'helpAnswer');
+        $('AnswerHint').textContent = tr('helpAnswer');
         $('AnswerHint').hidden = done;
         $('Next').hidden = !done;
         $('Next').textContent = tr(trial.ordinal === session.plan.length ? 'results' : 'next');
@@ -525,7 +528,8 @@
         if (!lastBlock) return;
         const c = M.counts(lastBlock.rows);
         $('SummaryTitle').textContent = tr(lastBlock.mode) + ' · ' + lastBlock.rows.length + '/' + lastBlock.plan.length;
-        if (lastBlock.mode === 'cold') $('Score').textContent = namingReport(lastBlock.rows);
+        if (lastBlock.mode === 'cold') $('Score').textContent = [tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted}),
+            namingReport(lastBlock.rows)].join(' · ');
         else {
             const metrics = [tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted})];
             if (lastBlock.responseMode === 'name') {
@@ -647,7 +651,6 @@
             $(id).onchange = () => {updateSettings({[key]:Number($(id).value)}); $(id).value = settings[key];};
         }
         $('Repeats').onchange = () => updateSettings({allowRepeats:$('Repeats').checked});
-        $('Recognition').onchange = () => updateSettings({responseMode:$('Recognition').checked ? 'set' : 'name'});
         $('Limit').onchange = () => {updateSettings({limit:AnswerTimer.parse($('Limit').value, settings.limit)});
             $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render();};
         $('Auto').onchange = () => {

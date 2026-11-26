@@ -142,7 +142,14 @@
         const saved = read(kv('settings'));
         const merged = {...M.defaults(), ...(saved && typeof saved === 'object' ? saved : {})};
         settings = M.validSettings(merged, host.site) ? merged : M.defaults();
-        settings.limit = M.answerWindow(settings.limit);  // 2.8.4: typed seconds kept in ms; null is no limit
+        // 2.8.6: the default window moved from 1.3 s to 2.5 s; an older default moves once, a typed value stays.
+        const before = JSON.stringify(settings);
+        settings.limit = M.answerWindow(settings.limit);
+        if (settings.limitVersion !== 3) {
+            if (settings.limit === 1300 || settings.limit === 1333) settings.limit = 2500;
+            settings.limitVersion = 3;
+        }
+        if (JSON.stringify(settings) !== before) TrainingCore.write(kv('settings'), settings);
     }
     const progress = () => M.promotion(rowsNow(), blocksNow(), settings);
     function introduce(d) {
@@ -188,7 +195,7 @@
             const title = document.createElement('strong'); title.textContent = modeName(mode);
             const hint = document.createElement('small');
             hint.textContent = mode === 'cold' ? tr('coldHelp') : mode === 'learn' ?
-                tr(settings.responseMode === 'name' ? 'learnExact' : 'learnHelp', {n: settings.size}) : tr('conHelp', {n: settings.size});
+                tr('learnHelp', {n: settings.size}) : tr('conHelp', {n: settings.size});
             b.dataset.mode = mode; b.append(title, hint);
             return b;
         }));
@@ -243,7 +250,6 @@
         $('Size').value = String(settings.size); $('Hit').value = settings.hit; $('Fa').value = settings.falseAlarm;
         $('Auto').checked = document.getElementById('autoNextCheck').checked;
         $('AutoText').textContent = host.text('autoNextText');
-        $('Recognition').checked = settings.responseMode === 'set';
         $('Repeats').checked = settings.allowRepeats;
         const names = M.namesFor(settings.responseMode, settings.known, M.pitchPool(settings.octaves, host.site)).length;
         if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
@@ -271,11 +277,11 @@
         const plan = M.plan(settings, mode, host.site, M.weights(rowsNow(), settings.known), previous);
         if (!plan.length) { renderHome(); return; }
         const pitches = M.pitchPool(settings.octaves, host.site);
-        const responseMode = mode === 'cold' ? 'name' : settings.responseMode;
-        const names = M.namesFor(responseMode, settings.known, pitches);
+        const responseMode = 'set';  // 2.8.6: judged against the learning set in every mode
+        const names = M.namesFor(mode === 'cold' ? 'name' : 'set', settings.known, pitches);
         session = {id: host.site + '-iv-' + (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)),
             mode, started: Date.now(), day: S.day(), rows: [], plan, pitches, names, responseMode,
-            known: mode === 'cold' ? [...names] : [...settings.known], direction: settings.direction,
+            known: mode === 'cold' ? [...names] : [...settings.known], learned: [...settings.known], direction: settings.direction,
             octaves: [...settings.octaves], limit: settings.limit, allowRepeats: settings.allowRepeats};
         lastBlock = null; trial = null; next();
     }
@@ -290,7 +296,7 @@
         const size = pair.size;
         session.plan[ordinal] = size;
         trial = {protocol: M.protocol, source: host.site, id: session.id + '-' + (ordinal + 1), sessionId: session.id,
-            ordinal: ordinal + 1, kind: session.mode, known: [...session.known], responseMode: session.responseMode,
+            ordinal: ordinal + 1, kind: session.mode, known: [...session.known], learned: [...(session.learned || session.known)], responseMode: session.responseMode,
             allowRepeats: session.allowRepeats, size, direction: pair.direction, reference: pair.reference, target: pair.target,
             timbre: host.site, day: S.day(), previousSize: before, guess: null, correct: false, result: 'interrupted',
             replayed: 0, rtMs: null, assistedRtMs: null, timing: null, playedAt: null, submittedAt: null,
@@ -383,7 +389,7 @@
     function renderRound() {
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = modeName(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
-        const named = () => way(trial.direction) + ' ' + labelOf(trial.size) + (M.exactTask(trial) || M.isTarget(trial) ? '' : ' · ' + tr('out'));
+        const named = () => way(trial.direction) + ' ' + labelOf(trial.size) + (M.isTarget(trial) ? '' : ' · ' + tr('out'));
         const prompt = $('Prompt');
         if (loading) prompt.textContent = ap('wait');
         else if (!done) prompt.textContent = tr('choose');
@@ -394,7 +400,6 @@
             (trial.replayed ? ' · ' + ap('aided') : Number.isFinite(trial.rtMs) ? ' · ' + seconds(trial.rtMs) : '');
         // 2.8.3: semitone numbers only, the same buttons whatever the learning set.
         const choices = [...M.available(session.pitches)];
-        if (session.responseMode === 'set' && session.mode !== 'cold' && choices.some(d => !session.known.includes(d))) choices.push('out');
         choices.push('unsure');
         const buttons = choices.map(choice => {
             const b = button(Number.isInteger(choice) ? String(choice) : answerLabel(choice), null);
@@ -412,7 +417,7 @@
         });
         $('Answers').classList.toggle('af-naming', choices.length > 4);
         $('Answers').replaceChildren(...buttons); $('Answers').hidden = done;
-        $('AnswerHint').hidden = done || !choices.includes('out');
+        $('AnswerHint').hidden = done || choices.every(d => d === 'unsure' || session.learned.includes(d));
         $('AnswerHint').textContent = tr('helpAnswer');
         $('Next').hidden = !done;
         $('Next').textContent = trial.ordinal === session.plan.length ? ap('results') : tr('next');
@@ -425,8 +430,7 @@
         if (!lastBlock) return;
         const c = M.counts(lastBlock.rows), parts = [];
         $('SummaryTitle').textContent = modeName(lastBlock.mode) + ' · ' + lastBlock.rows.length + '/' + lastBlock.plan.length;
-        if (lastBlock.mode === 'cold' || lastBlock.responseMode === 'name') parts.push(tr('named', {hits: c.named, total: c.total}));
-        if (lastBlock.mode !== 'cold') parts.push(ap('summary', {hits: c.hits, total: c.targets, alarms: c.alarms, outside: c.outside, aided: c.assisted}));
+        parts.push(ap('summary', {hits: c.hits, total: c.targets, alarms: c.alarms, outside: c.outside, aided: c.assisted}));
         if (c.late) parts.push(ap('lateCount', {n: c.late}));
         const times = lastBlock.rows.filter(r => M.first(r) && M.correct(r)).map(r => r.rtMs).filter(Number.isFinite);
         if (times.length) parts.push(ap('medianTime', {s: seconds(S.median(times))}));
@@ -528,7 +532,6 @@
         }
         $('Direction').onchange = () => { updateSettings({direction: $('Direction').value}); $('Direction').value = settings.direction; };
         $('Repeats').onchange = () => updateSettings({allowRepeats: $('Repeats').checked});
-        $('Recognition').onchange = () => updateSettings({responseMode: $('Recognition').checked ? 'set' : 'name'});
         $('Limit').onchange = () => { updateSettings({limit: AnswerTimer.parse($('Limit').value, settings.limit)});
             $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render(); };
         $('Auto').onchange = () => {

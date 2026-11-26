@@ -464,6 +464,18 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .af-octave-row button, .af-extra button {flex:1 1 0; min-width:44px;}
 .af-panel .af-two button[aria-pressed="true"] {background:#174b63; color:#fff; border-color:#174b63; box-shadow:0 0 0 3px #9fd0e4;}
 
+/* 2.8.4: the answer window is typed in seconds; empty or 0 is no limit. */
+.af-panel input.af-seconds, .limit-picker input {min-height:42px; box-sizing:border-box; padding:6px 10px; font:inherit; color:inherit;
+    background:#fff; border:1px solid #c6d0d6; border-radius:8px; font-variant-numeric:tabular-nums;}
+.af-panel input.af-seconds {width:6.5em; text-align:right;}
+.limit-picker input {width:100%;}
+.af-panel input.af-seconds:focus-visible, .limit-picker input:focus-visible {outline:3px solid #0076af; outline-offset:1px;}
+
+/* 2.8.6: names in the learning set (they need an octave) carry a ring; any other name answers "other" at once. */
+.af-panel .af-keys button.af-set {box-shadow:inset 0 0 0 2px #0f6d8f;}
+.af-panel .af-keys button.af-black.af-set {box-shadow:inset 0 0 0 2px #8fd3ee;}
+.af-panel .af-two button[aria-pressed="true"] {box-shadow:0 0 0 3px #9fd0e4;}
+
 </style>
 </head>
 <body>
@@ -514,10 +526,10 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                     <div id="focusPicker" class="af-notes" role="group"></div>
                     <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
                     <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
-                    <label class="af-option"><span data-af="recognition"></span><input id="focusRecognition" type="checkbox"></label>
+                    
                     <label class="af-option"><span data-af="repeats"></span><input id="focusRepeats" type="checkbox"></label>
                     <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
-                    <label class="af-option"><span data-af="limit"></span><select id="focusLimit"><option value="fast"></option><option value="off"></option></select></label>
+                    <label class="af-option"><span data-af="limitSeconds"></span><input id="focusLimit" class="af-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
                     <p class="af-muted" data-af="limitHelp"></p>
                     <label class="af-option"><span data-af="share"></span><select id="focusShare"><option value="0">0%</option><option value="0.2">20%</option><option value="0.5">50%</option></select></label>
                     <details><summary data-af="thresholds"></summary>
@@ -572,9 +584,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                     <label class="af-option"><span data-iv="direction"></span><select id="ivDirection"><option value="up"></option><option value="down"></option><option value="both"></option><option value="harmonic"></option></select></label>
                     <label class="af-option"><span data-iv="size"></span><select id="ivSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
                     <label class="af-option"><span id="ivAutoText"></span><input id="ivAuto" type="checkbox"></label>
-                    <label class="af-option"><span data-iv="recognition"></span><input id="ivRecognition" type="checkbox"></label>
+                    
                     <label class="af-option"><span data-iv="repeats"></span><input id="ivRepeats" type="checkbox"></label>
-                    <label class="af-option"><span data-iv="limit"></span><select id="ivLimit"><option value="fast"></option><option value="off"></option></select></label>
+                    <label class="af-option"><span data-iv="limitSeconds"></span><input id="ivLimit" class="af-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
                     <p class="af-muted" data-iv="limitHelp"></p>
                     <details><summary data-iv="thresholds"></summary>
                         <label class="af-option"><span data-iv="hit"></span><input id="ivHit" type="number" min="50" max="100"></label>
@@ -723,7 +735,7 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                     <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
                 </div>
                 <label class="option-row" id="autoNextRow"><input id="autoNextCheck" type="checkbox" checked><span id="autoNextText">Continue automatically after each answer</span></label>
-                <label class="limit-picker" for="answerLimitSelect" id="answerLimitRow"><span id="answerLimitLabel">Answer window</span><select id="answerLimitSelect"><option value="fast">1.3 s</option><option value="off">No limit</option></select></label>
+                <label class="limit-picker" for="answerLimitSelect" id="answerLimitRow"><span id="answerLimitLabel">Answer window</span><input id="answerLimitSelect" class="limit-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="1.3"></label>
                 <p id="answerLimitHelp" class="ap-description"></p>
             </div>
         </section>
@@ -4523,24 +4535,47 @@ DEMO_SCORES.piano = {
 </script>
     <script>
 /* Answer window shared by the timed exercises outside the focused screens.
- * 2.8.3: one fixed window of about 1.3 s (1183 ms, the two-choice window of 2.8.0, plus 150 ms
- * for the touch and the estimated audio onset), whatever the number of answer buttons, or no limit.
- * The window starts at the estimated onset of the sound that is answered. */
+ * 2.8.4: the window is a number of seconds typed by the user (default 2.5 since 2.8.6), kept in ms;
+ * an empty field or 0 means no limit. It starts at the estimated onset of the sound answered. */
 (function (root) {
     'use strict';
-    const LIMITS = ['fast', 'off'];  // 2.8.3: older 'strict' / 'relaxed' choices read as 'fast'
-    const KEY = 'ear-answer-limit-v1';
-    const FAST_MS = 1333;
-    function windowMs(limit) {
-        return limit === 'off' ? null : FAST_MS;
+    const KEY = 'ear-answer-limit-v3';
+    const DEFAULT_MS = 2500, MIN_MS = 100, MAX_MS = 60000;
+    // Any stored value as ms or null: older named choices ("fast", "strict", "relaxed") read as the default.
+    function normalize(limit) {
+        if (limit === null || limit === 'off' || limit === 0) return null;
+        if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(MAX_MS, Math.max(MIN_MS, limit)));
+        return DEFAULT_MS;
+    }
+    const windowMs = limit => normalize(limit);
+    // Typed text: empty or 0 is no limit; "1.3", "1,3" or "1.3 s" are seconds; anything else keeps `current`.
+    function parse(text, current = DEFAULT_MS) {
+        const raw = String(text ?? '').trim();
+        if (raw === '') return null;
+        const s = Number(raw.replace(',', '.').replace(/\s*(s|sec|秒|δ)\.?$/i, ''));
+        if (!Number.isFinite(s) || s < 0) return normalize(current);
+        return s === 0 ? null : normalize(Math.round(s * 1000));
+    }
+    function text(ms, language = 'en') {
+        if (ms === null || ms === undefined) return '';
+        try { return new Intl.NumberFormat(language || 'en', {maximumFractionDigits: 3, useGrouping: false}).format(ms / 1000); }
+        catch (_) { return String(ms / 1000); }
     }
     function load() {
-        try { const saved = localStorage.getItem(KEY); if (LIMITS.includes(saved)) return saved; } catch (_) {}
-        return 'fast';
+        try {
+            const saved = localStorage.getItem(KEY);
+            if (saved === 'off') return null;
+            if (saved !== null && saved !== '' && Number.isFinite(Number(saved))) return normalize(Number(saved));
+            // 2.8.6: the default moved from 1.3 s to 2.5 s; an older typed value other than 1.3 s is kept.
+            const older = localStorage.getItem('ear-answer-limit-v2') ?? localStorage.getItem('ear-answer-limit-v1');
+            if (older === 'off') return null;
+            if (older !== null && older !== '' && Number.isFinite(Number(older)) && ![1300, 1333].includes(Number(older))) return normalize(Number(older));
+        } catch (_) {}
+        return DEFAULT_MS;
     }
     function save(limit) {
-        if (!LIMITS.includes(limit)) return false;
-        try { localStorage.setItem(KEY, limit); return true; } catch (_) { return false; }
+        const ms = normalize(limit);
+        try { localStorage.setItem(KEY, ms === null ? 'off' : String(ms)); return true; } catch (_) { return false; }
     }
     // One countdown per screen. A finger that touched an answer before the deadline still
     // decides it (up to 0.8 s later), as in focused AP practice.
@@ -4589,7 +4624,7 @@ DEMO_SCORES.piano = {
             place(element) { if (element && element !== bar) { hide(); bar = element; if (deadline !== null) draw(); } }
         };
     }
-    root.AnswerTimer = {LIMITS, KEY, FAST_MS, windowMs, load, save, createClock};
+    root.AnswerTimer = {KEY, DEFAULT_MS, MIN_MS, MAX_MS, normalize, windowMs, parse, text, load, save, createClock};
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -6298,7 +6333,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         relativeCount: ['By interval: {n}','音程推算 {n} 題','音程から推測 {n}問','Aus Intervallen abgeleitet: {n}','Per intervallo: {n}','Με διάστημα: {n}'],
         coldToday: ["At least 4 h since the last recorded sound. Open blind note naming to record the first note.","距本機上次練習已滿 4 小時。現在開始盲聽，可以記錄休息後的首音。","前回の練習から4時間以上経過しました。ブラインドチェックで休憩後の最初の1音を記録できます。","Seit dem letzten Übungston sind mindestens 4 Std. vergangen. Ein Blindtest erfasst jetzt den ersten Ton.","Sono passate almeno 4 ore dall’ultimo suono registrato. Inizia la verifica per registrare la prima nota dopo la pausa.","Πέρασαν τουλάχιστον 4 ώρες από τον τελευταίο καταγεγραμμένο ήχο. Άρχισε τον έλεγχο για να καταγράψεις την πρώτη νότα."],
         warmToday: ["The last practice sound was less than 4 h ago. Blind answers count towards continuous practice.","距上次練習未滿 4 小時。現在盲聽的結果計入連續練習。","前回の練習から4時間未満です。今のブラインドチェックは連続練習に集計します。","Der letzte Übungston liegt weniger als 4 Std. zurück. Der Blindtest zählt zur laufenden Übung.","L’ultimo suono risale a meno di 4 ore fa. Le risposte contano nella pratica continua.","Ο τελευταίος ήχος ήταν πριν από λιγότερες από 4 ώρες. Οι απαντήσεις μετρούν στη συνεχή εξάσκηση."],
-        coldHelp: ["12 questions · choose the exact name · one listen · answers at the end","12 題 · 選出具體音名 · 每題聽一次 · 最後看答案","12問・音名で回答・各1回再生・答え合わせは最後","12 Aufgaben · genauen Namen wählen · einmal hören · Auflösung am Ende","12 domande · scegli il nome esatto · un ascolto · soluzioni alla fine","12 ερωτήσεις · ακριβές όνομα · μία ακρόαση · λύσεις στο τέλος"],
+        coldHelp: ["12 questions from all notes · name the notes in your set, the rest count as “Other” · one listen · answers at the end", "12 題，取自全部的音 · 音集內的音報出音名，其餘算「其他音」 · 每題聽一次 · 最後看答案", "全音から12問 · 学習中の音は音名、それ以外は「学習外の音」扱い · 1回だけ再生 · 最後に答え合わせ", "12 Fragen aus allen Tönen · Töne deiner Auswahl benennen, der Rest zählt als „Anderer Ton“ · einmal hören · Auflösung am Ende", "12 domande da tutte le note · nomina quelle del tuo gruppo, le altre valgono «Altra nota» · un ascolto · risposte alla fine", "12 ερωτήσεις από όλες τις νότες · ονόμασε όσες είναι στο σύνολο, οι άλλες μετρούν ως «Άλλη νότα» · μία ακρόαση · απαντήσεις στο τέλος"],
         learnHelp: ['{n} notes from your set and other notes · feedback after each answer','{n} 題 · 混合目前音集和其他音 · 每題立即回饋','{n}問・学習中の音とほかの音・毎回答え合わせ','{n} Töne aus deinem Tonvorrat und andere · sofortige Rückmeldung','{n} note del gruppo e altre note · riscontro immediato','{n} νότες από το σύνολό σου και άλλες · άμεση ανατροφοδότηση'],
         conHelp: ['{n} notes · optional · answers at the end','{n} 題 · 可選做一組 · 整組結束後看答案','{n}問・任意・答えは最後に表示','{n} Töne · freiwillig · Auflösung am Ende','{n} note · facoltativo · risposte alla fine','{n} νότες · προαιρετικά · απαντήσεις στο τέλος'],
         set: ['Learning set','學習音集','学習中の音','Lerntöne','Note in studio','Νότες εκμάθησης'],
@@ -6329,7 +6364,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         answerSound: ['Hear the answer','重聽答案','正解を聞く','Lösung anhören','Ascolta la risposta','Άκου τη σωστή νότα'],
         out: ['Other','其他音','学習外の音','Anderer Ton','Altra nota','Άλλη νότα'],
         unsure: ['Not sure','不確定','わからない','Unsicher','Non so','Δεν ξέρω'],
-        helpAnswer: ["Tap a note name and an octave number, in either order. Choose “Other” for a note outside your set, “Not sure” if you cannot tell.", "點一個音名和一個八度數字，順序不限。音集外的音選「其他音」，無法判斷選「不確定」。", "音名とオクターブの数字を1つずつ押します（順不同）。学習中の音以外なら「学習外の音」、判断できなければ「わからない」。", "Tippe einen Tonnamen und eine Oktavzahl, in beliebiger Reihenfolge. „Anderer Ton“ für einen Ton außerhalb deiner Auswahl, „Unsicher“, wenn du es nicht weißt.", "Tocca un nome di nota e un numero d’ottava, in qualsiasi ordine. «Altra nota» per una nota fuori dal gruppo, «Non so» se non sai.", "Πάτησε ένα όνομα νότας και έναν αριθμό οκτάβας, με οποιαδήποτε σειρά. «Άλλη νότα» για νότα εκτός συνόλου, «Δεν ξέρω» αν δεν ξέρεις."],
+        helpAnswer: ["Notes in your set (ringed): tap the name and an octave, in either order. Any other note: “Other” or any name outside your set — both count as “Other”. Can’t tell: “Not sure”.", "音集內的音（有框的音名）：點音名和八度，順序不限。音集外的音：選「其他音」或點任何不在音集裡的音名，都算「其他音」。無法判斷選「不確定」。", "学習中の音（枠付きの音名）は音名とオクターブを押します（順不同）。それ以外の音は「学習外の音」でも学習外の音名でも「学習外の音」扱いです。判断できなければ「わからない」。", "Töne deiner Auswahl (umrandet): Name und Oktave tippen, beliebige Reihenfolge. Alle anderen: „Anderer Ton“ oder ein Name außerhalb der Auswahl – beides zählt als „Anderer Ton“. Unsicher: „Unsicher“.", "Note del tuo gruppo (bordate): tocca nome e ottava, in qualsiasi ordine. Le altre: «Altra nota» o un nome fuori dal gruppo valgono entrambi «Altra nota». Se non sai: «Non so».", "Νότες του συνόλου (με περίγραμμα): πάτησε όνομα και οκτάβα, με οποιαδήποτε σειρά. Οι άλλες: «Άλλη νότα» ή όνομα εκτός συνόλου μετρούν και τα δύο ως «Άλλη νότα». Αν δεν ξέρεις: «Δεν ξέρω»."],
         recorded: ['Answer saved','已記錄答案','回答を記録しました','Antwort gespeichert','Risposta salvata','Η απάντηση αποθηκεύτηκε'],
         right: ['Correct','答對','正解','Richtig','Giusto','Σωστά'],
         wrong: ['Correct answer','正確答案','正しい答え','Richtige Antwort','Risposta corretta','Σωστή απάντηση'],
@@ -6354,7 +6389,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         limitRelaxed: ['Relaxed · {s}','寬鬆 · {s}','ゆるめ · {s}','Großzügig · {s}','Ampio · {s}','Χαλαρό · {s}'],
         limitFast: ["{s}", "{s}", "{s}", "{s}", "{s}", "{s}"],
         limitOff: ['No limit · intervals can creep in','不限時 · 容易變成音程推算','制限なし · 音程で推測しやすい','Ohne Limit · Intervall-Ableitung möglich','Senza limite · gli intervalli possono intromettersi','Χωρίς όριο · εύκολα μπαίνουν τα διαστήματα'],
-        limitHelp: ["The window starts at the estimated note onset. If you used an interval, mark it even when you answered quickly.","從估計的發聲時間起計時。如果用了音程推算，即使很快也請照實標記。","音の推定開始時刻から計測します。すぐに答えられても、音程から推測した場合は記録してください。","Die Frist beginnt beim geschätzten Tonbeginn. Markiere auch schnelle Antworten, die du aus einem Intervall abgeleitet hast.","Il tempo parte dall’attacco stimato. Segnala l’uso di un intervallo anche se hai risposto rapidamente.","Ο χρόνος ξεκινά από την εκτιμώμενη έναρξη της νότας. Δήλωσε τη χρήση διαστήματος ακόμη κι αν απάντησες γρήγορα."],
+        limitHelp: ["Type seconds, e.g. 1.3; leave empty or type 0 for no limit. The window starts at the estimated note onset. If you used an interval, mark it even when you answered quickly.", "輸入秒數，例如 1.3；留空或填 0 表示不限時。從估計的發聲時間起計時。如果用了音程推算，即使很快也請照實標記。", "秒数を入力（例：1.3）。空欄または 0 で制限なし。音の推定開始時刻から計測します。すぐに答えられても、音程から推測した場合は記録してください。", "Sekunden eingeben, z. B. 1,3; leer lassen oder 0 für kein Limit. Die Frist beginnt beim geschätzten Tonbeginn. Markiere auch schnelle Antworten, die du aus einem Intervall abgeleitet hast.", "Inserisci i secondi, ad es. 1,3; lascia vuoto o scrivi 0 per nessun limite. Il tempo parte dall’attacco stimato. Segnala l’uso di un intervallo anche se hai risposto rapidamente.", "Γράψε δευτερόλεπτα, π.χ. 1,3· άφησέ το κενό ή γράψε 0 για χωρίς όριο. Ο χρόνος ξεκινά από την εκτιμώμενη έναρξη της νότας. Δήλωσε τη χρήση διαστήματος ακόμη κι αν απάντησες γρήγορα."],
         rules: ['Answer within {s}. Later answers count as misses.','請在 {s}內作答，超時算答錯。','{s}以内に答えてください。時間切れは不正解になります。','Antworte innerhalb von {s}. Spätere Antworten zählen als Fehler.','Rispondi entro {s}. Le risposte più tarde contano come errori.','Απάντησε μέσα σε {s}. Οι πιο αργές απαντήσεις μετρούν ως λάθη.'],
         rulesOff: ["No time limit. Response time is recorded.","不限時，仍記錄反應時間。","制限時間なし。反応時間は記録します。","Ohne Zeitlimit. Die Antwortzeit wird erfasst.","Nessun limite di tempo. Il tempo di risposta viene registrato.","Χωρίς χρονικό όριο. Ο χρόνος απόκρισης καταγράφεται."],
         tooSlow: ['Too slow','超時','時間切れ','Zu langsam','Troppo tardi','Πολύ αργά'],
@@ -6380,6 +6415,9 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         octaveGroup: ["Octave", "八度", "オクターブ", "Oktave", "Ottava", "Οκτάβα"],
         nameRight: ["Right name, wrong octave", "音名對，八度不對", "音名は正解・オクターブ違い", "Name richtig, Oktave falsch", "Nome giusto, ottava sbagliata", "Σωστό όνομα, λάθος οκτάβα"],
         octaveHits: ["Right octave {hits}/{total}", "八度也對 {hits}/{total}", "オクターブも正解 {hits}/{total}", "Oktave richtig {hits}/{total}", "Ottava giusta {hits}/{total}", "Σωστή οκτάβα {hits}/{total}"],
+        limitSeconds: ["Answer window (s)", "作答時限（秒）", "回答時間（秒）", "Antwortfenster (s)", "Tempo di risposta (s)", "Χρόνος απάντησης (δ)"],
+        limitNone: ["No limit", "不限時", "制限なし", "Kein Limit", "Nessun limite", "Χωρίς όριο"],
+        coldSet: ["Your set: named {hits}/{total} · outside it: “Other” or named {out}/{outside}", "學習音集內答對 {hits}/{total} · 音集外選「其他音」或答對 {out}/{outside}", "学習中の音 {hits}/{total} 正解 · それ以外は「学習外の音」か正しい音名 {out}/{outside}", "Deine Auswahl: {hits}/{total} richtig · außerhalb: „Anderer Ton“ oder richtig {out}/{outside}", "Il tuo gruppo: {hits}/{total} giuste · fuori: «Altra nota» o nome giusto {out}/{outside}", "Το σύνολό σου: {hits}/{total} σωστά · εκτός: «Άλλη νότα» ή σωστό όνομα {out}/{outside}"],
         sec: ['{s} s','{s} 秒','{s}秒','{s} s','{s} s','{s} δ']
     };
     function t(lang,key,args = {}) {
@@ -6424,22 +6462,30 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     const attempted = row => scored(row) || row.result === 'relative' || row.result === 'timeout';
     const first = row => row.result === 'answered' && row.replayed === 0;
     const isNaming = row => row.protocol === protocol && row.kind === 'cold';
-    const isTarget = row => isNaming(row) || row.known.includes(row.pitch % 12);
+    // 2.8.6: every mode judges a note against the learning set at the time ("learned", stored since 2.8.5;
+    // older rows use "known", which held all 12 names on older blind checks). A note in the set needs its
+    // exact name. For any other note, "Other" and every name outside the set mean the same thing, "other",
+    // and count as right; only a name from the set is a false alarm. "Not sure" is neither.
+    const setOf = row => Array.isArray(row.learned) ? row.learned : row.known;
+    const isTarget = row => setOf(row).includes(row.pitch % 12);
     const exactTask = row => isNaming(row) || (row.protocol === protocol && row.responseMode === 'name');
     const namesFor = (style, known) => style === 'name' ? notes.map((_, pc) => pc) : [...known];
-    // 2.8.3: every name can be given; outside the set, "Other" or the exact name is right when "Other" counts.
-    const correct = row => row.result === 'answered' && (row.guess === row.pitch % 12 ||
-        (!exactTask(row) && !isTarget(row) && row.guess === 'out'));
+    const asOther = (row, guess) => guess === 'out' || (Number.isInteger(guess) && !setOf(row).includes(guess));
+    const correct = row => row.result === 'answered' && (isTarget(row) ? row.guess === row.pitch % 12 : asOther(row, row.guess));
     function defaults(known = [5]) {
-        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 'fast', allowRepeats: false, responseMode: 'name'};
+        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 2500, allowRepeats: false, responseMode: 'name'};
     }
     // The strict window interpolates the 2.8 thresholds by the number of displayed
     // pitch names. It includes a 150 ms allowance for touch and estimated audio onset.
     const windows = ['strict', 'relaxed', 'fast', 'off'];
     function answerWindow(limit) {
-        // 2.8.3: one fixed window (1183 ms + 150 ms), however many buttons are shown.
-        return limit === 'off' ? null : 1333;
+        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as the default.
+        if (limit === null || limit === 'off' || limit === 0) return null;
+        if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
+        return 2500;
     }
+    const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
+    const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument];
         return Array.from({length: octaveOf(high) - octaveOf(low) + 1}, (_, i) => octaveOf(low) + i);
@@ -6450,7 +6496,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
                 new Set(s.octaves).size === s.octaves.length && s.octaves.every(o => octaveChoices(instrument).includes(o)))) &&
             Number.isInteger(s.hit) && s.hit >= 50 && s.hit <= 100 &&
             Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50 &&
-            (s.limit === undefined || windows.includes(s.limit)) &&
+            (s.limit === undefined || s.limit === null || windows.includes(s.limit) || (Number.isFinite(s.limit) && s.limit >= 100 && s.limit <= 60000)) &&
             (s.allowRepeats === undefined || typeof s.allowRepeats === 'boolean') &&
             (s.responseMode === undefined || ['name','set'].includes(s.responseMode));
     }
@@ -6579,7 +6625,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const targets = usable.filter(isTarget);
         const outsiders = usable.filter(row => !isTarget(row) && first(row));
         return {hits: targets.filter(row => first(row) && correct(row)).length, targets: targets.length,
-            alarms: outsiders.filter(row => row.known.includes(row.guess)).length, outside: outsiders.length,
+            alarms: outsiders.filter(row => setOf(row).includes(row.guess)).length, outside: outsiders.length,
             assisted: usable.filter(row => row.replayed > 0).length, total: usable.length,
             late: usable.filter(row => row.result === 'timeout').length};
     }
@@ -6587,8 +6633,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const practiced = new Set(rows.filter(r => isFocus(r) && r.timbre === instrument && first(r)).map(r => r.sessionId));
         const blocks = sessions.filter(s => isFocus(s) && s.protocol === protocol && practiced.has(s.id) && s.completed && s.source === instrument &&
             ['learn','consolidate'].includes(s.kind) && sameSet(s.known, settings.known) &&
-            s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
-            s.limit === settings.limit && sameSet(s.octaves, settings.octaves) &&
+            s.allowRepeats === settings.allowRepeats &&
+            sameWindow(windowOf(s), answerWindow(settings.limit)) && sameSet(s.octaves, settings.octaves) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a,b) => b.started - a.started).slice(0,6);
         const ids = new Set(blocks.map(s => s.id));
@@ -6744,7 +6790,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     }
     function updateSettings(changes) {
         const next = {...settings, ...changes};
-        if (next.limit !== 'off') next.limit = 'fast';
+        next.limit = M.answerWindow(next.limit);  // ms or null
         if (!M.validSettings(next,host.site) || !TrainingCore.write(kv('settings'), next)) return;
         settings = next;
         guideNote = settings.known.includes(guideNote) ? guideNote : settings.known.at(-1);
@@ -6770,11 +6816,14 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
                 Number.isInteger(level) && level >= 1 && level <= 12 ? S.learned(level) : [5];
             settings = M.defaults(known);
         }
-        // 2.8.3: the window no longer depends on the buttons: 1.3 s or no limit.
-        if (settings.limit !== 'off' && settings.limit !== 'fast') {
-            settings.limit = 'fast';
-            TrainingCore.write(kv('settings'), settings);
+        // 2.8.6: the default window moved from 1.3 s to 2.5 s; an older default moves once, a typed value stays.
+        const before = JSON.stringify(settings);
+        settings.limit = M.answerWindow(settings.limit);
+        if (settings.limitVersion !== 3) {
+            if (settings.limit === 1300 || settings.limit === 1333) settings.limit = 2500;
+            settings.limitVersion = 3;
         }
+        if (JSON.stringify(settings) !== before) TrainingCore.write(kv('settings'), settings);
     }
     function progress() {
         return M.promotion([...trials.values()], [...sessions.values()], settings, host.site);
@@ -6843,14 +6892,12 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             b.disabled = !(mode === 'cold' ? validPrimary : validPractice);
             const title = document.createElement('strong'); title.textContent = tr(mode);
             const hint = document.createElement('small');
-            hint.textContent = tr({cold:'coldHelp',learn:settings.responseMode === 'name' ? 'learnExact' : 'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
+            hint.textContent = tr({cold:'coldHelp',learn:'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
             b.dataset.mode = mode; b.append(title,hint); return b;
         }));
-        const practiceLimit = M.answerWindow(settings.limit, M.namesFor(settings.responseMode,settings.known).length);
-        const checkLimit = M.answerWindow(settings.limit, 12);
-        $('Rules').textContent = practiceLimit === null ? tr('rulesOff') :
-            practiceLimit === checkLimit ? tr('rules',{s:seconds(practiceLimit)}) :
-            tr('twoLimits',{practice:seconds(practiceLimit),check:seconds(checkLimit)});
+        const windowMs = M.answerWindow(settings.limit);
+        $('Rules').textContent = windowMs === null ? tr('rulesOff') :
+            tr('rules',{s:tr('sec',{s:AnswerTimer.text(windowMs, document.documentElement.lang)})});
     }
     function renderEvidence() {
         evidence = progress();
@@ -6909,12 +6956,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         $('AutoText').textContent = host.text('autoNextText');
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
         $('Repeats').checked = settings.allowRepeats;
-        $('Recognition').checked = settings.responseMode === 'set';
-        for (const option of $('Limit').options) {
-            const ms = M.answerWindow(option.value,M.namesFor(settings.responseMode,settings.known).length);
-            option.textContent = ms === null ? tr('limitOff') : tr({strict:'limitStrict',relaxed:'limitRelaxed',fast:'limitFast'}[option.value],{s:seconds(ms)});
-        }
-        $('Limit').value = settings.limit;
+        if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
+        $('Limit').placeholder = tr('limitNone');
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
         $('Invitation').textContent = tr('secondHint',{instrument:tr(M.otherInstrument(host.site))});
         $('FilterTimbre').replaceChildren(...[host.site,M.otherInstrument(host.site)].map(inst => new Option(tr(inst),inst)));
@@ -6975,12 +7018,12 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const previous = TrainingCore.lastQuestion(host.site)?.target;
         const plan = M.plan(settings,mode,host.site,weights,previous);
         if (!plan.length) {renderHome(); return;}
-        const responseMode = mode === 'cold' ? 'name' : settings.responseMode;
-        const names = M.namesFor(responseMode, settings.known);
+        const responseMode = 'set';  // 2.8.6: judged against the learning set in every mode
+        const names = M.namesFor(mode === 'cold' ? 'name' : 'set', settings.known);
         const pitches = M.pitchPool(settings.octaves,host.site,mode !== 'cold' && settings.share > 0);
         session = {id:host.site + '-focus-' + (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)),
             mode, started:Date.now(), day:S.day(), rows:[], plan, pitches, names, responseMode,
-            known:mode === 'cold' ? names : [...settings.known], poolSize:new Set(pitches.map(p => p % 12)).size,
+            known:mode === 'cold' ? names : [...settings.known], learned:[...settings.known], poolSize:new Set(pitches.map(p => p % 12)).size,
             octaves:[...new Set(pitches.map(M.octaveOf))].sort((a,b) => a - b)};
         lastBlock = null; trial = null; next();
     }
@@ -6995,7 +7038,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             {allowRepeats:settings.allowRepeats, blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
-            kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],pitch,
+            kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],learned:[...(session.learned || session.known)],pitch,
             responseMode:session.responseMode,allowRepeats:settings.allowRepeats,poolSize:session.poolSize,firstRecorded:false,
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
@@ -7119,7 +7162,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
-        const named = () => M.label(trial.pitch) + (M.exactTask(trial) || M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
+        const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
         if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
         else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
@@ -7148,6 +7191,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         };
         const pick = (kind, value, at) => {
             if (phase !== 'answer') return;
+            // 2.8.6: a name outside the learning set means "other" at once; only names in the set need an octave.
+            if (kind === 'name' && !session.learned.includes(value)) {submit(value, at); return;}
             if (kind === 'name') pickName = value; else pickOctave = value;
             if (pickName !== null && pickOctave !== null) submit({pc:pickName, octave:pickOctave}, at);
             else renderRound();
@@ -7159,7 +7204,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const keys = group('af-keys', tr('noteGroup')), octaves = group('af-octave-row', tr('octaveGroup')), extra = group('af-extra');
         for (const pc of [1,3,6,8,10,0,2,4,5,7,9,11]) {
             const black = [1,3,6,8,10].includes(pc), b = document.createElement('button');
-            b.className = black ? 'secondary af-black' : 'secondary';
+            b.className = (black ? 'secondary af-black' : 'secondary') + (session.learned.includes(pc) ? ' af-set' : '');
             b.textContent = M.notes[pc]; b.dataset.answer = String(pc);
             b.style.gridRow = black ? '1' : '2'; b.style.gridColumn = KEY_COLUMN[pc] + ' / span 2';
             b.setAttribute('aria-pressed', String(pickName === pc));
@@ -7171,14 +7216,14 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             b.setAttribute('aria-pressed', String(pickOctave === o));
             octaves.append(tap(b, at => pick('octave', o, at)));
         }
-        for (const choice of session.mode === 'cold' ? ['unsure'] : ['out','unsure']) {
+        for (const choice of ['out','unsure']) {
             const b = document.createElement('button'); b.className = 'secondary';
             b.textContent = answerLabel(choice); b.dataset.answer = choice;
             extra.append(tap(b, at => submit(choice, at)));
         }
         $('Answers').className = 'af-two';
         $('Answers').replaceChildren(keys, octaves, extra); $('Answers').hidden = done;
-        $('AnswerHint').textContent = tr(session.mode === 'cold' ? 'helpCold' : 'helpAnswer');
+        $('AnswerHint').textContent = tr('helpAnswer');
         $('AnswerHint').hidden = done;
         $('Next').hidden = !done;
         $('Next').textContent = tr(trial.ordinal === session.plan.length ? 'results' : 'next');
@@ -7200,7 +7245,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         if (!lastBlock) return;
         const c = M.counts(lastBlock.rows);
         $('SummaryTitle').textContent = tr(lastBlock.mode) + ' · ' + lastBlock.rows.length + '/' + lastBlock.plan.length;
-        if (lastBlock.mode === 'cold') $('Score').textContent = namingReport(lastBlock.rows);
+        if (lastBlock.mode === 'cold') $('Score').textContent = [tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted}),
+            namingReport(lastBlock.rows)].join(' · ');
         else {
             const metrics = [tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted})];
             if (lastBlock.responseMode === 'name') {
@@ -7322,8 +7368,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             $(id).onchange = () => {updateSettings({[key]:Number($(id).value)}); $(id).value = settings[key];};
         }
         $('Repeats').onchange = () => updateSettings({allowRepeats:$('Repeats').checked});
-        $('Recognition').onchange = () => updateSettings({responseMode:$('Recognition').checked ? 'set' : 'name'});
-        $('Limit').onchange = () => {updateSettings({limit:$('Limit').value}); $('Limit').value = settings.limit;};
+        $('Limit').onchange = () => {updateSettings({limit:AnswerTimer.parse($('Limit').value, settings.limit)});
+            $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render();};
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;
             original.dispatchEvent(new Event('change'));
@@ -7380,7 +7426,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     const lines = {
         focus: ['Focused interval practice','音程集中訓練','音程集中練習','Intervalle gezielt üben','Allenamento mirato sugli intervalli','Εστιασμένη εξάσκηση διαστημάτων'],
         cold: ['Blind interval naming','盲聽音程','音程のブラインドチェック','Intervalle blind bestimmen','Intervalli alla cieca','Τυφλή αναγνώριση διαστημάτων'],
-        coldHelp: ['12 questions · choose the exact interval · one listen · answers at the end','12 題 · 選出具體音程 · 每題聽一次 · 最後看答案','12問・音程名で回答・各1回再生・答え合わせは最後','12 Aufgaben · genaues Intervall wählen · einmal hören · Auflösung am Ende','12 domande · scegli l’intervallo esatto · un ascolto · soluzioni alla fine','12 ερωτήσεις · ακριβές διάστημα · μία ακρόαση · λύσεις στο τέλος'],
+        coldHelp: ["12 questions from all intervals · your set by number, the rest count as “Other” · one listen · answers at the end", "12 題，取自全部音程 · 音程集內的報出數字，其餘算「其他音程」 · 每題聽一次 · 最後看答案", "全音程から12問 · 学習中の音程は数字で、それ以外は「ほかの音程」扱い · 1回だけ再生 · 最後に答え合わせ", "12 Fragen aus allen Intervallen · deine Auswahl per Zahl, der Rest zählt als „Anderes“ · einmal hören · Auflösung am Ende", "12 domande da tutti gli intervalli · il tuo gruppo col numero, il resto vale «Altro» · un ascolto · risposte alla fine", "12 ερωτήσεις από όλα τα διαστήματα · το σύνολό σου με αριθμό, τα υπόλοιπα μετρούν ως «Άλλο» · μία ακρόαση · απαντήσεις στο τέλος"],
         learnHelp: ['{n} intervals from your set and others · feedback after each answer','{n} 題 · 混合目前音程集和其他音程 · 每題立即回饋','{n}問・学習中の音程とほかの音程・毎回答え合わせ','{n} Intervalle aus deiner Auswahl und andere · Rückmeldung nach jeder Antwort','{n} intervalli del tuo gruppo e altri · riscontro dopo ogni risposta','{n} διαστήματα από το σύνολό σου και άλλα · ανατροφοδότηση μετά από κάθε απάντηση'],
         learnExact: ['{n} intervals · your set comes up more often · feedback after each answer','{n} 題 · 學習音程集中的音程較常出現 · 每題立即核對','{n}問・学習中の音程が多めに出題・毎回答え合わせ','{n} Intervalle · deine Lernintervalle kommen öfter · Rückmeldung nach jeder Antwort','{n} intervalli · quelli in studio compaiono più spesso · riscontro dopo ogni risposta','{n} διαστήματα · τα διαστήματα εκμάθησης εμφανίζονται συχνότερα · ανατροφοδότηση μετά από κάθε απάντηση'],
         conHelp: ['{n} intervals · optional · answers at the end','{n} 題 · 可選做一組 · 整組結束後看答案','{n}問・任意・答えは最後に表示','{n} Intervalle · freiwillig · Auflösung am Ende','{n} intervalli · facoltativo · risposte alla fine','{n} διαστήματα · προαιρετικά · απαντήσεις στο τέλος'],
@@ -7396,7 +7442,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         recognition: ['Allow “Other” in learning and consolidation','在學習與鞏固中使用「其他音程」選項','学習と定着で「ほかの音程」を使う','„Anderes“ beim Lernen und Festigen erlauben','Consenti «Altro» in apprendimento e consolidamento','Επίτρεψε «Άλλο» στη μάθηση και την εμπέδωση'],
         repeats: ['Allow the same interval on consecutive questions','允許相鄰題出現相同音程','連続する問題で同じ音程を許可','Gleiches Intervall direkt hintereinander erlauben','Consenti lo stesso intervallo in domande consecutive','Επίτρεψε το ίδιο διάστημα σε διαδοχικές ερωτήσεις'],
         out: ['Other','其他音程','ほかの音程','Anderes','Altro','Άλλο'],
-        helpAnswer: ['Choose {other} for an interval outside your set. Choose {unsure} if you cannot tell.','判斷為音程集以外的音程，選「{other}」。無法判斷，選「{unsure}」。','学習中以外の音程なら「{other}」、判断できなければ「{unsure}」を選びます。','Wähle „{other}“ für ein Intervall außerhalb deiner Auswahl und „{unsure}“, wenn du es nicht erkennst.','Scegli «{other}» per un intervallo fuori dal gruppo e «{unsure}» se non lo riconosci.','Επίλεξε «{other}» για διάστημα εκτός συνόλου και «{unsure}» αν δεν είσαι βέβαιος.'],
+        helpAnswer: ["Tap the number of semitones. For an interval outside your set, any number outside the set counts as “Other”.", "點半音數。音程集以外的音程，點任何不在音程集裡的數字都算「其他音程」。", "半音の数を押します。学習中以外の音程は、学習外のどの数字を押しても「ほかの音程」扱いです。", "Tippe die Zahl der Halbtöne. Bei einem Intervall außerhalb deiner Auswahl zählt jede Zahl außerhalb der Auswahl als „Anderes“.", "Tocca il numero di semitoni. Per un intervallo fuori dal gruppo, ogni numero fuori dal gruppo vale «Altro».", "Πάτησε τον αριθμό ημιτονίων. Για διάστημα εκτός συνόλου, κάθε αριθμός εκτός συνόλου μετράει ως «Άλλο»."],
         choose: ['Which interval did you hear?','你聽到哪個音程？','どの音程でしたか？','Welches Intervall hast du gehört?','Quale intervallo hai sentito?','Ποιο διάστημα άκουσες;'],
         next: ['Next interval','下一題','次へ','Nächstes Intervall','Prossimo intervallo','Επόμενο διάστημα'],
         progress: ['New-interval suggestion · {blocks}/2 blocks, at least {first}/5 first answers per interval, {outside}/10 outside intervals.','新增音程條件 · 練習 {blocks}/2 組，每個音程最少 {first}/5 次首答，音程集外首答 {outside}/10 次。','新しい音程の目安 · 練習 {blocks}/2 セット、各音程の初回回答 {first}/5 回以上、学習外の初回回答 {outside}/10 回。','Vorschlag für ein neues Intervall · {blocks}/2 Blöcke, mindestens {first}/5 Erstantworten je Intervall, {outside}/10 andere Intervalle.','Suggerimento per un nuovo intervallo · {blocks}/2 blocchi, almeno {first}/5 prime risposte per intervallo, {outside}/10 intervalli esterni.','Πρόταση νέου διαστήματος · {blocks}/2 ομάδες, τουλάχιστον {first}/5 πρώτες απαντήσεις ανά διάστημα, {outside}/10 άλλα διαστήματα.'],
@@ -7410,9 +7456,10 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         thresholds: ['New-interval thresholds','新增音程的提示條件','新しい音程を追加する目安','Schwellen für neue Intervalle','Soglie per un nuovo intervallo','Όρια για νέο διάστημα'],
         newInterval: ['Introduce {interval}','加入 {interval}','{interval}を追加','{interval} hinzufügen','Aggiungi {interval}','Πρόσθεσε {interval}'],
         named: ['Exact intervals {hits}/{total}','答對音程 {hits}/{total}','音程正答 {hits}/{total}','Genau bestimmt {hits}/{total}','Intervalli esatti {hits}/{total}','Σωστά διαστήματα {hits}/{total}'],
-        limitHelp: ['The window starts at the estimated onset of the second note, or of both notes when they sound together.','從第二個音的估計發聲時間起計時；兩音同時發聲時，從兩音響起時起計。','2音目の推定発音時刻から計ります。同時に鳴らす場合は2音が鳴った時刻からです。','Die Zeit läuft ab dem geschätzten Einsatz des zweiten Tons, beim Zusammenklang ab beiden Tönen.','Il tempo parte dall’attacco stimato della seconda nota, o di entrambe se suonano insieme.','Ο χρόνος μετρά από την εκτιμώμενη έναρξη της δεύτερης νότας ή και των δύο, όταν ηχούν μαζί.'],
+        limitSeconds: ["Answer window (s)", "作答時限（秒）", "回答時間（秒）", "Antwortfenster (s)", "Tempo di risposta (s)", "Χρόνος απάντησης (δ)"],
+        limitHelp: ["Type seconds, e.g. 1.3; leave empty or type 0 for no limit. The window starts at the estimated onset of the second note, or of both notes when they sound together.", "輸入秒數，例如 1.3；留空或填 0 表示不限時。從第二個音的估計發聲時間起計時；兩音同時發聲時，從兩音響起時起計。", "秒数を入力（例：1.3）。空欄または 0 で制限なし。2音目の推定発音時刻から計ります。同時に鳴らす場合は2音が鳴った時刻からです。", "Sekunden eingeben, z. B. 1,3; leer lassen oder 0 für kein Limit. Die Zeit läuft ab dem geschätzten Einsatz des zweiten Tons, beim Zusammenklang ab beiden Tönen.", "Inserisci i secondi, ad es. 1,3; lascia vuoto o scrivi 0 per nessun limite. Il tempo parte dall’attacco stimato della seconda nota, o di entrambe se suonano insieme.", "Γράψε δευτερόλεπτα, π.χ. 1,3· άφησέ το κενό ή γράψε 0 για χωρίς όριο. Ο χρόνος μετρά από την εκτιμώμενη έναρξη της δεύτερης νότας ή και των δύο, όταν ηχούν μαζί."],
         limitNone: ['No limit','不限時','制限なし','Ohne Zeitlimit','Nessun limite','Χωρίς όριο'],
-        limitScale: ["Timed from the estimated onset of the sound you answer; the window does not change with the number of buttons. Late answers count as misses; replays are not timed.", "從需要作答的那個音估計發聲時起計時，時限不隨按鈕數量改變。超時算答錯，重播過的題不計時。", "答える音の推定発音時刻から計ります。制限時間はボタンの数で変わりません。時間切れは不正解、再生し直した問題は計測しません。", "Die Zeit läuft ab dem geschätzten Einsatz des Tons, auf den du antwortest; sie hängt nicht von der Zahl der Tasten ab. Späte Antworten zählen als Fehler, Wiederholungen werden nicht gemessen.", "Il tempo parte dall’attacco stimato della nota a cui rispondi e non dipende dal numero di tasti. Le risposte in ritardo contano come errori; i riascolti non sono cronometrati.", "Ο χρόνος μετρά από την εκτιμώμενη έναρξη του ήχου που απαντάς και δεν αλλάζει με τον αριθμό των κουμπιών. Οι αργές απαντήσεις μετρούν ως λάθη· οι επαναλήψεις δεν χρονομετρούνται."],
+        limitScale: ["Type seconds, e.g. 1.3; leave empty or type 0 for no limit. Timed from the estimated onset of the sound you answer; late answers count as misses, replays are not timed.", "輸入秒數，例如 1.3；留空或填 0 表示不限時。從需要作答的那個音估計發聲時起計時；超時算答錯，重播過的題不計時。", "秒数を入力（例：1.3）。空欄または 0 で制限なし。答える音の推定発音時刻から計ります。時間切れは不正解、再生し直した問題は計測しません。", "Sekunden eingeben, z. B. 1,3; leer lassen oder 0 für kein Limit. Die Zeit läuft ab dem geschätzten Einsatz des Tons, auf den du antwortest; späte Antworten zählen als Fehler, Wiederholungen werden nicht gemessen.", "Inserisci i secondi, ad es. 1,3; lascia vuoto o scrivi 0 per nessun limite. Il tempo parte dall’attacco stimato della nota a cui rispondi; le risposte in ritardo contano come errori, i riascolti non sono cronometrati.", "Γράψε δευτερόλεπτα, π.χ. 1,3· άφησέ το κενό ή γράψε 0 για χωρίς όριο. Ο χρόνος μετρά από την εκτιμώμενη έναρξη του ήχου που απαντάς· οι αργές απαντήσεις μετρούν ως λάθη, οι επαναλήψεις δεν χρονομετρούνται."],
         rangeHint: ['Choose octaves in which every interval of your set and at least two different intervals fit.','所選八度須能播放學習音程集中的每個音程，並至少有兩種不同音程。','学習中の音程がすべて鳴らせて、2種類以上の音程があるオクターブを選んでください。','Wähle Oktaven, in denen alle Lernintervalle und mindestens zwei verschiedene Intervalle möglich sind.','Scegli ottave in cui siano possibili tutti gli intervalli in studio e almeno due diversi.','Επίλεξε οκτάβες όπου χωρούν όλα τα διαστήματα εκμάθησης και τουλάχιστον δύο διαφορετικά.'],
         exampleAudioError: ['Tap the interval again to retry.','請再點一次音程以重試播放。','もう一度音程をタップすると再生を試します。','Tippe das Intervall erneut an, um es noch einmal abzuspielen.','Tocca di nuovo l’intervallo per riprovare.','Πάτησε ξανά το διάστημα για νέα προσπάθεια.'],
         backup: ['Export interval backup','匯出音程備份','音程のバックアップを書き出す','Intervall-Sicherung exportieren','Esporta backup degli intervalli','Εξαγωγή αντιγράφου διαστημάτων'],
@@ -7462,7 +7509,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     }
     function defaults(known = [7]) {
         return {known: [...known], octaves: [4, 5], direction: 'up', size: 24, hit: 75, falseAlarm: 25,
-            limit: 'fast', allowRepeats: false, responseMode: 'name'};
+            limit: 2500, allowRepeats: false, responseMode: 'name'};
     }
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument] || limits.piano;
@@ -7474,7 +7521,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             directions.includes(s.direction) && sizes.includes(s.size) &&
             Number.isInteger(s.hit) && s.hit >= 50 && s.hit <= 100 &&
             Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50 &&
-            windows.includes(s.limit) && typeof s.allowRepeats === 'boolean' && ['name', 'set'].includes(s.responseMode);
+            (s.limit === null || windows.includes(s.limit) || (Number.isFinite(s.limit) && s.limit >= 100 && s.limit <= 60000)) && typeof s.allowRepeats === 'boolean' && ['name', 'set'].includes(s.responseMode);
     }
     function pitchPool(octaves, instrument) {
         const [low, high] = limits[instrument] || limits.piano;
@@ -7490,11 +7537,15 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     function namesFor(responseMode, known, pitches) {
         return responseMode === 'name' ? available(pitches) : [...known].sort((a, b) => a - b);
     }
-    // The same windows as focused AP practice and AnswerTimer: wider with more choices.
+    // The same window as focused AP practice and AnswerTimer.
     function answerWindow(limit) {
-        // 2.8.3: one fixed window (1183 ms + 150 ms), however many buttons are shown.
-        return limit === 'off' ? null : 1333;
+        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as the default.
+        if (limit === null || limit === 'off' || limit === 0) return null;
+        if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
+        return 2500;
     }
+    const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
+    const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
     const intervalOf = q => Number.isInteger(q?.reference) && Number.isInteger(q?.target) &&
         Math.abs(q.target - q.reference) >= 1 && Math.abs(q.target - q.reference) <= 12 ? Math.abs(q.target - q.reference) : null;
     function plan(settings, mode, instrument, weights = {}, previous = null) {
@@ -7598,15 +7649,20 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     const attempted = row => scored(row) || row.result === 'timeout';
     const first = row => row.result === 'answered' && row.replayed === 0;
     const exactTask = row => row.kind === 'cold' || row.responseMode === 'name';
-    const isTarget = row => row.kind === 'cold' || row.known.includes(row.size);
-    const correct = row => row.result === 'answered' && (row.guess === row.size ||
-        (!exactTask(row) && !isTarget(row) && row.guess === 'out'));
+    // 2.8.6: every mode judges an interval against the learning set at the time ("learned", stored since 2.8.5;
+    // older rows use "known", which held every interval on older blind checks). An interval in the set needs its
+    // exact number. For any other note, "Other" and every number outside the set mean the same thing, "other",
+    // and count as right; only a number from the set is a false alarm. "Not sure" is neither.
+    const setOf = row => Array.isArray(row.learned) ? row.learned : row.known;
+    const isTarget = row => setOf(row).includes(row.size);
+    const asOther = (row, guess) => guess === 'out' || (Number.isInteger(guess) && !setOf(row).includes(guess));
+    const correct = row => row.result === 'answered' && (isTarget(row) ? row.guess === row.size : asOther(row, row.guess));
     function counts(rows) {
         const usable = rows.filter(attempted);
         const targets = usable.filter(isTarget);
         const outsiders = usable.filter(row => !isTarget(row) && first(row));
         return {hits: targets.filter(row => first(row) && correct(row)).length, targets: targets.length,
-            alarms: outsiders.filter(row => row.known.includes(row.guess)).length, outside: outsiders.length,
+            alarms: outsiders.filter(row => setOf(row).includes(row.guess)).length, outside: outsiders.length,
             assisted: usable.filter(row => row.replayed > 0).length, total: usable.length,
             named: usable.filter(row => first(row) && correct(row)).length,
             late: usable.filter(row => row.result === 'timeout').length};
@@ -7624,8 +7680,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     }
     function promotion(rows, sessions, settings, now = Date.now()) {
         const blocks = sessions.filter(s => s.protocol === protocol && s.completed && ['learn', 'consolidate'].includes(s.kind) &&
-            sameSet(s.known, settings.known) && s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
-            s.limit === settings.limit && s.direction === settings.direction && Array.isArray(s.octaves) &&
+            sameSet(s.known, settings.known) && s.allowRepeats === settings.allowRepeats &&
+            sameWindow(windowOf(s), answerWindow(settings.limit)) && s.direction === settings.direction && Array.isArray(s.octaves) &&
             s.octaves.length === settings.octaves.length && settings.octaves.every(o => s.octaves.includes(o)) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a, b) => b.started - a.started).slice(0, 6);
@@ -7801,7 +7857,14 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const saved = read(kv('settings'));
         const merged = {...M.defaults(), ...(saved && typeof saved === 'object' ? saved : {})};
         settings = M.validSettings(merged, host.site) ? merged : M.defaults();
-        if (settings.limit !== 'off') settings.limit = 'fast';  // 2.8.3: 1.3 s or no limit
+        // 2.8.6: the default window moved from 1.3 s to 2.5 s; an older default moves once, a typed value stays.
+        const before = JSON.stringify(settings);
+        settings.limit = M.answerWindow(settings.limit);
+        if (settings.limitVersion !== 3) {
+            if (settings.limit === 1300 || settings.limit === 1333) settings.limit = 2500;
+            settings.limitVersion = 3;
+        }
+        if (JSON.stringify(settings) !== before) TrainingCore.write(kv('settings'), settings);
     }
     const progress = () => M.promotion(rowsNow(), blocksNow(), settings);
     function introduce(d) {
@@ -7847,15 +7910,13 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             const title = document.createElement('strong'); title.textContent = modeName(mode);
             const hint = document.createElement('small');
             hint.textContent = mode === 'cold' ? tr('coldHelp') : mode === 'learn' ?
-                tr(settings.responseMode === 'name' ? 'learnExact' : 'learnHelp', {n: settings.size}) : tr('conHelp', {n: settings.size});
+                tr('learnHelp', {n: settings.size}) : tr('conHelp', {n: settings.size});
             b.dataset.mode = mode; b.append(title, hint);
             return b;
         }));
-        const practiceLimit = M.answerWindow(settings.limit, M.namesFor(settings.responseMode, settings.known, pitches).length);
-        const checkLimit = M.answerWindow(settings.limit, avail.length);
-        $('Rules').textContent = practiceLimit === null ? ap('rulesOff') :
-            practiceLimit === checkLimit ? ap('rules', {s: seconds(practiceLimit)}) :
-            ap('twoLimits', {practice: seconds(practiceLimit), check: seconds(checkLimit)});
+        const windowMs = M.answerWindow(settings.limit);
+        $('Rules').textContent = windowMs === null ? ap('rulesOff') :
+            ap('rules', {s: ap('sec', {s: AnswerTimer.text(windowMs, document.documentElement.lang)})});
     }
     function renderEvidence() {
         const evidence = progress(), rows = rowsNow();
@@ -7904,15 +7965,10 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         $('Size').value = String(settings.size); $('Hit').value = settings.hit; $('Fa').value = settings.falseAlarm;
         $('Auto').checked = document.getElementById('autoNextCheck').checked;
         $('AutoText').textContent = host.text('autoNextText');
-        $('Recognition').checked = settings.responseMode === 'set';
         $('Repeats').checked = settings.allowRepeats;
         const names = M.namesFor(settings.responseMode, settings.known, M.pitchPool(settings.octaves, host.site)).length;
-        for (const option of $('Limit').options) {
-            const ms = M.answerWindow(option.value, names);
-            option.textContent = ms === null ? tr('limitNone') :
-                ap({strict: 'limitStrict', relaxed: 'limitRelaxed', fast: 'limitFast'}[option.value], {s: seconds(ms)});
-        }
-        $('Limit').value = settings.limit;
+        if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
+        $('Limit').placeholder = tr('limitNone');
         guide(); renderEvidence();
     }
 
@@ -7936,11 +7992,11 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const plan = M.plan(settings, mode, host.site, M.weights(rowsNow(), settings.known), previous);
         if (!plan.length) { renderHome(); return; }
         const pitches = M.pitchPool(settings.octaves, host.site);
-        const responseMode = mode === 'cold' ? 'name' : settings.responseMode;
-        const names = M.namesFor(responseMode, settings.known, pitches);
+        const responseMode = 'set';  // 2.8.6: judged against the learning set in every mode
+        const names = M.namesFor(mode === 'cold' ? 'name' : 'set', settings.known, pitches);
         session = {id: host.site + '-iv-' + (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)),
             mode, started: Date.now(), day: S.day(), rows: [], plan, pitches, names, responseMode,
-            known: mode === 'cold' ? [...names] : [...settings.known], direction: settings.direction,
+            known: mode === 'cold' ? [...names] : [...settings.known], learned: [...settings.known], direction: settings.direction,
             octaves: [...settings.octaves], limit: settings.limit, allowRepeats: settings.allowRepeats};
         lastBlock = null; trial = null; next();
     }
@@ -7955,7 +8011,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const size = pair.size;
         session.plan[ordinal] = size;
         trial = {protocol: M.protocol, source: host.site, id: session.id + '-' + (ordinal + 1), sessionId: session.id,
-            ordinal: ordinal + 1, kind: session.mode, known: [...session.known], responseMode: session.responseMode,
+            ordinal: ordinal + 1, kind: session.mode, known: [...session.known], learned: [...(session.learned || session.known)], responseMode: session.responseMode,
             allowRepeats: session.allowRepeats, size, direction: pair.direction, reference: pair.reference, target: pair.target,
             timbre: host.site, day: S.day(), previousSize: before, guess: null, correct: false, result: 'interrupted',
             replayed: 0, rtMs: null, assistedRtMs: null, timing: null, playedAt: null, submittedAt: null,
@@ -8048,7 +8104,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
     function renderRound() {
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = modeName(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
-        const named = () => way(trial.direction) + ' ' + labelOf(trial.size) + (M.exactTask(trial) || M.isTarget(trial) ? '' : ' · ' + tr('out'));
+        const named = () => way(trial.direction) + ' ' + labelOf(trial.size) + (M.isTarget(trial) ? '' : ' · ' + tr('out'));
         const prompt = $('Prompt');
         if (loading) prompt.textContent = ap('wait');
         else if (!done) prompt.textContent = tr('choose');
@@ -8059,7 +8115,6 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             (trial.replayed ? ' · ' + ap('aided') : Number.isFinite(trial.rtMs) ? ' · ' + seconds(trial.rtMs) : '');
         // 2.8.3: semitone numbers only, the same buttons whatever the learning set.
         const choices = [...M.available(session.pitches)];
-        if (session.responseMode === 'set' && session.mode !== 'cold' && choices.some(d => !session.known.includes(d))) choices.push('out');
         choices.push('unsure');
         const buttons = choices.map(choice => {
             const b = button(Number.isInteger(choice) ? String(choice) : answerLabel(choice), null);
@@ -8077,7 +8132,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         });
         $('Answers').classList.toggle('af-naming', choices.length > 4);
         $('Answers').replaceChildren(...buttons); $('Answers').hidden = done;
-        $('AnswerHint').hidden = done || !choices.includes('out');
+        $('AnswerHint').hidden = done || choices.every(d => d === 'unsure' || session.learned.includes(d));
         $('AnswerHint').textContent = tr('helpAnswer');
         $('Next').hidden = !done;
         $('Next').textContent = trial.ordinal === session.plan.length ? ap('results') : tr('next');
@@ -8090,8 +8145,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         if (!lastBlock) return;
         const c = M.counts(lastBlock.rows), parts = [];
         $('SummaryTitle').textContent = modeName(lastBlock.mode) + ' · ' + lastBlock.rows.length + '/' + lastBlock.plan.length;
-        if (lastBlock.mode === 'cold' || lastBlock.responseMode === 'name') parts.push(tr('named', {hits: c.named, total: c.total}));
-        if (lastBlock.mode !== 'cold') parts.push(ap('summary', {hits: c.hits, total: c.targets, alarms: c.alarms, outside: c.outside, aided: c.assisted}));
+        parts.push(ap('summary', {hits: c.hits, total: c.targets, alarms: c.alarms, outside: c.outside, aided: c.assisted}));
         if (c.late) parts.push(ap('lateCount', {n: c.late}));
         const times = lastBlock.rows.filter(r => M.first(r) && M.correct(r)).map(r => r.rtMs).filter(Number.isFinite);
         if (times.length) parts.push(ap('medianTime', {s: seconds(S.median(times))}));
@@ -8193,8 +8247,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         }
         $('Direction').onchange = () => { updateSettings({direction: $('Direction').value}); $('Direction').value = settings.direction; };
         $('Repeats').onchange = () => updateSettings({allowRepeats: $('Repeats').checked});
-        $('Recognition').onchange = () => updateSettings({responseMode: $('Recognition').checked ? 'set' : 'name'});
-        $('Limit').onchange = () => { updateSettings({limit: $('Limit').value}); $('Limit').value = settings.limit; };
+        $('Limit').onchange = () => { updateSettings({limit: AnswerTimer.parse($('Limit').value, settings.limit)});
+            $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render(); };
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;
             original.dispatchEvent(new Event('change'));
@@ -8233,7 +8287,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
 
 </script>
     <script>
-const APP_VERSION = "2.8.3";
+const APP_VERSION = "2.8.6";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -9287,16 +9341,9 @@ function renderAnswerLimit() {
         !(mode === "rpCourse" && document.getElementById("rpActivity").value === "produce");
     document.getElementById("answerLimitRow").hidden = !timed;
     document.getElementById("answerLimitHelp").hidden = !timed;
-    const choices = choiceCount(mode);
-    const format = new Intl.NumberFormat(currentLanguage, {minimumFractionDigits: 1, maximumFractionDigits: 1});
-    for (const option of select.options) {
-        const ms = AnswerTimer.windowMs(option.value, choices);
-        option.textContent = ms === null ? IntervalFocusCopy.t(currentLanguage, "limitNone")
-            : APFocusCopy.t(currentLanguage, {strict: "limitStrict", relaxed: "limitRelaxed", fast: "limitFast"}[option.value],
-                {s: APFocusCopy.t(currentLanguage, "sec", {s: format.format(ms / 1000)})});
-    }
-    select.value = answerLimit;
-    document.getElementById("answerLimitLabel").textContent = APFocusCopy.t(currentLanguage, "limit");
+    if (document.activeElement !== select) select.value = AnswerTimer.text(answerLimit, currentLanguage);
+    select.placeholder = APFocusCopy.t(currentLanguage, "limitNone");
+    document.getElementById("answerLimitLabel").textContent = APFocusCopy.t(currentLanguage, "limitSeconds");
     document.getElementById("answerLimitHelp").textContent = IntervalFocusCopy.t(currentLanguage, "limitScale");
 }
 // A single note or a pair that was not answered in time: shown like a miss, waits for Next.
@@ -10565,7 +10612,9 @@ rememberToggle("apMaskCheck", AP_MASK_KEY);
 rememberToggle("autoNextCheck", AUTO_NEXT_KEY);
 RPUI.init();
 document.getElementById("answerLimitSelect").addEventListener("change", (event) => {
-    if (AnswerTimer.LIMITS.includes(event.target.value)) { answerLimit = event.target.value; AnswerTimer.save(answerLimit); }
+    answerLimit = AnswerTimer.parse(event.target.value, answerLimit);
+    AnswerTimer.save(answerLimit);
+    event.target.value = AnswerTimer.text(answerLimit, currentLanguage);
     renderAnswerLimit();
 });
 for (const id of ["rpLevel", "rpActivity"]) document.getElementById(id).addEventListener("change", renderAnswerLimit);

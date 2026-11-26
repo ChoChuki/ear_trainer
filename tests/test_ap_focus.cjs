@@ -99,15 +99,16 @@ console.log('PASS '+checked+' consecutive focused targets, mixed instruments, se
 console.log('PASS: course size, pitch selection, outside trials and instrument mix');
 
 // Wong et al. (2025): 1,183 ms for one name to 2,028 ms for twelve, plus 150 ms for touch input.
-assert.equal(m.answerWindow('fast'),1333);
-assert.equal(m.answerWindow('strict'),1333,'2.8.3: no scaling by the number of buttons');
-assert.equal(m.answerWindow('relaxed'),1333);
+assert.equal(m.answerWindow('fast'),2500);
+assert.equal(m.answerWindow('strict'),2500,'older named choices read as the default');
+assert.equal(m.answerWindow(2500),2500); assert.equal(m.answerWindow(null),null); assert.equal(m.answerWindow(0),null);
 assert.equal(m.answerWindow('off',5),null);
-assert.equal(m.defaults().limit,'fast');
+assert.equal(m.defaults().limit,2500);
 assert(m.validSettings({...m.defaults(),limit:'relaxed'},'violin'));
 assert(m.validSettings({...m.defaults(),limit:'fast'},'violin'), '2.8.2: fixed 1.3 s window');
 assert(!m.validSettings({...m.defaults(),limit:'rapid'},'violin'));
-assert.equal(m.answerWindow('fast',12),1333);
+assert.equal(m.answerWindow(1300,12),1300);
+assert(m.validSettings({...m.defaults(),limit:null},'violin')); assert(m.validSettings({...m.defaults(),limit:2500},'violin'));
 console.log('PASS answer windows');
 
 const now = Date.now(), settings = m.defaults([5,4]);
@@ -137,7 +138,9 @@ sessions[1].started=now-15*86400000; assert(!promote().ready); sessions[1].start
 sessions[1].known=[5]; assert(!promote().ready); sessions[1].known=[5,4];
 assert(!m.promotion(rows,sessions,settings,'piano',now).ready);
 const out = {...shared,pitch:67,replayed:0,result:'answered',guess:'out'};
-assert(!m.correct(out)); assert(m.correct({...out,guess:7}));
+assert(m.correct(out),'2.8.6: Other for a note outside the set'); assert(m.correct({...out,guess:7}));
+assert(m.correct({...out,guess:(out.pitch + 1) % 12 === out.known[0] ? (out.pitch + 2) % 12 : (out.pitch + 1) % 12}),'any name outside the set counts as Other');
+assert(!m.correct({...out,guess:out.known[0]}),'a name from the set is a false alarm');
 assert(m.correct({...out,responseMode:'set'})); assert(!m.correct({...out,guess:'unsure'}));
 assert.equal(m.counts([out,{...out,guess:5},{...out,replayed:1,guess:5}]).alarms,1);
 const relativeTarget = {...out,sessionId:'a',timbre:'violin',pitch:65,result:'relative',guess:null};
@@ -176,6 +179,10 @@ for (let i = 0; i < 120; i++) registers.add(m.pickMidi(5,m.pitchPool([4,5,6],'vi
 assert.deepEqual([...registers].sort(),[65,77,89]);
 const checkRow = {...shared,kind:'cold',known:m.namesFor('name',[]),pitch:68,guess:8,result:'answered',replayed:0,poolSize:12};
 assert(m.correct(checkRow)); assert(!m.correct({...checkRow,guess:'out'}));
+const fresh = {...checkRow, learned:[(checkRow.pitch + 1) % 12]};  // 2.8.6 blind check: the note is outside the set
+assert(m.correct({...fresh,guess:'out'}) && m.correct({...fresh,guess:checkRow.pitch % 12}),'outside the set: Other or any outside name');
+assert(!m.correct({...fresh,guess:fresh.learned[0]}) && !m.correct({...fresh,guess:'unsure'}),'a set name is a false alarm');
+assert.deepEqual(m.counts([{...fresh,guess:fresh.learned[0]},{...fresh,guess:'out'}]).alarms, 1);
 const group = [ {...checkRow,eligibleCold:true}, {...checkRow,result:'relative'}, {...checkRow,result:'timeout'},
     {...checkRow,guess:'unsure'}, {...checkRow,result:'interrupted'}, {...checkRow,result:'audio-error'},
     {...checkRow,firstRecorded:true}, {...checkRow,eligibleCold:true,poolSize:5},

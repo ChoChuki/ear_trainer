@@ -30,8 +30,8 @@ const ready = (page, selector) => page.waitForFunction(s => {
     // 1. Focused interval practice: a blind check answered at once, then a timeout in learning.
     await page.goto(base + '#iv');
     await page.waitForSelector('#ivModes button[data-mode="cold"]');
-    assert.match(await page.textContent('#ivRules'), /1\.3 s/);
-    assert.deepEqual(await page.$$eval('#ivLimit option', o => o.map(x => x.textContent)), ['1.3 s', 'No limit']);
+    assert.match(await page.textContent('#ivRules'), /2\.5 s/);
+    assert.equal(await page.inputValue('#ivLimit'), '2.5');
     assert.equal(await page.isVisible('#focusPanel'), false);
     console.log('iv home:', await page.textContent('#ivRules'), '|', await page.textContent('#ivDaily'));
     await page.click('#ivModes button[data-mode="cold"]');
@@ -55,7 +55,7 @@ const ready = (page, selector) => page.waitForFunction(s => {
         assert.notEqual(check[i].size, check[i - 1].size, 'adjacent intervals differ');
         assert.notEqual(check[i].target % 12, check[i - 1].target % 12, 'adjacent second notes differ in name');
     }
-    assert(check.every(r => r.result === 'answered' && Number.isFinite(r.rtMs) && r.limitMs === 1333 && r.direction === 'up' && r.target > r.reference));
+    assert(check.every(r => r.result === 'answered' && Number.isFinite(r.rtMs) && r.limitMs === 2500 && r.direction === 'up' && r.target > r.reference));
     console.log('iv sizes:', check.map(r => r.size).join(' '), '| rt', check.map(r => r.rtMs).join(' '));
     await page.click('#ivContinue button.primary');
     await ready(page, '#ivAnswers button');
@@ -85,9 +85,9 @@ const ready = (page, selector) => page.waitForFunction(s => {
     // 2. Single notes (piano): a timeout, then an answer inside the window.
     await page.goto(base + '?instrument=piano');
     await ready(page, '#playButton');
-    console.log('single limits:', (await page.$$eval('#answerLimitSelect option', o => o.map(x => x.textContent))).join(' | '));
-    assert.equal(await page.inputValue('#answerLimitSelect'), 'fast');
-    assert.deepEqual(await page.$$eval('#answerLimitSelect option', o => o.map(x => x.textContent)), ['1.3 s', 'No limit']);
+    console.log('single limits:', await page.inputValue('#answerLimitSelect'));
+    assert.equal(await page.inputValue('#answerLimitSelect'), '2.5');
+    assert.equal(await page.getAttribute('#answerLimitSelect', 'placeholder'), 'No limit');
     await page.click('#playButton');
     await page.waitForFunction(() => !document.getElementById('answerTimer').hidden && document.getElementById('answerTimer').parentElement.classList.contains('answer-card'), null, {timeout: 8000});
     await page.waitForFunction(() => /Time’s up/.test(document.getElementById('status').textContent), null, {timeout: 6000});
@@ -105,7 +105,7 @@ const ready = (page, selector) => page.waitForFunction(s => {
     // 3. Relative pitch course: the window starts at the second note; a timeout is recorded.
     await page.selectOption('#modeSelect', 'rpCourse');
     await page.waitForTimeout(300);
-    const rpLimit = await page.textContent('#answerLimitSelect option[value="fast"]');
+    const rpLimit = await page.inputValue('#answerLimitSelect');
     console.log('rp limit:', rpLimit, '| answers', await page.evaluate(() => rpChoiceCount()));
     await page.click('#playButton');
     await page.waitForFunction(() => { const b = document.querySelector('#rpAnswers button'); return b && !b.disabled; }, null, {timeout: 10000});
@@ -130,7 +130,7 @@ const ready = (page, selector) => page.waitForFunction(s => {
     console.log('ap timeout:', await page.textContent('#apMessage'));
     await page.waitForTimeout(300);
     data = await store(page, 'ap-training-data-piano');
-    assert(data.trials.some(r => r.result === 'timeout' && r.limitMs === 1333));
+    assert(data.trials.some(r => r.result === 'timeout' && r.limitMs === 2500));
     await page.evaluate(() => stopTest());
 
     // 5. Focused AP: a labelled example never shares its name with the next question.

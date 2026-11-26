@@ -27,7 +27,7 @@
     }
     function defaults(known = [7]) {
         return {known: [...known], octaves: [4, 5], direction: 'up', size: 24, hit: 75, falseAlarm: 25,
-            limit: 1300, allowRepeats: false, responseMode: 'name'};
+            limit: 2500, allowRepeats: false, responseMode: 'name'};
     }
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument] || limits.piano;
@@ -57,10 +57,10 @@
     }
     // The same window as focused AP practice and AnswerTimer.
     function answerWindow(limit) {
-        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as 1.3 s.
+        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as the default.
         if (limit === null || limit === 'off' || limit === 0) return null;
         if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
-        return 1300;
+        return 2500;
     }
     const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
     const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
@@ -167,15 +167,20 @@
     const attempted = row => scored(row) || row.result === 'timeout';
     const first = row => row.result === 'answered' && row.replayed === 0;
     const exactTask = row => row.kind === 'cold' || row.responseMode === 'name';
-    const isTarget = row => row.kind === 'cold' || row.known.includes(row.size);
-    const correct = row => row.result === 'answered' && (row.guess === row.size ||
-        (!exactTask(row) && !isTarget(row) && row.guess === 'out'));
+    // 2.8.6: every mode judges an interval against the learning set at the time ("learned", stored since 2.8.5;
+    // older rows use "known", which held every interval on older blind checks). An interval in the set needs its
+    // exact number. For any other note, "Other" and every number outside the set mean the same thing, "other",
+    // and count as right; only a number from the set is a false alarm. "Not sure" is neither.
+    const setOf = row => Array.isArray(row.learned) ? row.learned : row.known;
+    const isTarget = row => setOf(row).includes(row.size);
+    const asOther = (row, guess) => guess === 'out' || (Number.isInteger(guess) && !setOf(row).includes(guess));
+    const correct = row => row.result === 'answered' && (isTarget(row) ? row.guess === row.size : asOther(row, row.guess));
     function counts(rows) {
         const usable = rows.filter(attempted);
         const targets = usable.filter(isTarget);
         const outsiders = usable.filter(row => !isTarget(row) && first(row));
         return {hits: targets.filter(row => first(row) && correct(row)).length, targets: targets.length,
-            alarms: outsiders.filter(row => row.known.includes(row.guess)).length, outside: outsiders.length,
+            alarms: outsiders.filter(row => setOf(row).includes(row.guess)).length, outside: outsiders.length,
             assisted: usable.filter(row => row.replayed > 0).length, total: usable.length,
             named: usable.filter(row => first(row) && correct(row)).length,
             late: usable.filter(row => row.result === 'timeout').length};
@@ -193,7 +198,7 @@
     }
     function promotion(rows, sessions, settings, now = Date.now()) {
         const blocks = sessions.filter(s => s.protocol === protocol && s.completed && ['learn', 'consolidate'].includes(s.kind) &&
-            sameSet(s.known, settings.known) && s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
+            sameSet(s.known, settings.known) && s.allowRepeats === settings.allowRepeats &&
             sameWindow(windowOf(s), answerWindow(settings.limit)) && s.direction === settings.direction && Array.isArray(s.octaves) &&
             s.octaves.length === settings.octaves.length && settings.octaves.every(o => s.octaves.includes(o)) &&
             s.started >= now - 14 * 86400000 && s.started <= now)

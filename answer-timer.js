@@ -1,11 +1,11 @@
 /* Answer window shared by the timed exercises outside the focused screens.
- * 2.8.4: the window is a number of seconds typed by the user (default 1.3), kept in ms;
+ * 2.8.4: the window is a number of seconds typed by the user (default 2.5 since 2.8.6), kept in ms;
  * an empty field or 0 means no limit. It starts at the estimated onset of the sound answered. */
 (function (root) {
     'use strict';
-    const KEY = 'ear-answer-limit-v2';
-    const DEFAULT_MS = 1300, MIN_MS = 100, MAX_MS = 60000;
-    // Any stored value as ms or null: older named choices ("fast", "strict", "relaxed") read as 1.3 s.
+    const KEY = 'ear-answer-limit-v3';
+    const DEFAULT_MS = 2500, MIN_MS = 100, MAX_MS = 60000;
+    // Any stored value as ms or null: older named choices ("fast", "strict", "relaxed") read as the default.
     function normalize(limit) {
         if (limit === null || limit === 'off' || limit === 0) return null;
         if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(MAX_MS, Math.max(MIN_MS, limit)));
@@ -30,7 +30,10 @@
             const saved = localStorage.getItem(KEY);
             if (saved === 'off') return null;
             if (saved !== null && saved !== '' && Number.isFinite(Number(saved))) return normalize(Number(saved));
-            if (localStorage.getItem('ear-answer-limit-v1') === 'off') return null;
+            // 2.8.6: the default moved from 1.3 s to 2.5 s; an older typed value other than 1.3 s is kept.
+            const older = localStorage.getItem('ear-answer-limit-v2') ?? localStorage.getItem('ear-answer-limit-v1');
+            if (older === 'off') return null;
+            if (older !== null && older !== '' && Number.isFinite(Number(older)) && ![1300, 1333].includes(Number(older))) return normalize(Number(older));
         } catch (_) {}
         return DEFAULT_MS;
     }

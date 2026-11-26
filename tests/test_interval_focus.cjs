@@ -12,10 +12,12 @@ for (const file of ['training-core.js', 'answer-timer.js', 'interval-focus-model
 const M = context.IntervalFocusModel, T = context.AnswerTimer;
 
 const scale = k => Math.round(1183 + 845 * (k - 1) / 11 + 150);
-for (const k of [1, 2, 4, 12, 25]) { assert.equal(M.answerWindow('fast', k), 1333); assert.equal(T.windowMs('fast', k), 1333); }
-assert.equal(M.answerWindow('off', 3), null); assert.equal(T.windowMs('off', 25), null);
-assert.equal(T.windowMs('strict', 12), 1333, 'older choices fall back to the fixed window');
-console.log('PASS answer windows: fixed', T.windowMs('fast', 12), 'ms for any number of buttons');
+for (const k of [1, 2, 4, 12, 25]) { assert.equal(M.answerWindow(1300, k), 1300); assert.equal(T.windowMs(1300, k), 1300); }
+assert.equal(M.answerWindow(null), null); assert.equal(T.windowMs(null), null); assert.equal(T.windowMs('off'), null);
+assert.equal(T.windowMs('fast'), 2500, 'older choices read as the default'); assert.equal(M.defaults().limit, 2500);
+for (const [text, ms] of [['1.3', 1300], ['1,25', 1250], ['2', 2000], [' 0.8 s ', 800], ['', null], ['0', null], ['abc', 1700], ['-1', 1700], ['999', 60000], ['0.01', 100]]) assert.equal(T.parse(text, 1700), ms, text);
+assert.equal(T.text(1300, 'en'), '1.3'); assert.equal(T.text(1250, 'de'), '1,25'); assert.equal(T.text(null, 'en'), '');
+console.log('PASS answer windows: typed seconds, empty or 0 for no limit');
 
 assert(M.validSettings(M.defaults(), 'violin') && M.validSettings(M.defaults(), 'piano'));
 assert(!M.validSettings({...M.defaults(), known: [0]}, 'violin'));
@@ -61,7 +63,9 @@ console.log('PASS block mix: learned share ' + (target / total).toFixed(3) + ' Â
 
 const row = o => ({protocol: 1, kind: 'learn', known: [7], responseMode: 'name', result: 'answered', replayed: 0, ...o});
 assert(M.correct(row({size: 7, guess: 7}))); assert(!M.correct(row({size: 7, guess: 5})));
-assert(M.correct(row({size: 5, guess: 'out', responseMode: 'set'}))); assert(!M.correct(row({size: 5, guess: 'out'})));
+assert(M.correct(row({size: 5, guess: 'out', responseMode: 'set'}))); assert(M.correct(row({size: 5, guess: 'out'})));
+assert(M.correct(row({size: 5, guess: 3})), '2.8.6: any number outside the set counts as other'); assert(!M.correct(row({size: 5, guess: 7})), 'a set number is a false alarm');
+assert(M.correct(row({kind: 'cold', known: [1,2,3,4,5,6,7,8,9,10,11,12], learned: [7], size: 4, guess: 9})) && !M.correct(row({kind: 'cold', known: [1,2,3,4,5,6,7,8,9,10,11,12], learned: [7], size: 7, guess: 'out'})));
 assert(!M.correct(row({size: 7, guess: 7, result: 'timeout'})));
 const now = Date.now(), sessions = [], rows = [];
 for (let b = 0; b < 2; b++) {

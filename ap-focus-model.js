@@ -24,23 +24,27 @@
     const attempted = row => scored(row) || row.result === 'relative' || row.result === 'timeout';
     const first = row => row.result === 'answered' && row.replayed === 0;
     const isNaming = row => row.protocol === protocol && row.kind === 'cold';
-    const isTarget = row => isNaming(row) || row.known.includes(row.pitch % 12);
+    // 2.8.6: every mode judges a note against the learning set at the time ("learned", stored since 2.8.5;
+    // older rows use "known", which held all 12 names on older blind checks). A note in the set needs its
+    // exact name. For any other note, "Other" and every name outside the set mean the same thing, "other",
+    // and count as right; only a name from the set is a false alarm. "Not sure" is neither.
+    const setOf = row => Array.isArray(row.learned) ? row.learned : row.known;
+    const isTarget = row => setOf(row).includes(row.pitch % 12);
     const exactTask = row => isNaming(row) || (row.protocol === protocol && row.responseMode === 'name');
     const namesFor = (style, known) => style === 'name' ? notes.map((_, pc) => pc) : [...known];
-    // 2.8.3: every name can be given; outside the set, "Other" or the exact name is right when "Other" counts.
-    const correct = row => row.result === 'answered' && (row.guess === row.pitch % 12 ||
-        (!exactTask(row) && !isTarget(row) && row.guess === 'out'));
+    const asOther = (row, guess) => guess === 'out' || (Number.isInteger(guess) && !setOf(row).includes(guess));
+    const correct = row => row.result === 'answered' && (isTarget(row) ? row.guess === row.pitch % 12 : asOther(row, row.guess));
     function defaults(known = [5]) {
-        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 1300, allowRepeats: false, responseMode: 'name'};
+        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 2500, allowRepeats: false, responseMode: 'name'};
     }
     // The strict window interpolates the 2.8 thresholds by the number of displayed
     // pitch names. It includes a 150 ms allowance for touch and estimated audio onset.
     const windows = ['strict', 'relaxed', 'fast', 'off'];
     function answerWindow(limit) {
-        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as 1.3 s.
+        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as the default.
         if (limit === null || limit === 'off' || limit === 0) return null;
         if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
-        return 1300;
+        return 2500;
     }
     const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
     const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
@@ -183,7 +187,7 @@
         const targets = usable.filter(isTarget);
         const outsiders = usable.filter(row => !isTarget(row) && first(row));
         return {hits: targets.filter(row => first(row) && correct(row)).length, targets: targets.length,
-            alarms: outsiders.filter(row => row.known.includes(row.guess)).length, outside: outsiders.length,
+            alarms: outsiders.filter(row => setOf(row).includes(row.guess)).length, outside: outsiders.length,
             assisted: usable.filter(row => row.replayed > 0).length, total: usable.length,
             late: usable.filter(row => row.result === 'timeout').length};
     }
@@ -191,7 +195,7 @@
         const practiced = new Set(rows.filter(r => isFocus(r) && r.timbre === instrument && first(r)).map(r => r.sessionId));
         const blocks = sessions.filter(s => isFocus(s) && s.protocol === protocol && practiced.has(s.id) && s.completed && s.source === instrument &&
             ['learn','consolidate'].includes(s.kind) && sameSet(s.known, settings.known) &&
-            s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
+            s.allowRepeats === settings.allowRepeats &&
             sameWindow(windowOf(s), answerWindow(settings.limit)) && sameSet(s.octaves, settings.octaves) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a,b) => b.started - a.started).slice(0,6);
