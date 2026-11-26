@@ -142,7 +142,7 @@
         const saved = read(kv('settings'));
         const merged = {...M.defaults(), ...(saved && typeof saved === 'object' ? saved : {})};
         settings = M.validSettings(merged, host.site) ? merged : M.defaults();
-        if (settings.limit !== 'off') settings.limit = 'fast';  // 2.8.3: 1.3 s or no limit
+        settings.limit = M.answerWindow(settings.limit);  // 2.8.4: typed seconds kept in ms; null is no limit
     }
     const progress = () => M.promotion(rowsNow(), blocksNow(), settings);
     function introduce(d) {
@@ -192,11 +192,9 @@
             b.dataset.mode = mode; b.append(title, hint);
             return b;
         }));
-        const practiceLimit = M.answerWindow(settings.limit, M.namesFor(settings.responseMode, settings.known, pitches).length);
-        const checkLimit = M.answerWindow(settings.limit, avail.length);
-        $('Rules').textContent = practiceLimit === null ? ap('rulesOff') :
-            practiceLimit === checkLimit ? ap('rules', {s: seconds(practiceLimit)}) :
-            ap('twoLimits', {practice: seconds(practiceLimit), check: seconds(checkLimit)});
+        const windowMs = M.answerWindow(settings.limit);
+        $('Rules').textContent = windowMs === null ? ap('rulesOff') :
+            ap('rules', {s: ap('sec', {s: AnswerTimer.text(windowMs, document.documentElement.lang)})});
     }
     function renderEvidence() {
         const evidence = progress(), rows = rowsNow();
@@ -248,12 +246,8 @@
         $('Recognition').checked = settings.responseMode === 'set';
         $('Repeats').checked = settings.allowRepeats;
         const names = M.namesFor(settings.responseMode, settings.known, M.pitchPool(settings.octaves, host.site)).length;
-        for (const option of $('Limit').options) {
-            const ms = M.answerWindow(option.value, names);
-            option.textContent = ms === null ? tr('limitNone') :
-                ap({strict: 'limitStrict', relaxed: 'limitRelaxed', fast: 'limitFast'}[option.value], {s: seconds(ms)});
-        }
-        $('Limit').value = settings.limit;
+        if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
+        $('Limit').placeholder = tr('limitNone');
         guide(); renderEvidence();
     }
 
@@ -535,7 +529,8 @@
         $('Direction').onchange = () => { updateSettings({direction: $('Direction').value}); $('Direction').value = settings.direction; };
         $('Repeats').onchange = () => updateSettings({allowRepeats: $('Repeats').checked});
         $('Recognition').onchange = () => updateSettings({responseMode: $('Recognition').checked ? 'set' : 'name'});
-        $('Limit').onchange = () => { updateSettings({limit: $('Limit').value}); $('Limit').value = settings.limit; };
+        $('Limit').onchange = () => { updateSettings({limit: AnswerTimer.parse($('Limit').value, settings.limit)});
+            $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render(); };
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;
             original.dispatchEvent(new Event('change'));

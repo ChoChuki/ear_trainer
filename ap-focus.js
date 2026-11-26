@@ -73,7 +73,7 @@
     }
     function updateSettings(changes) {
         const next = {...settings, ...changes};
-        if (next.limit !== 'off') next.limit = 'fast';
+        next.limit = M.answerWindow(next.limit);  // ms or null
         if (!M.validSettings(next,host.site) || !TrainingCore.write(kv('settings'), next)) return;
         settings = next;
         guideNote = settings.known.includes(guideNote) ? guideNote : settings.known.at(-1);
@@ -99,9 +99,10 @@
                 Number.isInteger(level) && level >= 1 && level <= 12 ? S.learned(level) : [5];
             settings = M.defaults(known);
         }
-        // 2.8.3: the window no longer depends on the buttons: 1.3 s or no limit.
-        if (settings.limit !== 'off' && settings.limit !== 'fast') {
-            settings.limit = 'fast';
+        // 2.8.4: the window is typed in seconds and kept in ms; null is no limit.
+        const typed = M.answerWindow(settings.limit);
+        if (typed !== settings.limit) {
+            settings.limit = typed;
             TrainingCore.write(kv('settings'), settings);
         }
     }
@@ -175,11 +176,9 @@
             hint.textContent = tr({cold:'coldHelp',learn:settings.responseMode === 'name' ? 'learnExact' : 'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
             b.dataset.mode = mode; b.append(title,hint); return b;
         }));
-        const practiceLimit = M.answerWindow(settings.limit, M.namesFor(settings.responseMode,settings.known).length);
-        const checkLimit = M.answerWindow(settings.limit, 12);
-        $('Rules').textContent = practiceLimit === null ? tr('rulesOff') :
-            practiceLimit === checkLimit ? tr('rules',{s:seconds(practiceLimit)}) :
-            tr('twoLimits',{practice:seconds(practiceLimit),check:seconds(checkLimit)});
+        const windowMs = M.answerWindow(settings.limit);
+        $('Rules').textContent = windowMs === null ? tr('rulesOff') :
+            tr('rules',{s:tr('sec',{s:AnswerTimer.text(windowMs, document.documentElement.lang)})});
     }
     function renderEvidence() {
         evidence = progress();
@@ -239,11 +238,8 @@
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
         $('Repeats').checked = settings.allowRepeats;
         $('Recognition').checked = settings.responseMode === 'set';
-        for (const option of $('Limit').options) {
-            const ms = M.answerWindow(option.value,M.namesFor(settings.responseMode,settings.known).length);
-            option.textContent = ms === null ? tr('limitOff') : tr({strict:'limitStrict',relaxed:'limitRelaxed',fast:'limitFast'}[option.value],{s:seconds(ms)});
-        }
-        $('Limit').value = settings.limit;
+        if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
+        $('Limit').placeholder = tr('limitNone');
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
         $('Invitation').textContent = tr('secondHint',{instrument:tr(M.otherInstrument(host.site))});
         $('FilterTimbre').replaceChildren(...[host.site,M.otherInstrument(host.site)].map(inst => new Option(tr(inst),inst)));
@@ -652,7 +648,8 @@
         }
         $('Repeats').onchange = () => updateSettings({allowRepeats:$('Repeats').checked});
         $('Recognition').onchange = () => updateSettings({responseMode:$('Recognition').checked ? 'set' : 'name'});
-        $('Limit').onchange = () => {updateSettings({limit:$('Limit').value}); $('Limit').value = settings.limit;};
+        $('Limit').onchange = () => {updateSettings({limit:AnswerTimer.parse($('Limit').value, settings.limit)});
+            $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render();};
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;
             original.dispatchEvent(new Event('change'));

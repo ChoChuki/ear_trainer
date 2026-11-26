@@ -31,15 +31,19 @@
     const correct = row => row.result === 'answered' && (row.guess === row.pitch % 12 ||
         (!exactTask(row) && !isTarget(row) && row.guess === 'out'));
     function defaults(known = [5]) {
-        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 'fast', allowRepeats: false, responseMode: 'name'};
+        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 1300, allowRepeats: false, responseMode: 'name'};
     }
     // The strict window interpolates the 2.8 thresholds by the number of displayed
     // pitch names. It includes a 150 ms allowance for touch and estimated audio onset.
     const windows = ['strict', 'relaxed', 'fast', 'off'];
     function answerWindow(limit) {
-        // 2.8.3: one fixed window (1183 ms + 150 ms), however many buttons are shown.
-        return limit === 'off' ? null : 1333;
+        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as 1.3 s.
+        if (limit === null || limit === 'off' || limit === 0) return null;
+        if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
+        return 1300;
     }
+    const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
+    const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument];
         return Array.from({length: octaveOf(high) - octaveOf(low) + 1}, (_, i) => octaveOf(low) + i);
@@ -50,7 +54,7 @@
                 new Set(s.octaves).size === s.octaves.length && s.octaves.every(o => octaveChoices(instrument).includes(o)))) &&
             Number.isInteger(s.hit) && s.hit >= 50 && s.hit <= 100 &&
             Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50 &&
-            (s.limit === undefined || windows.includes(s.limit)) &&
+            (s.limit === undefined || s.limit === null || windows.includes(s.limit) || (Number.isFinite(s.limit) && s.limit >= 100 && s.limit <= 60000)) &&
             (s.allowRepeats === undefined || typeof s.allowRepeats === 'boolean') &&
             (s.responseMode === undefined || ['name','set'].includes(s.responseMode));
     }
@@ -188,7 +192,7 @@
         const blocks = sessions.filter(s => isFocus(s) && s.protocol === protocol && practiced.has(s.id) && s.completed && s.source === instrument &&
             ['learn','consolidate'].includes(s.kind) && sameSet(s.known, settings.known) &&
             s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
-            s.limit === settings.limit && sameSet(s.octaves, settings.octaves) &&
+            sameWindow(windowOf(s), answerWindow(settings.limit)) && sameSet(s.octaves, settings.octaves) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a,b) => b.started - a.started).slice(0,6);
         const ids = new Set(blocks.map(s => s.id));

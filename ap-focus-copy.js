@@ -78,7 +78,7 @@
         limitRelaxed: ['Relaxed · {s}','寬鬆 · {s}','ゆるめ · {s}','Großzügig · {s}','Ampio · {s}','Χαλαρό · {s}'],
         limitFast: ["{s}", "{s}", "{s}", "{s}", "{s}", "{s}"],
         limitOff: ['No limit · intervals can creep in','不限時 · 容易變成音程推算','制限なし · 音程で推測しやすい','Ohne Limit · Intervall-Ableitung möglich','Senza limite · gli intervalli possono intromettersi','Χωρίς όριο · εύκολα μπαίνουν τα διαστήματα'],
-        limitHelp: ["The window starts at the estimated note onset. If you used an interval, mark it even when you answered quickly.","從估計的發聲時間起計時。如果用了音程推算，即使很快也請照實標記。","音の推定開始時刻から計測します。すぐに答えられても、音程から推測した場合は記録してください。","Die Frist beginnt beim geschätzten Tonbeginn. Markiere auch schnelle Antworten, die du aus einem Intervall abgeleitet hast.","Il tempo parte dall’attacco stimato. Segnala l’uso di un intervallo anche se hai risposto rapidamente.","Ο χρόνος ξεκινά από την εκτιμώμενη έναρξη της νότας. Δήλωσε τη χρήση διαστήματος ακόμη κι αν απάντησες γρήγορα."],
+        limitHelp: ["Type seconds, e.g. 1.3; leave empty or type 0 for no limit. The window starts at the estimated note onset. If you used an interval, mark it even when you answered quickly.", "輸入秒數，例如 1.3；留空或填 0 表示不限時。從估計的發聲時間起計時。如果用了音程推算，即使很快也請照實標記。", "秒数を入力（例：1.3）。空欄または 0 で制限なし。音の推定開始時刻から計測します。すぐに答えられても、音程から推測した場合は記録してください。", "Sekunden eingeben, z. B. 1,3; leer lassen oder 0 für kein Limit. Die Frist beginnt beim geschätzten Tonbeginn. Markiere auch schnelle Antworten, die du aus einem Intervall abgeleitet hast.", "Inserisci i secondi, ad es. 1,3; lascia vuoto o scrivi 0 per nessun limite. Il tempo parte dall’attacco stimato. Segnala l’uso di un intervallo anche se hai risposto rapidamente.", "Γράψε δευτερόλεπτα, π.χ. 1,3· άφησέ το κενό ή γράψε 0 για χωρίς όριο. Ο χρόνος ξεκινά από την εκτιμώμενη έναρξη της νότας. Δήλωσε τη χρήση διαστήματος ακόμη κι αν απάντησες γρήγορα."],
         rules: ['Answer within {s}. Later answers count as misses.','請在 {s}內作答，超時算答錯。','{s}以内に答えてください。時間切れは不正解になります。','Antworte innerhalb von {s}. Spätere Antworten zählen als Fehler.','Rispondi entro {s}. Le risposte più tarde contano come errori.','Απάντησε μέσα σε {s}. Οι πιο αργές απαντήσεις μετρούν ως λάθη.'],
         rulesOff: ["No time limit. Response time is recorded.","不限時，仍記錄反應時間。","制限時間なし。反応時間は記録します。","Ohne Zeitlimit. Die Antwortzeit wird erfasst.","Nessun limite di tempo. Il tempo di risposta viene registrato.","Χωρίς χρονικό όριο. Ο χρόνος απόκρισης καταγράφεται."],
         tooSlow: ['Too slow','超時','時間切れ','Zu langsam','Troppo tardi','Πολύ αργά'],
@@ -104,6 +104,8 @@
         octaveGroup: ["Octave", "八度", "オクターブ", "Oktave", "Ottava", "Οκτάβα"],
         nameRight: ["Right name, wrong octave", "音名對，八度不對", "音名は正解・オクターブ違い", "Name richtig, Oktave falsch", "Nome giusto, ottava sbagliata", "Σωστό όνομα, λάθος οκτάβα"],
         octaveHits: ["Right octave {hits}/{total}", "八度也對 {hits}/{total}", "オクターブも正解 {hits}/{total}", "Oktave richtig {hits}/{total}", "Ottava giusta {hits}/{total}", "Σωστή οκτάβα {hits}/{total}"],
+        limitSeconds: ["Answer window (s)", "作答時限（秒）", "回答時間（秒）", "Antwortfenster (s)", "Tempo di risposta (s)", "Χρόνος απάντησης (δ)"],
+        limitNone: ["No limit", "不限時", "制限なし", "Kein Limit", "Nessun limite", "Χωρίς όριο"],
         sec: ['{s} s','{s} 秒','{s}秒','{s} s','{s} s','{s} δ']
     };
     function t(lang,key,args = {}) {

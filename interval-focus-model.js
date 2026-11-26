@@ -27,7 +27,7 @@
     }
     function defaults(known = [7]) {
         return {known: [...known], octaves: [4, 5], direction: 'up', size: 24, hit: 75, falseAlarm: 25,
-            limit: 'fast', allowRepeats: false, responseMode: 'name'};
+            limit: 1300, allowRepeats: false, responseMode: 'name'};
     }
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument] || limits.piano;
@@ -39,7 +39,7 @@
             directions.includes(s.direction) && sizes.includes(s.size) &&
             Number.isInteger(s.hit) && s.hit >= 50 && s.hit <= 100 &&
             Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50 &&
-            windows.includes(s.limit) && typeof s.allowRepeats === 'boolean' && ['name', 'set'].includes(s.responseMode);
+            (s.limit === null || windows.includes(s.limit) || (Number.isFinite(s.limit) && s.limit >= 100 && s.limit <= 60000)) && typeof s.allowRepeats === 'boolean' && ['name', 'set'].includes(s.responseMode);
     }
     function pitchPool(octaves, instrument) {
         const [low, high] = limits[instrument] || limits.piano;
@@ -55,11 +55,15 @@
     function namesFor(responseMode, known, pitches) {
         return responseMode === 'name' ? available(pitches) : [...known].sort((a, b) => a - b);
     }
-    // The same windows as focused AP practice and AnswerTimer: wider with more choices.
+    // The same window as focused AP practice and AnswerTimer.
     function answerWindow(limit) {
-        // 2.8.3: one fixed window (1183 ms + 150 ms), however many buttons are shown.
-        return limit === 'off' ? null : 1333;
+        // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as 1.3 s.
+        if (limit === null || limit === 'off' || limit === 0) return null;
+        if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
+        return 1300;
     }
+    const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
+    const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
     const intervalOf = q => Number.isInteger(q?.reference) && Number.isInteger(q?.target) &&
         Math.abs(q.target - q.reference) >= 1 && Math.abs(q.target - q.reference) <= 12 ? Math.abs(q.target - q.reference) : null;
     function plan(settings, mode, instrument, weights = {}, previous = null) {
@@ -190,7 +194,7 @@
     function promotion(rows, sessions, settings, now = Date.now()) {
         const blocks = sessions.filter(s => s.protocol === protocol && s.completed && ['learn', 'consolidate'].includes(s.kind) &&
             sameSet(s.known, settings.known) && s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
-            s.limit === settings.limit && s.direction === settings.direction && Array.isArray(s.octaves) &&
+            sameWindow(windowOf(s), answerWindow(settings.limit)) && s.direction === settings.direction && Array.isArray(s.octaves) &&
             s.octaves.length === settings.octaves.length && settings.octaves.every(o => s.octaves.includes(o)) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a, b) => b.started - a.started).slice(0, 6);

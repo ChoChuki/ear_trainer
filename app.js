@@ -1,4 +1,4 @@
-const APP_VERSION = "2.8.3";
+const APP_VERSION = "2.8.4";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -1052,16 +1052,9 @@ function renderAnswerLimit() {
         !(mode === "rpCourse" && document.getElementById("rpActivity").value === "produce");
     document.getElementById("answerLimitRow").hidden = !timed;
     document.getElementById("answerLimitHelp").hidden = !timed;
-    const choices = choiceCount(mode);
-    const format = new Intl.NumberFormat(currentLanguage, {minimumFractionDigits: 1, maximumFractionDigits: 1});
-    for (const option of select.options) {
-        const ms = AnswerTimer.windowMs(option.value, choices);
-        option.textContent = ms === null ? IntervalFocusCopy.t(currentLanguage, "limitNone")
-            : APFocusCopy.t(currentLanguage, {strict: "limitStrict", relaxed: "limitRelaxed", fast: "limitFast"}[option.value],
-                {s: APFocusCopy.t(currentLanguage, "sec", {s: format.format(ms / 1000)})});
-    }
-    select.value = answerLimit;
-    document.getElementById("answerLimitLabel").textContent = APFocusCopy.t(currentLanguage, "limit");
+    if (document.activeElement !== select) select.value = AnswerTimer.text(answerLimit, currentLanguage);
+    select.placeholder = APFocusCopy.t(currentLanguage, "limitNone");
+    document.getElementById("answerLimitLabel").textContent = APFocusCopy.t(currentLanguage, "limitSeconds");
     document.getElementById("answerLimitHelp").textContent = IntervalFocusCopy.t(currentLanguage, "limitScale");
 }
 // A single note or a pair that was not answered in time: shown like a miss, waits for Next.
@@ -2330,7 +2323,9 @@ rememberToggle("apMaskCheck", AP_MASK_KEY);
 rememberToggle("autoNextCheck", AUTO_NEXT_KEY);
 RPUI.init();
 document.getElementById("answerLimitSelect").addEventListener("change", (event) => {
-    if (AnswerTimer.LIMITS.includes(event.target.value)) { answerLimit = event.target.value; AnswerTimer.save(answerLimit); }
+    answerLimit = AnswerTimer.parse(event.target.value, answerLimit);
+    AnswerTimer.save(answerLimit);
+    event.target.value = AnswerTimer.text(answerLimit, currentLanguage);
     renderAnswerLimit();
 });
 for (const id of ["rpLevel", "rpActivity"]) document.getElementById(id).addEventListener("change", renderAnswerLimit);

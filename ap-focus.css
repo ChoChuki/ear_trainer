@@ -65,3 +65,10 @@
 .af-octave-row, .af-extra {display:flex; flex-wrap:wrap; gap:6px;}
 .af-octave-row button, .af-extra button {flex:1 1 0; min-width:44px;}
 .af-panel .af-two button[aria-pressed="true"] {background:#174b63; color:#fff; border-color:#174b63; box-shadow:0 0 0 3px #9fd0e4;}
+
+/* 2.8.4: the answer window is typed in seconds; empty or 0 is no limit. */
+.af-panel input.af-seconds, .limit-picker input {min-height:42px; box-sizing:border-box; padding:6px 10px; font:inherit; color:inherit;
+    background:#fff; border:1px solid #c6d0d6; border-radius:8px; font-variant-numeric:tabular-nums;}
+.af-panel input.af-seconds {width:6.5em; text-align:right;}
+.limit-picker input {width:100%;}
+.af-panel input.af-seconds:focus-visible, .limit-picker input:focus-visible {outline:3px solid #0076af; outline-offset:1px;}
