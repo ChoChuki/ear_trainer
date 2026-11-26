@@ -36,7 +36,7 @@
   for(const button of $('rpAnswers').querySelectorAll('button')){
    const raw=button.dataset.answer;
    const value=/^\d+$/.test(raw)?Number(raw):raw;
-   button.textContent=typeof value==='number'?C.label(value,lang())
+   button.textContent=typeof value==='number'?String(value)
     :value==='higher'?'↑ '+tx('up'):value==='lower'?'↓ '+tx('down'):'＝ '+tx('same');
   }
   for(const option of $('rpTimbre').options) option.textContent=tx(option.value);
@@ -54,9 +54,9 @@
   for (const id of ['rpActivity','rpDirection','rpTimbre']) $(id).addEventListener('change',()=>{if((testActive||micOpening)&&isMode())cancelRound();sampleButtons();render();});
   $('rpReplay').addEventListener('click',()=>{if(!current()||!isMode()||feedbackBusy||(session.activity==='test'&&!session.audioFailed))return;
     if(isProduce()){if(answered||!['wait','mic'].includes(produceStage))return;stopListening();produceStage='listen';}
-    if(!answered) replayCount++;
+    if(!answered){replayCount++;stopTimer();}
     TrainingTracker.activity('question');
-    questionPlayback(current());render();
+    questionPlayback(current(),true);render();
   });
   $('rpCorrectAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode()&&!feedbackBusy){TrainingTracker.activity('question');playPair(q.reference,q.target).catch(()=>{$('rpMessage').textContent=tx('audioRetry');});}});
   $('rpSelectedAudio').addEventListener('click',()=>{const q=lastAnswered();if(q&&isMode()&&Number.isInteger(selectedAnswer)){TrainingTracker.activity('question');playPair(q.reference,q.reference+(q.direction==='lower'?-selectedAnswer:selectedAnswer)).catch(()=>{$('rpMessage').textContent=tx('audioRetry');});}});
@@ -83,7 +83,7 @@
  }
  function closeMic(){stopListening();if(root.PitchDetect)PitchDetect.close(micStream);micStream=null;}
  function cancelRound(){
-  TrainingTracker.pause();audioVersion++; feedbackBusy=false; TrainingCore.cancelAudio(); if(typeof player!=='undefined'&&player&&audioContext)player.cancelQueue(audioContext);
+  stopTimer();TrainingTracker.pause();audioVersion++; feedbackBusy=false; TrainingCore.cancelAudio(); if(typeof player!=='undefined'&&player&&audioContext)player.cancelQueue(audioContext);
   closeMic();produceStage='idle';
   if(session&&!session.finished&&session.records.length){const summary={id:session.id,at:Date.now(),level:session.level,activity:session.activity,completed:false,total:session.records.length,planned:session.total,protocol:C.PROTOCOL};state.sessions.push(summary);C.append(AP_APP_ID,'sessions',summary);C.save(AP_APP_ID,state);}
   session=null;replayCount=0;selectedAnswer=null;testActive=false;answered=false;questionAudioReady=false;
@@ -134,7 +134,7 @@
   const options=cfg.directionOnly?['higher','same','lower']:C.availableDistances(minMidi,maxMidi,cfg.distances,relativePitchClasses);
   for(const value of options){
    const b=document.createElement('button');b.type='button';b.className='secondary rp-choice';b.dataset.answer=String(value);
-   b.textContent=typeof value==='number'?C.label(value,lang()):value==='higher'?'↑ '+tx('up'):value==='lower'?'↓ '+tx('down'):'＝ '+tx('same');
+   b.textContent=typeof value==='number'?String(value):value==='higher'?'↑ '+tx('up'):value==='lower'?'↓ '+tx('down'):'＝ '+tx('same');
    b.addEventListener('click',()=>answer(value));box.appendChild(b);
   }
  }
@@ -198,7 +198,7 @@
   if(session&&!session.finished&&session.timbre==='neutral')TrainingCore.neutralTone(audioContext,start,m,duration);
   else queueInstrumentNote(instrumentMode,m,start,duration);
  }
- async function playPair(ref,target,prelude=null){
+ async function playPair(ref,target,prelude=null,untilOnset=false){
   if(!ready)return false;
   const serial=++audioVersion;
   await ensureAudio();if(serial!==audioVersion||!isMode())return false;
@@ -208,7 +208,7 @@
   tone(ref,at,.58);tone(target,at+.8,.78);
   const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
   heardAt=performance.now()+1000*(at+.8-audioContext.currentTime+latency);
-  return TrainingCore.waitForAudio(audioContext,at+1.58+latency,()=>serial===audioVersion&&isMode()&&!document.hidden);
+  return TrainingCore.waitForAudio(audioContext,(untilOnset?at+.8:at+1.58)+latency,()=>serial===audioVersion&&isMode()&&!document.hidden);
  }
  async function playOne(midi,duration=.9){
   if(!ready)return false;
@@ -220,8 +220,9 @@
   const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
   return TrainingCore.waitForAudio(audioContext,at+duration+latency,()=>serial===audioVersion&&isMode()&&!document.hidden);
  }
- function playQuestion(q){return isProduce()?playOne(q.reference):playPair(q.reference,q.target,q.prelude);}
- function questionPlayback(q){
+ // 2.8.2: a question opens for answers at its second note; feedback pairs still play to the end.
+ function playQuestion(q){return isProduce()?playOne(q.reference):playPair(q.reference,q.target,q.prelude,true);}
+ function questionPlayback(q,replay=false){
   // A displayed question is not answerable until its audio has been scheduled.
   // If playback fails, the user can retry without recording an incorrect trial.
   questionAudioReady=false;
@@ -233,6 +234,7 @@
    questionAudioReady=true;
    for(const b of $('rpAnswers').querySelectorAll('button'))b.disabled=false;
    if(isProduce()){produceStage='wait';if(micStream)startListening(q);render();}
+   else if(!replay&&!replayCount)armTimer(q);
   }).catch(()=>{
    if(isMode()&&testActive&&!answered&&current()===q){
     session.audioFailed=true;$('rpReplay').disabled=false;
@@ -241,6 +243,15 @@
     setStatus('raw',{text:$('rpMessage').textContent});
    }
   });
+ }
+ // 2.8.2: the shared answer window starts at the second note and widens with the number of answers.
+ let limitMs=null;
+ function stopTimer(){if(typeof answerClock!=='undefined')answerClock.stop();}
+ function armTimer(q){
+  limitMs=null;
+  if(typeof startAnswerClock!=='function'||isProduce()||!session||answered)return;
+  const choices=isPosition()?Math.max(2,maxMidi-minMidi+1):$('rpAnswers').children.length;
+  limitMs=startAnswerClock(heardAt,choices,()=>{if(isMode()&&session&&testActive&&!answered&&current()===q)answer(null,isPosition(),true);});
  }
  function startNext(){
   if(!ready||!isMode())return;
@@ -297,16 +308,23 @@
  }
  function activityPrompt(activity,level){return activity==='produce'?tx('produceTip'):C.LEVELS[level].directionOnly?tx('directionTip'):activity==='locate'?tx('locationTip'):activity==='melody'?tx('melodyTip'):tx('listen');}
  function answerPosition(midi){if(!isMode())return false;if(!testActive||answered)return true;if(!isPosition())return true;answer(midi,true);return true;}
- function answer(value,position=false){
-  if(!isMode()||!session||!testActive||answered||!questionAudioReady||isProduce())return;
+ function answer(value,position=false,timeout=false){
+  if(!isMode()||!session||!testActive||answered||(!questionAudioReady&&!timeout)||isProduce())return;
   const q=current();if(!q)return;
+  const pressed=typeof answerClock!=='undefined'?answerClock.pressed():null;
+  const at=pressed!==null&&Math.abs(pressed-performance.now())<60000?pressed:performance.now();
+  // Past the window the pair counts as missed, whatever is chosen afterwards.
+  const late=timeout||(typeof answerClock!=='undefined'&&answerClock.late(at));
+  stopTimer();
   const isDirection=C.LEVELS[session.level].directionOnly;
-  const selected=position?Number(value):value;
-  const correct=position ? selected===q.target :isDirection?selected===q.direction:selected===q.distance;
-  const rtMs=Math.max(0,Math.round(performance.now()-heardAt));
+  const chosen=position?Number(value):value;
+  const selected=late?null:chosen;
+  const correct=!late&&(position ? selected===q.target :isDirection?selected===q.direction:selected===q.distance);
+  const rtMs=late?null:Math.max(0,Math.round(at-heardAt));
   const item={protocol:C.PROTOCOL,sessionId:session.id,timbre:session.timbre,repair:!!q.repair,id:`${AP_APP_ID}-rp-${Date.now()}-${session.records.length}`,time:Date.now(),day:today(),site:AP_APP_ID,
    level:session.level,activity:session.activity,direction:q.direction,reference:q.reference,target:q.target,distance:q.distance,
-   signed:q.signed,selected:position?null:selected,selectedMidi:position?selected:null,correct,replayed:replayCount,hints:0,rtMs};
+   signed:q.signed,selected:position?null:selected,selectedMidi:position?selected:null,correct,replayed:replayCount,hints:0,rtMs,
+   result:late?'timeout':'answered',limitMs,lateSelected:late&&!timeout?chosen:null};
   session.records.push(item);state.records.push(item);C.append(AP_APP_ID,'trials',item);
   if(adaptive(session.activity)){
    const key=C.memoryKey(q);state.memory[key]=TrainingCore.review(state.memory[key],correct,Date.now(),replayCount>0||q.repair);
@@ -324,12 +342,13 @@
    if(mine)b.classList.add(feedback?(correct?'rp-right':'rp-wrong'):'rp-picked');
    if(feedback&&right)b.classList.add('rp-right');}}
   if(position){resetKeyboardColors();rpMarkPitch(q.reference,'reference');rpMarkPitch(q.target,'correct');if(!correct)rpMarkPitch(selected,'wrong');}
+  const slow=late?APFocusCopy.t(lang(),'tooSlow')+' · ':'';
   if(session.activity==='test'){
-   $('rpMessage').textContent=`${session.records.length} / ${session.total}`;
+   $('rpMessage').textContent=`${session.records.length} / ${session.total}`+(late?' · '+APFocusCopy.t(lang(),'timeUp'):'');
   }else{
-   $('rpMessage').textContent=correct?`✓ ${tx('correct')} · ${describe(q)}`:`✗ ${tx('wrong')}: ${describe(q)}`;
+   $('rpMessage').textContent=correct?`✓ ${tx('correct')} · ${describe(q)}`:`✗ ${slow}${tx('wrong')}: ${describe(q)}`;
    if(!correct && !position && Number.isInteger(selected))selectedAnswer=selected;
-   if(!correct && !position && !isDirection){
+   if(!correct && !late && !position && !isDirection){
     const diff=selected-q.distance; $('rpMessage').textContent+=` · Δ${diff>0?'+':''}${diff}`;
    }
   }
@@ -405,7 +424,7 @@
  }
  function finish(){
   if(!session||session.finished)return;
-  session.finished=true;testActive=false;answered=true;questionAudioReady=false;
+  stopTimer();session.finished=true;testActive=false;answered=true;questionAudioReady=false;
   player.cancelQueue(audioContext);TrainingCore.cancelAudio();audioVersion++;questionSerial++;
   closeMic();produceStage='idle';
   const ok=session.records.filter(r=>r.correct).length;
@@ -422,7 +441,8 @@
    $('rpMessage').textContent=`${tx('results')}: ${[part('mic','micChecked'),part('self','selfRated')].filter(Boolean).join(' · ')}`;
    rate=session.records.length?ok/session.records.length:0;
   }else{
-   $('rpMessage').textContent=`${tx('results')}: ${ok}/${session.total} · ${tx('fresh')}: ${clean}/${independent.length}`;
+   const late=session.records.filter(r=>r.result==='timeout').length;
+   $('rpMessage').textContent=`${tx('results')}: ${ok}/${session.total} · ${tx('fresh')}: ${clean}/${independent.length}`+(late?' · '+APFocusCopy.t(lang(),'lateCount',{n:late}):'');
   }
   setStatus('raw',{text:$('rpMessage').textContent});
   const title=document.createElement('strong');title.textContent=$('rpMessage').textContent;result.appendChild(title);

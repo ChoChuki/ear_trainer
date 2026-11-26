@@ -1,11 +1,9 @@
 /* The focused AP course uses the same pitch classes, database and clock as the host. */
 (function (root) {
     'use strict';
-    // Protocol 8: note names independent of the previous question, successive notes more
-    // than an octave apart, a timed answer window and a longer pitch-memory reset.
-    // Protocol 7 rows stay readable but no longer count towards a new-note suggestion.
-    const protocol = 8;
-    const readable = [7, 8];
+    // Protocol 9 separates unrestricted pitch naming from target recognition.
+    const protocol = 9;
+    const readable = [7, 8, 9];
     const sourceVersion = 'jclive-sf2-v1';
     const legacySourceVersion = 'iowa-prototype-1';
     const notes = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
@@ -25,20 +23,22 @@
     // A late answer is an attempt without a hit, like a wrong one.
     const attempted = row => scored(row) || row.result === 'relative' || row.result === 'timeout';
     const first = row => row.result === 'answered' && row.replayed === 0;
-    const isTarget = row => row.known.includes(row.pitch % 12);
-    const correct = row => row.result === 'answered' && row.guess === (isTarget(row) ? row.pitch % 12 : 'out');
+    const isNaming = row => row.protocol === protocol && row.kind === 'cold';
+    const isTarget = row => isNaming(row) || row.known.includes(row.pitch % 12);
+    const exactTask = row => isNaming(row) || (row.protocol === protocol && row.responseMode === 'name');
+    const namesFor = (style, known) => style === 'name' ? notes.map((_, pc) => pc) : [...known];
+    // 2.8.3: every name can be given; outside the set, "Other" or the exact name is right when "Other" counts.
+    const correct = row => row.result === 'answered' && (row.guess === row.pitch % 12 ||
+        (!exactTask(row) && !isTarget(row) && row.guess === 'out'));
     function defaults(known = [5]) {
-        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 'strict'};
+        return {known: [...known], octaves: [4,5,6], share: 0, size: 24, hit: 75, falseAlarm: 25, limit: 'fast', allowRepeats: false, responseMode: 'name'};
     }
-    // Answer windows of Wong et al. (2025): 1,183 ms with one learned name, rising
-    // linearly to 2,028 ms with twelve. Answers after the window count as misses, which
-    // leaves little time to work a name out from an interval. 150 ms covers touch input
-    // and the uncertainty of the audible-onset estimate; "relaxed" adds 0.7 s.
-    const windows = ['strict', 'relaxed', 'off'];
-    function answerWindow(limit, names) {
-        if (limit === 'off') return null;
-        const k = Math.max(1, Math.min(12, names));
-        return Math.round(1183 + (2028 - 1183) * (k - 1) / 11 + 150 + (limit === 'relaxed' ? 700 : 0));
+    // The strict window interpolates the 2.8 thresholds by the number of displayed
+    // pitch names. It includes a 150 ms allowance for touch and estimated audio onset.
+    const windows = ['strict', 'relaxed', 'fast', 'off'];
+    function answerWindow(limit) {
+        // 2.8.3: one fixed window (1183 ms + 150 ms), however many buttons are shown.
+        return limit === 'off' ? null : 1333;
     }
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument];
@@ -50,7 +50,9 @@
                 new Set(s.octaves).size === s.octaves.length && s.octaves.every(o => octaveChoices(instrument).includes(o)))) &&
             Number.isInteger(s.hit) && s.hit >= 50 && s.hit <= 100 &&
             Number.isInteger(s.falseAlarm) && s.falseAlarm >= 0 && s.falseAlarm <= 50 &&
-            (s.limit === undefined || windows.includes(s.limit));
+            (s.limit === undefined || windows.includes(s.limit)) &&
+            (s.allowRepeats === undefined || typeof s.allowRepeats === 'boolean') &&
+            (s.responseMode === undefined || ['name','set'].includes(s.responseMode));
     }
     function supports(instrument, pitch, version = sourceVersion) {
         if (!limits[instrument] || !Number.isInteger(pitch)) return false;
@@ -86,26 +88,46 @@
         }
         return result;
     }
-    // The planned name is kept; only its octave depends on the most recent sound
-    // (the last labelled example if one followed the last question).
-    function pickMidi(pc, pitches, previous, known, example = null) {
-        const recent = Number.isInteger(example) ? example : previous;
-        const preferred = pitches.filter(p => p % 12 === pc);
-        if (preferred.length) return TrainingCore.farPitch(preferred, recent);
-        // Another tab or a changed range can remove the planned name from the pool.
-        const sameGroup = pitches.filter(p => known.includes(p % 12) === known.includes(pc));
-        return TrainingCore.farPitch(sameGroup.length ? sameGroup : pitches, recent);
+    function pickMidi(pc, pitches, previous, known, example = null, {allowRepeats = false, blind = false, avoid = null} = {}) {
+        const available = [...new Set(pitches.map(midi => midi % 12))];
+        let legal = available.filter(name => allowRepeats || !TrainingCore.sameNoteName(name, previous));
+        // 2.8.2: a labelled example heard just before the question counts as its previous note too.
+        const label = Number.isInteger(avoid) ? avoid : example;
+        if (!allowRepeats && Number.isInteger(label)) {
+            const clear = legal.filter(name => !TrainingCore.sameNoteName(name, label));
+            if (clear.length) legal = clear;
+        }
+        if (!legal.length) return null;
+        if (!legal.includes(pc)) {
+            // A stopped question or a different tab can change the last audible target after planning.
+            const sameGroup = legal.filter(name => known.includes(name) === known.includes(pc));
+            pc = TrainingCore.choose(sameGroup.length ? sameGroup : legal);
+        }
+        const choices = pitches.filter(midi => midi % 12 === pc);
+        return blind ? TrainingCore.choose(choices) : TrainingCore.farPitch(choices, example ?? previous);
     }
     function plan(settings, mode, instrument, weights = {}, previousMidi = null) {
         const n = mode === 'cold' ? 12 : settings.size;
         const known = settings.known;
         const pitches = pitchPool(settings.octaves, instrument, mode !== 'cold' && settings.share > 0);
-        if (!playable(pitches, known)) return [];
         const available = new Set(pitches.map(p => p % 12));
+        if (available.size < 2) return [];
+        if (mode === 'cold') {
+            // Sample pitch names, not MIDI numbers, so partial octaves do not bias the test.
+            // There is no block quota to solve by elimination on the last question.
+            let previous = previousMidi;
+            return Array.from({length:n}, () => {
+                const names = [...available].filter(pc => settings.allowRepeats || !TrainingCore.sameNoteName(pc, previous));
+                const pc = TrainingCore.choose(names);
+                previous = pc;
+                return {pc, instrument};
+            });
+        }
+        if (!playable(pitches, known)) return [];
         const outside = order.filter(pc => available.has(pc) && !known.includes(pc));
         let nTarget = outside.length ? n - Math.round(n / 4) : n;
         // A single name keeps a little over a third of the block, as in earlier releases.
-        if (known.length === 1) nTarget = Math.round(n * (.34 + Math.random() * .07));
+        if (known.length === 1) nTarget = outside.length === 1 && !settings.allowRepeats ? n / 2 : Math.round(n * (.34 + Math.random() * .07));
         const nOther = n - nTarget;
         const extra = mode === 'learn' ? Math.min(Math.floor(nTarget / 5), Math.max(0, nTarget - known.length)) : 0;
         let targetPCs = [];
@@ -121,16 +143,36 @@
         const remaining = Array(12).fill(0);
         for (const pc of targetPCs) remaining[pc]++;
         for (let i = 0; i < nOther; i++) {
-            const eligible = outside.filter(pc => remaining[pc] < n/2);  // no single outside name dominates
+            const eligible = outside.filter(pc => outside.length === 1 || remaining[pc] < n/2);
             const pc = TrainingCore.choose(eligible, eligible.map(pc => foilWeights[outside.indexOf(pc)]));
             remaining[pc]++;
         }
-        const secondary = mode === 'cold' ? 0 : Math.round(n * settings.share);
+        const secondary = Math.round(n * settings.share);
         const instruments = shuffle([...Array(secondary).fill(otherInstrument(instrument)), ...Array(n - secondary).fill(instrument)]);
-        // Plain shuffle: a name may follow itself, so the previous answer carries no
-        // information about the next one (no "never the same name twice" rule).
-        const names = shuffle(remaining.flatMap((count, pc) => Array(count).fill(pc)));
-        return instruments.map((name, i) => ({pc: names[i], instrument: name}));
+        if (settings.allowRepeats) {
+            const names = shuffle(remaining.flatMap((count, pc) => Array(count).fill(pc)));
+            return instruments.map((name, i) => ({pc:names[i], instrument:name}));
+        }
+        // Reserve a slot for any name that could otherwise occupy two adjacent draws.
+        let previous = previousMidi;
+        return instruments.map((name, i) => {
+            const legal = [...available].filter(pc => !TrainingCore.sameNoteName(pc, previous));
+            const unused = legal.filter(pc => remaining[pc] > 0);
+            const required = unused.find(pc => remaining[pc] > (n - i) / 2);
+            const pc = required ?? (unused.length ? TrainingCore.choose(unused, unused.map(k => remaining[k])) : TrainingCore.choose(legal));
+            remaining[pc]--; previous = pc;
+            return {pc, instrument:name};
+        });
+    }
+    function namingScores(rows) {
+        const checks = rows.filter(row => isNaming(row) && attempted(row));
+        const score = group => ({hits:group.filter(row => first(row) && correct(row)).length, total:group.length});
+        return {
+            rested:score(checks.filter(row => row.eligibleCold && row.poolSize === 12)),
+            limited:score(checks.filter(row => row.eligibleCold && row.poolSize < 12)),
+            firstUse:score(checks.filter(row => row.firstRecorded)),
+            warm:score(checks.filter(row => !row.eligibleCold && !row.firstRecorded))
+        };
     }
     function counts(rows) {
         const usable = rows.filter(attempted);
@@ -145,6 +187,8 @@
         const practiced = new Set(rows.filter(r => isFocus(r) && r.timbre === instrument && first(r)).map(r => r.sessionId));
         const blocks = sessions.filter(s => isFocus(s) && s.protocol === protocol && practiced.has(s.id) && s.completed && s.source === instrument &&
             ['learn','consolidate'].includes(s.kind) && sameSet(s.known, settings.known) &&
+            s.responseMode === settings.responseMode && s.allowRepeats === settings.allowRepeats &&
+            s.limit === settings.limit && sameSet(s.octaves, settings.octaves) &&
             s.started >= now - 14 * 86400000 && s.started <= now)
             .sort((a,b) => b.started - a.started).slice(0,6);
         const ids = new Set(blocks.map(s => s.id));
@@ -173,5 +217,5 @@
             method: 'context-estimate'};
     }
     root.APFocusModel = {protocol,sourceVersion,notes,order,label,validSet,sameSet,defaults,windows,answerWindow,validSettings,otherInstrument,
-        isFocus,sampleId,scored,attempted,first,correct,isTarget,octaveChoices,octaveOf,supports,pitchPool,rangeText,playable,pickMidi,plan,counts,promotion,outputClock};
+        isFocus,isNaming,exactTask,namesFor,namingScores,sampleId,scored,attempted,first,correct,isTarget,octaveChoices,octaveOf,supports,pitchPool,rangeText,playable,pickMidi,plan,counts,promotion,outputClock};
 })(typeof window === 'undefined' ? globalThis : window);

@@ -1,6 +1,6 @@
 /* A cache belongs to this app and scope; unrelated PWAs are never deleted. */
 const PREFIX = "violin-ear-trainer";
-const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.8.0';
+const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.8.3';
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,10 @@ const ASSETS = [
   "./ap-focus-model.js",
   "./ap-focus-audio.js",
   "./ap-focus.js",
+  "./answer-timer.js",
+  "./interval-focus-copy.js",
+  "./interval-focus-model.js",
+  "./interval-focus.js",
   "./training-tracker.js",
   "./styles.css",
   "./training-core.js",

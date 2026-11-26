@@ -1,15 +1,16 @@
-.af-entry {display:block; text-align:center; margin:8px 0; padding:11px; border-radius:9px; font-weight:650; text-decoration:none;}
-.training-round .af-entry, .demo-running .af-entry {display:none;}
-.app-shell.focus-open > :not(.app-header):not(#focusPanel):not(.tracker-strip):not(#storageWarning),
+.af-entries {display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:8px 0;}
+.af-entry {display:flex; align-items:center; justify-content:center; text-align:center; padding:11px; border-radius:9px; font-weight:650; text-decoration:none; line-height:1.25;}
+.training-round .af-entries, .demo-running .af-entries {display:none;}
+.app-shell.focus-open > :not(.app-header):not(.af-panel):not(.tracker-strip):not(#storageWarning),
 .app-shell.focus-open #status, .app-shell.focus-open #audioReload,
 .app-shell.focus-round .tracker-strip, .app-shell.focus-round .update-button {display:none !important;}
-#focusPanel [hidden], #focusPanel[hidden] {display:none !important;}
-#focusPanel {margin:8px 0; padding:clamp(14px,4vw,26px); background:#fff; border:1px solid #d1d9df; border-radius:14px; color:#202930;}
-#focusPanel h2, #focusPanel h3, #focusPanel p {margin:0 0 .65rem;}
-#focusPanel h2 {font-size:clamp(22px,5vw,30px); line-height:1.15;}
-#focusPanel summary, #focusPanel button, #focusPanel select {cursor:pointer;}
-#focusPanel button, #focusPanel select {min-height:42px; height:auto; white-space:normal; line-height:1.22;}
-#focusPanel button, .af-entry {touch-action:manipulation;}
+.af-panel [hidden], .af-panel[hidden] {display:none !important;}
+.af-panel {margin:8px 0; padding:clamp(14px,4vw,26px); background:#fff; border:1px solid #d1d9df; border-radius:14px; color:#202930;}
+.af-panel h2, .af-panel h3, .af-panel p {margin:0 0 .65rem;}
+.af-panel h2 {font-size:clamp(22px,5vw,30px); line-height:1.15;}
+.af-panel summary, .af-panel button, .af-panel select {cursor:pointer;}
+.af-panel button, .af-panel select {min-height:42px; height:auto; white-space:normal; line-height:1.22;}
+.af-panel button, .af-entry {touch-action:manipulation;}
 .af-head, .af-group, .af-option {display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
 .af-head {border-bottom:1px solid #e2e6e9; padding-bottom:6px; margin-bottom:14px;}
 .af-head a, .af-plain {color:#145569;}
@@ -18,24 +19,49 @@
 .af-modes button {display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:start; padding:10px 14px;}
 .af-modes small {font-weight:normal;}
 .af-group {justify-content:flex-start;margin:12px 0;}
-#focusPanel details {border-top:1px solid #e1e6e8;padding:8px 0;}
-#focusPanel summary {font-weight:600;padding:5px 0;}
+.af-panel details {border-top:1px solid #e1e6e8;padding:8px 0;}
+.af-panel summary {font-weight:600;padding:5px 0;}
 .af-notes,.af-actions,.af-example,.af-filters {display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0;}
-#focusPanel .af-notes button {min-width:47px; flex:0 1 auto;}
+.af-panel .af-notes button {min-width:47px; flex:0 1 auto;}
 .af-octaves {margin:.75rem 0; padding:0; border:0; min-width:0;}
 .af-octaves legend {font-weight:650; padding:0;}
-#focusPanel #focusOctaves button {min-width:42px; padding:6px 10px;}
-#focusPanel button[aria-pressed="true"] {background:#174b63; color:white;}
+.af-panel .af-octaves button {min-width:42px; padding:6px 10px;}
+.af-panel button[aria-pressed="true"] {background:#174b63; color:white;}
 .af-option {margin:8px 0;}
 .af-option input[type=number] {width:5em;}
-#focusPanel table {border-collapse:collapse;width:100%;text-align:left;font-size:.9rem; margin:10px 0;}
-#focusPanel th,#focusPanel td {padding:5px 2px;border-bottom:1px solid #e1e6e8;}
+.af-panel table {border-collapse:collapse;width:100%;text-align:left;font-size:.9rem; margin:10px 0;}
+.af-panel th,.af-panel td {padding:5px 2px;border-bottom:1px solid #e1e6e8;}
 .af-plain {border:0;background:transparent;padding:5px 8px;text-decoration:underline;font-size:.9rem;}
 .af-end {margin-top:9px;}
 .af-live {min-height:1.6em;font-weight:650;}
-#focusCurrent {font-variant-numeric:tabular-nums;}
-#focusReview li {margin:5px 0;}
-#focusPanel button:focus-visible,#focusPanel a:focus-visible,#focusPanel summary:focus-visible {outline:3px solid #0076af;outline-offset:2px;}
+#focusCurrent, #ivCurrent {font-variant-numeric:tabular-nums;}
+#focusReview li, #ivReview li {margin:5px 0;}
+.af-panel button:focus-visible,.af-panel a:focus-visible,.af-panel summary:focus-visible,.af-entry:focus-visible {outline:3px solid #0076af;outline-offset:2px;}
 .af-timer {height:6px; margin:-.35rem 0 .7rem; border-radius:3px; background:#e2e6e9; overflow:hidden;}
-.af-timer span {display:block; height:100%; background:#174b63; transform-origin:left center;}
-#focusRules {margin-top:-4px;}
+.af-timer span, .answer-timer span {display:block; height:100%; background:#174b63; transform-origin:left center;}
+#focusRules, #ivRules {margin-top:-4px;}
+
+#focusAnswers.af-naming, #ivAnswers.af-naming {display:grid; grid-template-columns:repeat(4,minmax(0,1fr));}
+#focusAnswers.af-naming button[data-answer="unsure"], #ivAnswers.af-naming button[data-answer="unsure"] {grid-column:1/-1;}
+
+/* 2.8.2: interval buttons show the short name above the full name. */
+.iv-code {display:block; font-weight:750;}
+.iv-name {display:block; font-weight:500; font-size:.76rem; line-height:1.15;}
+.af-panel #ivPicker button, .af-panel #ivExamples button {min-width:66px;}
+
+/* 2.8.2: the shared answer window of single notes, two notes, the AP checks and the interval course. */
+.answer-timer {height:6px; border-radius:3px; background:#e2e6e9; overflow:hidden; margin:0 0 8px;}
+.rp-panel > .answer-timer {grid-column:1/-1; margin:2px 0 6px;}
+.answer-card {position:relative;}
+.answer-card > .answer-timer {position:absolute; left:0; right:0; bottom:0; height:4px; margin:0; border-radius:0;}
+.limit-picker {grid-column:1/-1; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:8px;}
+.limit-picker span {font-size:12px; font-weight:700; color:#6b7280;}
+
+/* 2.8.3: focused AP answers are a note name plus an octave number; the buttons never change with the set. */
+.af-two {display:grid; gap:8px; margin:8px 0;}
+.af-keys {display:grid; grid-template-columns:repeat(14,minmax(0,1fr)); gap:4px;}
+.af-panel .af-keys button {min-width:0; padding:0 2px;}
+.af-panel .af-keys button.af-black {background:#33404a; color:#fff; border-color:#33404a;}
+.af-octave-row, .af-extra {display:flex; flex-wrap:wrap; gap:6px;}
+.af-octave-row button, .af-extra button {flex:1 1 0; min-width:44px;}
+.af-panel .af-two button[aria-pressed="true"] {background:#174b63; color:#fff; border-color:#174b63; box-shadow:0 0 0 3px #9fd0e4;}

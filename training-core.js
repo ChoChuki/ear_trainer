@@ -75,12 +75,32 @@
   return lastInPage;
  }
  function rememberQuestion(site, reference, target) {
-  lastInPage = {reference, target};
+  lastInPage = {reference, target, at: Date.now()};
   try {
    localStorage.setItem(questionKey, JSON.stringify(lastInPage));
    questionWriteFailed = false;
   } catch (_) { questionWriteFailed = true; }
   try { localStorage.setItem('ap-last-midi-' + site, String(target)); } catch (_) {}
+ }
+ // 2.8.2: the last labelled note (example, free play, feedback). Heard after the last question
+ // and within maxAge, its note name is avoided by the next question as well (not its register).
+ const labelKey = 'ear-trainer-last-label-v1';
+ let labelInPage = null;
+ function rememberLabel(midi) {
+  if (!Number.isInteger(midi)) return;
+  labelInPage = {midi, at: Date.now()};
+  try { localStorage.setItem(labelKey, JSON.stringify(labelInPage)); } catch (_) {}
+ }
+ function recentLabel(site, maxAge = 5 * 60000, now = Date.now()) {
+  let label = labelInPage;
+  try {
+   const saved = JSON.parse(localStorage.getItem(labelKey));
+   if (Number.isInteger(saved?.midi) && Number.isFinite(saved.at) && (!label || saved.at > label.at)) label = saved;
+  } catch (_) {}
+  if (!label || now - label.at > maxAge || label.at > now + 1000) return null;
+  const last = lastQuestion(site);
+  if (Number.isFinite(last?.at) && last.at >= label.at) return null;
+  return label.midi;
  }
  function decodePreset(player, context, name) {
   player.loader.decodeAfterLoading(context,name);
@@ -236,5 +256,5 @@
   return resetTones(context, at, {previous, low, high, seconds: duration});
  }
  function cancelAudio() { for (const voice of voices) { try {voice.stop();} catch (_) {} } voices.clear(); }
- root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, sameNoteName, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, resetTones, resetGap, shepardGlide, farPitch, cancelAudio};
+ root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, sameNoteName, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, resetTones, resetGap, shepardGlide, farPitch, cancelAudio, rememberLabel, recentLabel};
 })(typeof window !== 'undefined' ? window : globalThis);

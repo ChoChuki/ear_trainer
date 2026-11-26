@@ -3,15 +3,15 @@
     const M = APFocusModel, S = APPitchScience;
     const $ = id => document.getElementById('focus' + id);
     const modes = ['cold','learn','consolidate'];
+    // 2.8.3: columns of a 14-column mini keyboard; black keys sit between the white letters.
+    const KEY_COLUMN = [1,2,3,4,5,7,8,9,10,11,12,13];
     let host, sound, settings, session = null, trial = null, lastBlock = null;
     let phase = 'home', visible = false, initialized = false, screenToken = 0, audioToken = 0;
     let autoTimer, pendingWrites = Promise.resolve(), firstOnset = null, lastOnset = null;
     // Answer window of the current question (performance-clock time) and its timer.
     let deadline = null, deadlineTimer, pressedAt = null, pendingReset = null;
-    // Last labelled sound (example, "Hear the answer" or learning feedback). A block without
-    // feedback that starts soon afterwards opens with the long reset.
-    let labelledAt = 0;
-    let guideInstrument, guideNote, displayInstrument, evidence, hasPastTraining, lastExample = null;
+    let guideInstrument, guideNote, displayInstrument, evidence, lastExample = null;
+    let pickName = null, pickOctave = null;  // the half of a two-group answer chosen so far
     const trials = new Map(), sessions = new Map();
     const kv = k => 'ap-focus-' + k + '-' + host.site;
     const tr = (key, args) => APFocusCopy.t(host.language(), key, args);
@@ -19,10 +19,10 @@
     const percent = n => n === null ? '—' : Math.round(n * 100) + '%';
     const seconds = ms => tr('sec',{s:new Intl.NumberFormat(host.language(),{minimumFractionDigits:1,maximumFractionDigits:1}).format(ms / 1000)});
     const LABEL_MEMORY_MS = 5 * 60000;
-    const firstSoundToday = () => {
-        const at = S.lastPracticeAt(host.site);
-        return at === null || S.day(new Date(at)) !== S.day();
-    };
+    function unprimed() {
+        const last = S.lastPracticeAt(host.site);
+        return last === null || S.rested(last);
+    }
     function button(text, action, cls = 'secondary') {
         const b = document.createElement('button');
         b.type = 'button'; b.className = cls; b.textContent = text;
@@ -45,7 +45,7 @@
         if (store === 'sessions') {
             return !existing.completed && (incoming.completed || incoming.attempted > existing.attempted);
         }
-        const final = row => row.result === 'answered' || row.result === 'timeout';
+        const final = row => ['answered','relative','timeout'].includes(row.result);
         if (final(existing)) return false;
         if (final(incoming)) return true;
         return (incoming.submittedAt || incoming.playedAt || 0) > (existing.submittedAt || existing.playedAt || 0) ||
@@ -73,6 +73,7 @@
     }
     function updateSettings(changes) {
         const next = {...settings, ...changes};
+        if (next.limit !== 'off') next.limit = 'fast';
         if (!M.validSettings(next,host.site) || !TrainingCore.write(kv('settings'), next)) return;
         settings = next;
         guideNote = settings.known.includes(guideNote) ? guideNote : settings.known.at(-1);
@@ -85,19 +86,23 @@
         for (const row of rows) if (M.isFocus(row)) trials.set(row.id,row);
         for (const block of blocks) if (M.isFocus(block)) sessions.set(block.id,block);
         await recoverJournal();
-        hasPastTraining = rows.length > 0 || blocks.length > 0 || trials.size > 0;
         const saved = read(kv('settings'));
         if (M.validSettings(saved,host.site)) settings = {...M.defaults(), ...saved};
         else {
             const oldLevel = read('ap-course-v1-' + host.site)?.level;
-            const previous = blocks.filter(s => ['learn','cold'].includes(s.kind) && (M.validSet(s.known) || Number.isInteger(s.level)))
+            const previous = blocks.filter(s => ['learn','cold'].includes(s.kind) && !M.isNaming(s) && (M.validSet(s.known) || Number.isInteger(s.level)))
                 .sort((a,b) => b.started - a.started)[0];
-            const lastTrial = rows.filter(r => ['learn','cold'].includes(r.kind) && Number.isInteger(r.level))
+            const lastTrial = rows.filter(r => ['learn','cold'].includes(r.kind) && !M.isNaming(r) && Number.isInteger(r.level))
                 .sort((a,b) => b.submittedAt - a.submittedAt)[0];
             const level = oldLevel ?? previous?.level ?? lastTrial?.level;
             const known = !oldLevel && M.validSet(previous?.known) ? previous.known :
                 Number.isInteger(level) && level >= 1 && level <= 12 ? S.learned(level) : [5];
             settings = M.defaults(known);
+        }
+        // 2.8.3: the window no longer depends on the buttons: 1.3 s or no limit.
+        if (settings.limit !== 'off' && settings.limit !== 'fast') {
+            settings.limit = 'fast';
+            TrainingCore.write(kv('settings'), settings);
         }
     }
     function progress() {
@@ -141,20 +146,22 @@
         try {
             await sound.play(instrument,pitch);
             if (token !== audioToken) return;
-            lastExample = pitch; labelledAt = Date.now();
-            S.markPractice(host.site); TrainingTracker.activity('ap-learning');
+            lastExample = pitch; S.markLabel(host.site); TrainingCore.rememberLabel(pitch);
+            TrainingTracker.activity('ap-learning');
             $('Notice').textContent = tr(instrument) + ' · ' + M.label(pitch);
             if (phase === 'home') renderModes();
         } catch (_) {if (token === audioToken) $('Notice').textContent = tr('exampleAudioError');}
     }
     function renderModes() {
-        const fresh = !hasPastTraining && S.lastPracticeAt(host.site) === null;
-        const cold = firstSoundToday(), preferred = cold && !fresh ? 'cold' : 'learn';
+        const fresh = S.lastPracticeAt(host.site) === null;
+        const cold = unprimed(), preferred = cold ? 'cold' : 'learn';
         $('Daily').textContent = tr(fresh ? 'firstVisit' : cold ? 'coldToday' : 'warmToday');
         const primary = M.pitchPool(settings.octaves,host.site);
         const practice = settings.share ? M.pitchPool(settings.octaves,host.site,true) : primary;
-        const validPrimary = M.playable(primary,settings.known), validPractice = M.playable(practice,settings.known);
+        const availableCount = new Set(primary.map(p => p % 12)).size;
+        const validPrimary = availableCount >= 2, validPractice = M.playable(practice,settings.known);
         const hints = [];
+        if (validPrimary && availableCount < 12) hints.push(tr('partialRange',{n:availableCount}));
         if (practice.length !== primary.length) hints.push(tr('mixRange',{range:M.rangeText(practice) || '—'}));
         if (!validPrimary || !validPractice) hints.push(tr('rangeHint'));
         // Successive notes can only stay more than an octave apart across three octaves.
@@ -165,11 +172,14 @@
             b.disabled = !(mode === 'cold' ? validPrimary : validPractice);
             const title = document.createElement('strong'); title.textContent = tr(mode);
             const hint = document.createElement('small');
-            hint.textContent = tr({cold:'coldHelp',learn:'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
+            hint.textContent = tr({cold:'coldHelp',learn:settings.responseMode === 'name' ? 'learnExact' : 'learnHelp',consolidate:'conHelp'}[mode], {n:settings.size});
             b.dataset.mode = mode; b.append(title,hint); return b;
         }));
-        const limitMs = M.answerWindow(settings.limit, settings.known.length);
-        $('Rules').textContent = limitMs === null ? tr('rulesOff') : tr('rules',{s:seconds(limitMs)});
+        const practiceLimit = M.answerWindow(settings.limit, M.namesFor(settings.responseMode,settings.known).length);
+        const checkLimit = M.answerWindow(settings.limit, 12);
+        $('Rules').textContent = practiceLimit === null ? tr('rulesOff') :
+            practiceLimit === checkLimit ? tr('rules',{s:seconds(practiceLimit)}) :
+            tr('twoLimits',{practice:seconds(practiceLimit),check:seconds(checkLimit)});
     }
     function renderEvidence() {
         evidence = progress();
@@ -178,13 +188,21 @@
         const oct = $('FilterOctave').value;
         const list = [...trials.values()].filter(r => M.attempted(r) && r.timbre === displayInstrument &&
             (oct === 'all' || Math.floor(r.pitch / 12) - 1 === Number(oct)));
-        const daily = list.filter(r => r.kind === 'cold' && r.firstOfDay);
-        $('First').textContent = tr('dayFirst',{hits:daily.filter(r => M.first(r) && M.correct(r)).length,n:daily.length});
+        $('First').textContent = namingReport(list, true);
+        const rested = list.filter(r => M.isNaming(r) && r.eligibleCold).sort((a,b) => b.playedAt - a.playedAt).slice(0,12);
+        $('RestLog').hidden = !rested.length;
+        $('RestRows').replaceChildren(...rested.map(row => {
+            const li = document.createElement('li');
+            const answer = row.result === 'relative' ? tr('relative') : row.result === 'timeout' ? tr('tooSlow') : guessText(row);
+            li.textContent = row.day + ' · ' + M.label(row.pitch) + ' · ' + tr('answer') + ' ' + answer +
+                (Number.isFinite(row.rtMs) ? ' · ' + seconds(row.rtMs) : '');
+            return li;
+        }));
         const body = $('Stats'); body.replaceChildren();
         for (const pc of M.order) {
-            const pool = list.filter(r => r.pitch % 12 === pc && M.isTarget(r));
-            if (!settings.known.includes(pc) && !pool.length) continue;
-            const checks = pool.filter(r => r.kind === 'cold'), practice = pool.filter(r => r.kind !== 'cold');
+            const pool = list.filter(r => r.pitch % 12 === pc && (M.exactTask(r) || M.isTarget(r)));
+            const checks = pool.filter(M.isNaming), practice = pool.filter(r => r.kind !== 'cold');
+            if (!settings.known.includes(pc) && !checks.length && !practice.length) continue;
             const format = a => a.filter(r => M.first(r) && M.correct(r)).length + '/' + a.length;
             const row = document.createElement('tr');
             for (const value of [M.notes[pc],format(practice),format(checks),new Set(checks.map(r => r.day)).size]) {
@@ -219,9 +237,11 @@
         $('Auto').checked = document.getElementById('autoNextCheck').checked;
         $('AutoText').textContent = host.text('autoNextText');
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
+        $('Repeats').checked = settings.allowRepeats;
+        $('Recognition').checked = settings.responseMode === 'set';
         for (const option of $('Limit').options) {
-            const ms = M.answerWindow(option.value, settings.known.length);
-            option.textContent = ms === null ? tr('limitOff') : tr(option.value === 'strict' ? 'limitStrict' : 'limitRelaxed',{s:seconds(ms)});
+            const ms = M.answerWindow(option.value,M.namesFor(settings.responseMode,settings.known).length);
+            option.textContent = ms === null ? tr('limitOff') : tr({strict:'limitStrict',relaxed:'limitRelaxed',fast:'limitFast'}[option.value],{s:seconds(ms)});
         }
         $('Limit').value = settings.limit;
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
@@ -240,24 +260,24 @@
         const items = session.rows;
         const eligible = items.filter(M.attempted);
         const good = eligible.filter(r => M.first(r) && M.correct(r));
-        const times = good.map(r => r.rtMs).filter(Number.isFinite).sort((a,b) => a-b);
+        const times = good.map(r => r.rtMs).filter(Number.isFinite);
         return {id:session.id, protocol:M.protocol, sourceVersion:M.sourceVersion, source:host.site, kind:session.mode,
             started:session.started, day:session.day, finished:Date.now(), completed:complete,
             interrupted:!complete || items.some(r => ['interrupted','audio-error'].includes(r.result)), attempted:items.length, total:eligible.length,
-            planned:session.plan.length, correct:good.length, medianRt:times.length ? times[Math.floor(times.length/2)] : null,
-            known:[...settings.known], level:settings.known.length, share:session.mode === 'cold' ? 0 : settings.share, timbre:host.site,
+            planned:session.plan.length, correct:good.length, medianRt:S.median(times),
+            known:[...session.known], level:session.known.length, responseMode:session.responseMode, allowRepeats:settings.allowRepeats, share:session.mode === 'cold' ? 0 : settings.share, timbre:host.site,
             octaves:[...settings.octaves], effectiveRange:[session.pitches[0],session.pitches.at(-1)],
             relative:items.filter(r => r.result === 'relative').length,
             late:items.filter(r => r.result === 'timeout').length, limit:settings.limit,
-            limitMs:M.answerWindow(settings.limit,settings.known.length), resetOn:$('Mask').checked,
-            eligible:items.some(r => r.firstOfDay && r.kind === 'cold' && M.first(r))};
+            limitMs:M.answerWindow(settings.limit,session.names.length), resetOn:$('Mask').checked,
+            eligible:items.some(r => r.eligibleCold && M.attempted(r))};
     }
     function stopSound() {++audioToken; sound.stop(); clearTimeout(autoTimer); disarm();}
     function disarm() {
         clearTimeout(deadlineTimer); deadline = null; pressedAt = null;
         if (initialized) $('Timer').hidden = true;
     }
-    // A visible countdown: names that take longer than the window are worked out, not heard.
+    // Compare touch time with the estimated audible onset.
     function arm(row) {
         clearTimeout(deadlineTimer);
         const total = row.limitMs, left = deadline - performance.now();
@@ -284,24 +304,32 @@
         const previous = TrainingCore.lastQuestion(host.site)?.target;
         const plan = M.plan(settings,mode,host.site,weights,previous);
         if (!plan.length) {renderHome(); return;}
+        const responseMode = mode === 'cold' ? 'name' : settings.responseMode;
+        const names = M.namesFor(responseMode, settings.known);
+        const pitches = M.pitchPool(settings.octaves,host.site,mode !== 'cold' && settings.share > 0);
         session = {id:host.site + '-focus-' + (crypto.randomUUID?.() || Date.now() + '-' + Math.random().toString(36).slice(2)),
-            mode, started:Date.now(), day:S.day(), rows:[], plan, pitches:M.pitchPool(settings.octaves,host.site,mode !== 'cold' && settings.share > 0)};
+            mode, started:Date.now(), day:S.day(), rows:[], plan, pitches, names, responseMode,
+            known:mode === 'cold' ? names : [...settings.known], poolSize:new Set(pitches.map(p => p % 12)).size,
+            octaves:[...new Set(pitches.map(M.octaveOf))].sort((a,b) => a - b)};
         lastBlock = null; trial = null; next();
     }
     function next() {
         if (!session) return;
         if (session.rows.length === session.plan.length) {finish(true); return;}
-        stopSound(); $('Notice').textContent = ''; firstOnset = lastOnset = null;
+        stopSound(); $('Notice').textContent = ''; firstOnset = lastOnset = null; pickName = pickOctave = null;
         const tone = session.plan[session.rows.length];
         const prev = TrainingCore.lastQuestion(host.site)?.target ?? null;
-        const pitch = M.pickMidi(tone.pc,session.pitches,prev,settings.known,lastExample);
+        const blind = session.mode === 'cold' && !session.rows.length && unprimed();
+        const pitch = M.pickMidi(tone.pc,session.pitches,prev,session.known,lastExample,
+            {allowRepeats:settings.allowRepeats, blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
-            kind:session.mode,timbre:tone.instrument,level:settings.known.length,known:[...settings.known],pitch,
+            kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],pitch,
+            responseMode:session.responseMode,allowRepeats:settings.allowRepeats,poolSize:session.poolSize,firstRecorded:false,
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
             eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false,
-            reset:null,limitMs:null,lateGuess:null,
+            reset:null,limitMs:null,lateGuess:null,guessOctave:null,octaveCorrect:null,lateOctave:null,
             jump:Number.isInteger(lastExample ?? prev) ? Math.abs(pitch - (lastExample ?? prev)) : null};
         playQuestion(false);
     }
@@ -314,7 +342,8 @@
             save('trials',trial);  // Keep a request for help even if the tab is closed before a response.
         }
         const row = trial;
-        const mask = !replay && $('Mask').checked && (row.ordinal > 1 || !firstSoundToday());
+        const mask = !replay && $('Mask').checked && (row.ordinal > 1 || !unprimed());
+        const labelledAt = S.lastLabelAt();
         const long = mask && row.ordinal === 1 && session.mode !== 'learn' && labelledAt > 0 &&
             Date.now() - labelledAt < LABEL_MEMORY_MS;
         pendingReset = mask ? (long ? 'long' : 'short') : null;
@@ -324,17 +353,14 @@
             const reset = mask ? {long, previous:lastExample ?? row.previousPitch,
                 low:session.pitches[0], high:session.pitches.at(-1)} : null;
             const clock = await sound.play(row.timbre,row.pitch,reset);
-            if (long) labelledAt = 0;
             if (token !== audioToken || row !== trial) return;
-            const now = Date.now(), last = S.lastPracticeAt(host.site);
+            const now = Date.now();
             if (!replay) {
                 firstOnset = clock.when;
                 row.playedAt = Math.round(now + clock.when - performance.now());
                 row.day = S.day(new Date(row.playedAt));
-                row.gapSincePracticeMs = last === null ? null : Math.max(0,row.playedAt - last);
-                row.firstOfDay = row.kind === 'cold' && row.ordinal === 1 && firstSoundToday();
-                row.eligibleCold = row.firstOfDay; row.timing = clock.method; row.resetSoundOn = mask;
-                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit,settings.known.length);
+                row.timing = clock.method; row.resetSoundOn = mask;
+                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit,session.names.length);
                 save('trials',row); // A reload before the response leaves an excluded trial.
             }
             lastOnset = clock.when;
@@ -343,28 +369,44 @@
             await new Promise(resolve => setTimeout(resolve, delay));
             if (token !== audioToken || row !== trial) return;
             if (document.hidden || host.context.state !== 'running') {invalidate('interrupted'); return;}
-            if (!replay) {host.remember(row.pitch); lastExample = null;}
+            if (!replay) {
+                const last = S.lastPracticeAt(host.site);
+                const isFirstCheck = row.kind === 'cold' && row.ordinal === 1 && !mask;
+                row.gapSincePracticeMs = last === null ? null : Math.max(0,row.playedAt - last);
+                row.firstOfDay = row.kind === 'cold' && row.ordinal === 1 &&
+                    (last === null || S.day(new Date(last)) !== row.day);
+                row.firstRecorded = isFirstCheck && last === null;
+                row.eligibleCold = isFirstCheck && S.rested(last, row.playedAt);
+                if (long) S.clearLabel(labelledAt);
+                host.remember(row.pitch); lastExample = null;
+            }
             S.markPractice(host.site);
             pendingReset = null; phase = 'answer'; render();
             if (!replay && row.limitMs !== null) {deadline = firstOnset + row.limitMs; arm(row);}
         } catch (_) {if (token === audioToken && row === trial) invalidate('audio-error');}
     }
-    function submit(guess, when) {
+    function submit(answer, when) {
         if (phase !== 'answer' || !trial || when < lastOnset) return;
+        // 2.8.3: a note name and an octave number arrive together as {pc, octave}.
+        const pair = answer !== null && typeof answer === 'object';
+        const guess = pair ? answer.pc : answer, octave = pair ? answer.octave : null;
+        pickName = pickOctave = null;
         // Past the window the note counts as missed, whatever is chosen afterwards.
         const late = guess === 'timeout' || (deadline !== null && !trial.replayed && when > deadline);
         stopSound();
         const inferred = !late && guess === 'relative';
         if (late) {
             trial.guess = null; trial.result = 'timeout'; trial.correct = false;
-            trial.lateGuess = guess === 'timeout' ? null : guess;
+            trial.lateGuess = guess === 'timeout' ? null : guess; trial.lateOctave = octave;
         } else {
             trial.guess = inferred ? null : guess; trial.result = inferred ? 'relative' : 'answered'; trial.correct = M.correct(trial);
+            trial.guessOctave = inferred ? null : octave;
+            trial.octaveCorrect = Number.isInteger(octave) && Number.isInteger(trial.guess) ? octave === M.octaveOf(trial.pitch) : null;
         }
         trial.submittedAt = Date.now();
         if (trial.replayed) trial.assistedRtMs = Math.max(0,Math.round(when - lastOnset));
         else if (guess !== 'timeout') trial.rtMs = Math.max(0,Math.round(when - firstOnset));
-        if (session.mode === 'learn') labelledAt = Date.now();  // the name is shown now
+        if (session.mode === 'learn') S.markLabel(host.site);
         if (!inferred && trial.timbre === host.site && session.mode === 'learn') {
             const pc = trial.pitch % 12;
             if (M.isTarget(trial)) APMemory.record(host.site,pc,trial.correct,Date.now(),!M.first(trial),false);
@@ -398,11 +440,15 @@
         phase = home ? 'home' : 'summary'; TrainingTracker.pause(); $('Notice').textContent = ''; render();
     }
     function answerLabel(answer) {return answer === 'out' || answer === 'unsure' ? tr(answer) : Number.isInteger(answer) ? M.notes[answer] : '—';}
+    function guessText(row) {
+        const late = row.result === 'timeout', g = late ? row.lateGuess : row.guess, o = late ? row.lateOctave : row.guessOctave;
+        return (g === 'relative' ? tr('relative') : answerLabel(g)) + (Number.isInteger(g) && Number.isInteger(o) ? String(o) : '');
+    }
     function renderRound() {
         const loading = phase === 'loading', done = phase === 'done';
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
-        const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
+        const named = () => M.label(trial.pitch) + (M.exactTask(trial) || M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
         if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
         else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
@@ -410,28 +456,59 @@
         else if (trial.result !== 'answered') prompt.textContent = tr(trial.result === 'audio-error' ? 'audioError' : 'interrupted');
         else if (session.mode !== 'learn') prompt.textContent = tr('recorded');
         else {
-            prompt.textContent = tr(trial.correct ? 'right' : 'wrong') + ' · ' + named() +
+            prompt.textContent = tr(trial.correct ? (trial.octaveCorrect === false ? 'nameRight' : 'right') : 'wrong') + ' · ' + named() +
+                (trial.correct && trial.octaveCorrect !== false ? '' : ' · ' + tr('answer') + ' ' + guessText(trial)) +
                 (trial.replayed ? ' · ' + tr('aided') : Number.isFinite(trial.rtMs) ? ' · ' + seconds(trial.rtMs) : '');
         }
-        const choices = [...settings.known];
-        if (choices.length < 12) choices.push('out');
-        choices.push('unsure');
-        const buttons = choices.map(choice => {
-            const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary';
-            b.textContent = answerLabel(choice); b.dataset.answer = String(choice);
-            b.disabled = phase !== 'answer';
+        // 2.8.3: two fixed groups, a note name and an octave number, plus Other / Not sure.
+        // The buttons stay the same whatever the learning set; a name and an octave complete the answer.
+        const open = phase === 'answer';
+        const tap = (b, take) => {
             let touched = null;
+            b.type = 'button'; b.disabled = !open;
             b.addEventListener('pointerdown', e => {touched = pressedAt = e.timeStamp;});
             b.addEventListener('pointercancel', () => {touched = pressedAt = null;});
             b.addEventListener('click', e => {
                 const at = e.detail && touched !== null ? touched : e.timeStamp;
                 pressedAt = null;
-                submit(choice,Math.abs(at - performance.now()) < 60000 ? at : performance.now());
+                take(Math.abs(at - performance.now()) < 60000 ? at : performance.now());
             });
             return b;
-        });
-        $('Answers').replaceChildren(...buttons); $('Answers').hidden = done;
-        $('AnswerHint').hidden = done || settings.known.length === 12;
+        };
+        const pick = (kind, value, at) => {
+            if (phase !== 'answer') return;
+            if (kind === 'name') pickName = value; else pickOctave = value;
+            if (pickName !== null && pickOctave !== null) submit({pc:pickName, octave:pickOctave}, at);
+            else renderRound();
+        };
+        const group = (cls, label) => {
+            const box = document.createElement('div'); box.className = cls;
+            box.setAttribute('role','group'); if (label) box.setAttribute('aria-label', label); return box;
+        };
+        const keys = group('af-keys', tr('noteGroup')), octaves = group('af-octave-row', tr('octaveGroup')), extra = group('af-extra');
+        for (const pc of [1,3,6,8,10,0,2,4,5,7,9,11]) {
+            const black = [1,3,6,8,10].includes(pc), b = document.createElement('button');
+            b.className = black ? 'secondary af-black' : 'secondary';
+            b.textContent = M.notes[pc]; b.dataset.answer = String(pc);
+            b.style.gridRow = black ? '1' : '2'; b.style.gridColumn = KEY_COLUMN[pc] + ' / span 2';
+            b.setAttribute('aria-pressed', String(pickName === pc));
+            keys.append(tap(b, at => pick('name', pc, at)));
+        }
+        for (const o of session.octaves) {
+            const b = document.createElement('button'); b.className = 'secondary';
+            b.textContent = String(o); b.dataset.octave = String(o);
+            b.setAttribute('aria-pressed', String(pickOctave === o));
+            octaves.append(tap(b, at => pick('octave', o, at)));
+        }
+        for (const choice of session.mode === 'cold' ? ['unsure'] : ['out','unsure']) {
+            const b = document.createElement('button'); b.className = 'secondary';
+            b.textContent = answerLabel(choice); b.dataset.answer = choice;
+            extra.append(tap(b, at => submit(choice, at)));
+        }
+        $('Answers').className = 'af-two';
+        $('Answers').replaceChildren(keys, octaves, extra); $('Answers').hidden = done;
+        $('AnswerHint').textContent = tr(session.mode === 'cold' ? 'helpCold' : 'helpAnswer');
+        $('AnswerHint').hidden = done;
         $('Next').hidden = !done;
         $('Next').textContent = tr(trial.ordinal === session.plan.length ? 'results' : 'next');
         if (phase !== 'answer') $('Timer').hidden = true;
@@ -440,16 +517,33 @@
         $('Replay').hidden = session.mode === 'cold' || phase !== 'answer';
         $('AnswerSound').hidden = session.mode !== 'learn' || !done || !['answered','relative','timeout'].includes(trial.result);
     }
+    function namingReport(rows, history = false) {
+        const scores = M.namingScores(rows), parts = [];
+        for (const key of ['rested','limited','firstUse','warm']) {
+            const score = scores[key];
+            if (score.total || (history && key === 'rested')) parts.push(tr(key,score));
+        }
+        return parts.length ? parts.join(' · ') : tr('noAttempts');
+    }
     function renderSummary() {
         if (!lastBlock) return;
         const c = M.counts(lastBlock.rows);
         $('SummaryTitle').textContent = tr(lastBlock.mode) + ' · ' + lastBlock.rows.length + '/' + lastBlock.plan.length;
-        $('Score').textContent = tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted});
+        if (lastBlock.mode === 'cold') $('Score').textContent = namingReport(lastBlock.rows);
+        else {
+            const metrics = [tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted})];
+            if (lastBlock.responseMode === 'name') {
+                metrics.unshift(tr('named',{hits:lastBlock.rows.filter(r => M.first(r) && M.correct(r)).length,total:c.total}));
+            }
+            $('Score').textContent = metrics.join(' · ');
+        }
+        const placed = lastBlock.rows.filter(r => M.first(r) && M.correct(r) && Number.isInteger(r.guessOctave));
+        if (placed.length) $('Score').textContent += ' · ' + tr('octaveHits',{hits:placed.filter(r => r.octaveCorrect).length,total:placed.length});
         const inferred = lastBlock.rows.filter(r => r.result === 'relative').length;
         if (inferred) $('Score').textContent += ' · ' + tr('relativeCount',{n:inferred});
         if (c.late) $('Score').textContent += ' · ' + tr('lateCount',{n:c.late});
-        const times = lastBlock.rows.filter(r => M.first(r) && M.correct(r)).map(r => r.rtMs).filter(Number.isFinite).sort((a,b) => a-b);
-        if (times.length) $('Score').textContent += ' · ' + tr('medianTime',{s:seconds(times[Math.floor(times.length/2)])});
+        const times = lastBlock.rows.filter(r => M.first(r) && M.correct(r)).map(r => r.rtMs).filter(Number.isFinite);
+        if (times.length) $('Score').textContent += ' · ' + tr('medianTime',{s:seconds(S.median(times))});
         const goHome = () => {stopSound(); phase = 'home'; lastBlock = null; $('Notice').textContent = ''; render();};
         const actions = $('Continue'); actions.replaceChildren();
         const rec = progress();
@@ -460,10 +554,10 @@
         $('Review').replaceChildren(...lastBlock.rows.map(row => {
             const li = document.createElement('li');
             li.textContent = row.ordinal + ' · ' + tr(row.timbre) + ' ' + M.label(row.pitch) + ' · ' +
-                (M.scored(row) ? tr('answer') + ' ' + answerLabel(row.guess) +
+                (M.scored(row) ? tr('answer') + ' ' + guessText(row) +
                     (row.replayed ? ' · ' + tr('aided') : Number.isFinite(row.rtMs) ? ' · ' + seconds(row.rtMs) : '') :
                     row.result === 'timeout' ? tr('tooSlow') + (row.lateGuess === null || row.lateGuess === undefined ? '' :
-                        ' · ' + tr('answer') + ' ' + (row.lateGuess === 'relative' ? tr('relative') : answerLabel(row.lateGuess))) :
+                        ' · ' + tr('answer') + ' ' + guessText(row)) :
                     tr(row.result === 'relative' ? 'relative' : row.result === 'audio-error' ? 'audioError' : 'interrupted'));
             return li;
         }));
@@ -519,13 +613,14 @@
             Number.isInteger(s.attempted) && Number.isInteger(s.planned) && s.attempted <= s.planned) &&
             data.trials.every(r => {
                 const block = byId.get(r.sessionId);
-                const match = block ? r.kind === block.kind && r.sourceVersion === block.sourceVersion && M.sameSet(r.known,block.known) :
+                const match = block ? r.kind === block.kind && r.protocol === block.protocol && r.sourceVersion === block.sourceVersion && M.sameSet(r.known,block.known) :
                     ['interrupted','assisted'].includes(r.result);
                 return base(r) && match && Number.isInteger(r.ordinal) && r.ordinal >= 1 && r.ordinal <= 60 &&
                     r.id === r.sessionId + '-' + r.ordinal && M.supports(r.timbre,r.pitch,r.sourceVersion) &&
                     ['piano','violin'].includes(r.timbre) && r.sampleId === M.sampleId(r.timbre,r.pitch,r.sourceVersion) &&
                     ['answered','relative','assisted','interrupted','audio-error','timeout'].includes(r.result) && Number.isInteger(r.replayed) && r.replayed >= 0 &&
-                    (r.result !== 'answered' || r.known.includes(r.guess) || r.guess === 'unsure' || r.guess === 'out');
+                    (r.result !== 'answered' || r.guess === 'unsure' || r.guess === 'out' || (Number.isInteger(r.guess) && r.guess >= 0 && r.guess < 12)) &&
+                    (r.guessOctave === undefined || r.guessOctave === null || Number.isInteger(r.guessOctave));
             });
     }
     async function importBackup(file) {
@@ -555,6 +650,8 @@
         for (const [id,key] of [['Size','size'],['Share','share'],['Hit','hit'],['Fa','falseAlarm']]) {
             $(id).onchange = () => {updateSettings({[key]:Number($(id).value)}); $(id).value = settings[key];};
         }
+        $('Repeats').onchange = () => updateSettings({allowRepeats:$('Repeats').checked});
+        $('Recognition').onchange = () => updateSettings({responseMode:$('Recognition').checked ? 'set' : 'name'});
         $('Limit').onchange = () => {updateSettings({limit:$('Limit').value}); $('Limit').value = settings.limit;};
         $('Auto').onchange = () => {
             const original = document.getElementById('autoNextCheck'); original.checked = $('Auto').checked;

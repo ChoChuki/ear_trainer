@@ -23,7 +23,8 @@ for (let length = 1; length <= 12; length++) {
         const count = mode === 'cold' ? 12 : 24;
         assert.equal(block.length,count);
         const targets = block.filter(n => settings.known.includes(n.pc)).length;
-        if (length === 1) {
+        if (mode === 'cold') assert(block.every(q => q.pc >= 0 && q.pc < 12));
+        else if (length === 1) {
             assert(targets >= Math.round(count * .34) && targets <= Math.round(count * .41));
             assert(block.some((x,i) => i && x.pc !== 5 && block[i-1].pc !== 5));
         } else assert.equal(count-targets,length === 12 ? 0 : count/4);
@@ -33,6 +34,7 @@ for (let length = 1; length <= 12; length++) {
             const pool = m.pitchPool(settings.octaves,'violin');
             const midi = m.pickMidi(item.pc,pool,previous,settings.known);
             assert.equal(midi % 12,item.pc);
+            assert(!TrainingCore.sameNoteName(midi,previous));
             assert(midi >= 60 && midi <= 95);
             checkRegister(midi,pool,previous);
             previous = midi;
@@ -66,6 +68,7 @@ for (const inst of ['violin','piano']) {
                 for (const q of plan) {
                     const midi = m.pickMidi(q.pc,pool,prior,known);
                     assert.equal(midi%12,q.pc);
+                    assert(!TrainingCore.sameNoteName(midi,prior));
                     assert(octaves.includes(m.octaveOf(midi)) && m.supports(q.instrument,midi));
                     checkRegister(midi,pool,prior);
                     prior = midi; checked++;
@@ -76,13 +79,14 @@ for (const inst of ['violin','piano']) {
 }
 // The planned name is never replaced; the most recent sound (here an example, D4) only moves the octave.
 for(let i=0;i<100;i++){
-    assert.equal(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],62),89);
-    assert([65,89].includes(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5])),'both F are an octave from F5');
+    assert.equal(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],62,{allowRepeats:true}),89);
+    assert.notEqual(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],62) % 12,5);
+    assert([65,89].includes(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],null,{allowRepeats:true})),'both F are an octave from F5');
 }
 // A name may follow itself, so the previous answer predicts nothing about the next one.
 let ff = 0, fAny = 0, of = 0, oAny = 0;
 for (let n = 0; n < 4000; n++) {
-    const block = m.plan(m.defaults([5]),'learn','violin');
+    const block = m.plan({...m.defaults([5]),allowRepeats:true},'learn','violin');
     for (let i = 1; i < block.length; i++) {
         if (block[i-1].pc === 5) {fAny++; if (block[i].pc === 5) ff++;}
         else {oAny++; if (block[i].pc === 5) of++;}
@@ -95,17 +99,20 @@ console.log('PASS '+checked+' consecutive focused targets, mixed instruments, se
 console.log('PASS: course size, pitch selection, outside trials and instrument mix');
 
 // Wong et al. (2025): 1,183 ms for one name to 2,028 ms for twelve, plus 150 ms for touch input.
-assert.equal(m.answerWindow('strict',1),1333);
-assert.equal(m.answerWindow('strict',12),2178);
-assert.equal(m.answerWindow('relaxed',1),2033);
+assert.equal(m.answerWindow('fast'),1333);
+assert.equal(m.answerWindow('strict'),1333,'2.8.3: no scaling by the number of buttons');
+assert.equal(m.answerWindow('relaxed'),1333);
 assert.equal(m.answerWindow('off',5),null);
-assert.equal(m.defaults().limit,'strict');
+assert.equal(m.defaults().limit,'fast');
 assert(m.validSettings({...m.defaults(),limit:'relaxed'},'violin'));
-assert(!m.validSettings({...m.defaults(),limit:'fast'},'violin'));
+assert(m.validSettings({...m.defaults(),limit:'fast'},'violin'), '2.8.2: fixed 1.3 s window');
+assert(!m.validSettings({...m.defaults(),limit:'rapid'},'violin'));
+assert.equal(m.answerWindow('fast',12),1333);
 console.log('PASS answer windows');
 
 const now = Date.now(), settings = m.defaults([5,4]);
-const shared = {protocol:m.protocol,sourceVersion:m.sourceVersion,source:'violin',kind:'learn',known:[5,4]};
+const shared = {protocol:m.protocol,sourceVersion:m.sourceVersion,source:'violin',kind:'learn',known:[5,4],
+    responseMode:settings.responseMode,limit:settings.limit,allowRepeats:settings.allowRepeats,octaves:settings.octaves};
 const sessions = ['a','b'].map(id => ({...shared,id,completed:true,started:now-1000}));
 const rows = [];
 function add(pitch, guess, extras={}) {
@@ -130,7 +137,8 @@ sessions[1].started=now-15*86400000; assert(!promote().ready); sessions[1].start
 sessions[1].known=[5]; assert(!promote().ready); sessions[1].known=[5,4];
 assert(!m.promotion(rows,sessions,settings,'piano',now).ready);
 const out = {...shared,pitch:67,replayed:0,result:'answered',guess:'out'};
-assert(m.correct(out)); assert(!m.correct({...out,guess:'unsure'}));
+assert(!m.correct(out)); assert(m.correct({...out,guess:7}));
+assert(m.correct({...out,responseMode:'set'})); assert(!m.correct({...out,guess:'unsure'}));
 assert.equal(m.counts([out,{...out,guess:5},{...out,replayed:1,guess:5}]).alarms,1);
 const relativeTarget = {...out,sessionId:'a',timbre:'violin',pitch:65,result:'relative',guess:null};
 const relativeStats = m.counts([relativeTarget]);
@@ -143,11 +151,44 @@ const lateStats = m.counts([lateTarget,{...out,result:'timeout',guess:null}]);
 assert.equal(lateStats.targets,1); assert.equal(lateStats.hits,0); assert.equal(lateStats.outside,0); assert.equal(lateStats.late,2);
 rows.push({...lateTarget,sessionId:'a',timbre:'violin'});assert(!promote().ready,'late answers lower the hit rate');rows.pop();
 assert(promote().ready);
-// Blocks recorded before protocol 8 stay readable but no longer support a new-note suggestion.
-assert(m.isFocus({...shared,protocol:7}));
+// Blocks recorded before protocol 9 stay readable but no longer support a new-note suggestion.
+assert(m.isFocus({...shared,protocol:7})); assert(m.isFocus({...shared,protocol:8}));
 sessions[1].protocol=7; assert(!promote().ready,'protocol 7 blocks do not count'); sessions[1].protocol=m.protocol;
 assert(promote().ready);
 console.log('PASS: promotion thresholds, replay, cold, old records and separate instruments');
+
+// The blind check is independent of study settings; a fixed-size block has no fixed name quotas.
+const checkSettings = {...m.defaults([5]), octaves:[4,5,6]};
+const frequencies = Array(12).fill(0), spread = new Set();
+for (let block = 0; block < 3000; block++) {
+    const plan = m.plan(checkSettings,'cold','violin');
+    spread.add(plan.filter(q => q.pc === 5).length);
+    plan.forEach(q => frequencies[q.pc]++);
+}
+assert(frequencies.every(n => n > 2650 && n < 3350));
+assert(spread.has(0) && spread.has(2));
+assert(m.plan({...m.defaults([5]),octaves:[3]},'cold','violin').every(q => [7,8,9,10,11].includes(q.pc)));
+assert.equal(m.plan({...m.defaults([5]),octaves:[3]},'learn','violin').length,0);
+assert.equal(m.namesFor('name',[5]).length,12);
+assert.deepEqual(m.namesFor('set',[5]),[5]);
+const registers = new Set();
+for (let i = 0; i < 120; i++) registers.add(m.pickMidi(5,m.pitchPool([4,5,6],'violin'),60,[5],null,{blind:true}));
+assert.deepEqual([...registers].sort(),[65,77,89]);
+const checkRow = {...shared,kind:'cold',known:m.namesFor('name',[]),pitch:68,guess:8,result:'answered',replayed:0,poolSize:12};
+assert(m.correct(checkRow)); assert(!m.correct({...checkRow,guess:'out'}));
+const group = [ {...checkRow,eligibleCold:true}, {...checkRow,result:'relative'}, {...checkRow,result:'timeout'},
+    {...checkRow,guess:'unsure'}, {...checkRow,result:'interrupted'}, {...checkRow,result:'audio-error'},
+    {...checkRow,firstRecorded:true}, {...checkRow,eligibleCold:true,poolSize:5},
+    {...checkRow,protocol:8,eligibleCold:true} ];
+assert.deepEqual(m.namingScores(group),{rested:{hits:1,total:1},limited:{hits:1,total:1},
+    firstUse:{hits:1,total:1},warm:{hits:0,total:3}});
+const midnight = Date.parse('2026-11-24T15:00:00Z');
+assert(!APPitchScience.rested(midnight-60000,midnight+60000));
+assert(!APPitchScience.rested(midnight,midnight+APPitchScience.restMs-1));
+assert(APPitchScience.rested(midnight,midnight+APPitchScience.restMs));
+assert(!APPitchScience.rested(null,midnight));
+assert.equal(APPitchScience.median([900,200]),550);
+console.log('PASS exact-name blind checks, balanced names, randomized first register, prior versions and first-note groups');
 
 const ctx = {currentTime:1,outputLatency:.1,baseLatency:.05};
 assert.deepEqual(m.outputClock(ctx,1.05,1000),{when:1150,method:'context-estimate'});

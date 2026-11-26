@@ -22,11 +22,12 @@
         const last = Math.floor((to - 11) / 12) * 12 + 11;
         return first <= last ? {from:first,to:last} : null;
     }
-    // The answer is a pitch class: F4 and F5 are the same answer.
-    // Each note name is drawn without looking at the previous question, so the
-    // previous answer never rules a name in or out. Only the register depends on
-    // the previous note: more than an octave away whenever the range allows.
-    function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null}) {
+    function allowsRepeatedNames(id) {
+        try { return JSON.parse(localStorage.getItem('ap-focus-settings-' + id))?.allowRepeats === true; }
+        catch (_) { return false; }
+    }
+    // The user can opt into the unrestricted 2.8 sequence for AP practice.
+    function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null,allowRepeats=false,avoid=null}) {
         if (!Number.isInteger(from)||!Number.isInteger(to)||from<0||to>127||to<from||
             !Number.isInteger(total)||total<1) return [];
         const all=Array.from({length:to-from+1},(_,i)=>from+i);
@@ -56,7 +57,14 @@
         const result=[];
         let prior=previousMidi;
         for (let i=0;i<total;i++) {
-            const pc=TrainingCore.choose(names,weights);
+            let eligible = names.filter(pc => allowRepeats || !TrainingCore.sameNoteName(pc,prior));
+            // 2.8.2: a labelled note heard just before the first question counts as its previous note too.
+            if (i === 0 && !allowRepeats && Number.isInteger(avoid)) {
+                const clear = eligible.filter(pc => !TrainingCore.sameNoteName(pc,avoid));
+                if (clear.length || forcedPC !== null) eligible = clear;
+            }
+            if (!eligible.length) return [];
+            const pc = TrainingCore.choose(eligible, eligible.map(name => weights[names.indexOf(name)]));
             const next=TrainingCore.farPitch(common.map(octave=>12*octave+pc),prior);
             result.push(next); prior=next;
         }
@@ -84,17 +92,41 @@
     // Both trainers share storage when served from one origin; a note heard on the
     // sibling site also ends a break. Other origins and devices remain undetectable.
     const SITE_IDS = ["piano", "violin"];
+    let latestPractice = null;
     function lastPracticeAt(id) {
         try {
             const stamps = [...new Set([id, ...SITE_IDS])]
                 .map((site) => Number(localStorage.getItem(`ap-last-practice-at-${site}`)) || 0);
-            return Math.max(...stamps) || null;
-        } catch (_) { return null; }
+            return Math.max(...stamps, latestPractice || 0) || null;
+        } catch (_) { return latestPractice; }
+    }
+    const restMs = 4 * 3600000;
+    const rested = (last, now = Date.now()) => Number.isFinite(last) && now - last >= restMs;
+    const labelKey = 'ear-trainer-ap-labelled-time', clearedKey = 'ear-trainer-ap-cleared-label';
+    let localLabelAt = 0, localClearedAt = 0;
+    function lastLabelAt() {
+        try {
+            localLabelAt = Math.max(localLabelAt, Number(localStorage.getItem(labelKey)) || 0);
+            localClearedAt = Math.max(localClearedAt, Number(localStorage.getItem(clearedKey)) || 0);
+        } catch (_) {}
+        return localLabelAt > localClearedAt ? localLabelAt : 0;
+    }
+    function markLabel(id) {
+        localLabelAt = Date.now();
+        try { localStorage.setItem(labelKey, String(localLabelAt)); } catch (_) {}
+        markPractice(id);
+    }
+    function clearLabel(stamp) {
+        // A newer labelled example in another tab must survive completion of this reset.
+        if (!stamp || lastLabelAt() !== stamp) return;
+        localClearedAt = stamp;
+        try { localStorage.setItem(clearedKey, String(stamp)); } catch (_) {}
     }
     function markPractice(id) {
+        latestPractice = Date.now();
         try {
             localStorage.setItem(`ap-practiced-day-${id}`, day());
-            localStorage.setItem(`ap-last-practice-at-${id}`, String(Date.now()));
+            localStorage.setItem(`ap-last-practice-at-${id}`, String(latestPractice));
         } catch (_) {}
     }
     function dbFor(id, namespace = "ap") {
@@ -175,5 +207,5 @@
             meanError: chroma.length ? chroma.reduce((sum, r) => sum + chromaDistance(r.target % 12, r.guess), 0) / chroma.length : null};
     }
     root.APPitchScience = {ORDER, day, learned, makeSequence, effectiveRange, octaveBases, chromaDistance, loadCourse, saveCourse,
-        practiceToday, lastPracticeAt, markPractice, putRows, flushWrites, allRows, metrics};
+        practiceToday, lastPracticeAt, markPractice, markLabel, lastLabelAt, clearLabel, rested, restMs, allowsRepeatedNames, putRows, flushWrites, allRows, median, metrics};
 }(window));

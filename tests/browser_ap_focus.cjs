@@ -32,21 +32,26 @@ async function rows(page, site) {
 }
 
 (async () => {
-    const browser = await playwright.chromium.launch({args:['--autoplay-policy=no-user-gesture-required']});
+    const browser = await playwright.chromium.launch({executablePath:process.env.EAR_TRAINER_CHROMIUM || undefined,args:['--autoplay-policy=no-user-gesture-required']});
     const page = await browser.newPage({viewport:{width:390, height:844}});
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => {if (m.type() === 'error') errors.push(m.text());});
     await page.goto(base + '#ap');
     await page.waitForSelector('#focusModes button[data-mode="learn"]');
+    assert.equal(await page.isChecked('#focusRepeats'), false);
+    assert.equal(await page.isChecked('#focusRecognition'), false);
     assert.match(await page.textContent('#focusRules'), /1\.3 s/);
     const options = await page.$$eval('#focusLimit option', o => o.map(x => x.textContent));
-    assert.deepEqual(options.slice(0, 2), ['Strict · 1.3 s', 'Relaxed · 2.0 s']);
+    assert.deepEqual(options, ['1.3 s', 'No limit · intervals can creep in']);
     console.log('home:', await page.textContent('#focusRules'), '|', options.join(' | '));
 
     // 1. Learning block, first question: no reset (first sound of the day); let the window pass.
     await page.click('#focusModes button[data-mode="learn"]');
     await answerPhase(page);
+    assert.equal(await page.locator('#focusAnswers .af-keys button').count(),12);
+    assert.equal(await page.locator('#focusAnswers .af-octave-row button').count(),3);
+    assert.equal(await page.locator('#focusAnswers button[data-answer="out"]').count(),1);
     assert.equal(await page.isVisible('#focusTimer'), true, 'countdown bar shown');
     assert.match(await page.$eval('#focusTimer span', s => s.style.transition), /transform \d+ms linear/);
     await page.waitForFunction(() => /Too slow/.test(document.getElementById('focusPrompt').textContent), null, {timeout:4000});
@@ -61,7 +66,8 @@ async function rows(page, site) {
     await answerPhase(page);
     const resetMs = Date.now() - resetStart;
     const pitch = await target(page);
-    await page.click(`#focusAnswers button[data-answer="${pitch % 12 === 5 ? 5 : 'out'}"]`);
+    await page.click(`#focusAnswers button[data-answer="${pitch % 12}"]`);
+    await page.click(`#focusAnswers button[data-octave="${Math.floor(pitch / 12) - 1}"]`);
     const prompt = await page.textContent('#focusPrompt');
     console.log('reset + gap ≈', resetMs, 'ms; fast answer:', prompt);
     assert(resetMs > 2900 && resetMs < 5000, 'reset 2.4 s + 0.7–1.2 s gap');
@@ -78,7 +84,7 @@ async function rows(page, site) {
     // 4. Consolidation right after labelled feedback starts with the 20 s glide.
     const consolidate = page.locator('#focusContinue button', {hasText:'Consolidate'});
     await consolidate.click();
-    await page.waitForFunction(() => /Clearing labelled notes/.test(document.getElementById('focusPrompt').textContent), null, {timeout:3000});
+    await page.waitForFunction(() => /Interference sound after a labelled note/.test(document.getElementById('focusPrompt').textContent), null, {timeout:3000});
     const glideStart = Date.now();
     await answerPhase(page, 40000);
     const glideMs = Date.now() - glideStart;
@@ -90,16 +96,16 @@ async function rows(page, site) {
     await page.waitForSelector('#focusSummary:not([hidden])');
 
     const data = await rows(page, 'violin');
-    const trials = data.trials.filter(r => r.protocol === 8).sort((a, b) => a.playedAt - b.playedAt);
+    const trials = data.trials.filter(r => r.protocol === 9).sort((a, b) => a.playedAt - b.playedAt);
     assert.equal(trials.length, 3);
     assert.equal(trials[0].result, 'timeout'); assert.equal(trials[0].limitMs, 1333); assert.equal(trials[0].reset, null);
     assert.equal(trials[0].rtMs, null);
     assert.equal(trials[1].result, 'answered'); assert.equal(trials[1].correct, true); assert.equal(trials[1].reset, 'short');
-    assert(trials[1].rtMs < 1333);
+    assert(trials[1].rtMs < 2178);
     assert(trials[1].jump >= 12, 'register jump ' + trials[1].jump);
     assert.equal(trials[2].reset, 'long'); assert.equal(trials[2].kind, 'consolidate');
-    const blocks = data.sessions.filter(s => s.protocol === 8);
-    assert(blocks.some(s => s.kind === 'learn' && s.late === 1 && s.limit === 'strict' && s.limitMs === 1333 && s.resetOn === true));
+    const blocks = data.sessions.filter(s => s.protocol === 9);
+    assert(blocks.some(s => s.kind === 'learn' && s.late === 1 && s.limit === 'fast' && s.limitMs === 1333 && s.resetOn === true));
     console.log('records:', trials.map(t => `${t.kind}:${t.result}:${t.reset}:jump=${t.jump}:rt=${t.rtMs}`).join(' | '));
 
     // 5. Classic AP learning: one question with the shared reset.
@@ -108,8 +114,9 @@ async function rows(page, site) {
     await page.click('#playButton');
     await page.waitForFunction(() => [...document.querySelectorAll('#apAnswers button')].some(b => !b.hidden && !b.disabled), null, {timeout:20000});
     const classic = await target(page);
-    await page.click(`#apAnswers button[data-pitch-class="${classic % 12}"]:not([hidden])`).catch(() =>
-        page.click('#apAnswers button[data-pitch-class="out"]'));
+    const exact = page.locator(`#apAnswers button[data-pitch-class="${classic % 12}"]`);
+    if (await exact.isVisible()) await exact.click();
+    else await page.click('#apAnswers button[data-pitch-class="out"]');
     await page.waitForTimeout(300);
     console.log('classic:', await page.textContent('#apMessage'));
 
@@ -127,6 +134,28 @@ async function rows(page, site) {
             '|', await page.textContent('#focusInstrument'));
     }
     assert.equal(seen.size, 5, 'each language has its own text');
+    // A check after a four-hour break ignores the F-only learning set.
+    await page.selectOption('#languageSelect','en');
+    await page.evaluate(() => {
+        for (const instrument of ['piano','violin']) localStorage.setItem('ap-last-practice-at-' + instrument, String(Date.now()-5*3600000));
+    });
+    await page.click('#focusModes button[data-mode="cold"]');
+    await answerPhase(page);
+    assert.equal(await page.locator('#focusAnswers .af-keys button').count(),12);
+    assert.equal(await page.locator('#focusAnswers button[data-answer="out"]').count(),0);
+    assert.equal(await page.isVisible('#focusReplay'),false);
+    const firstNote = await target(page);
+    await page.click(`#focusAnswers button[data-answer="${firstNote%12}"]`);
+    await page.click(`#focusAnswers button[data-octave="${Math.floor(firstNote/12)-1}"]`);
+    assert.equal(await page.textContent('#focusPrompt'),'Answer saved');
+    await page.click('#focusNext');
+    await answerPhase(page);
+    assert.notEqual((await target(page))%12,firstNote%12);
+    await page.click('#focusRelative');
+    await page.click('#focusEnd');
+    await page.waitForSelector('#focusSummary:not([hidden])');
+    assert.match(await page.textContent('#focusScore'),/First note after ≥4 h \(all 12 names\) 1\/1/);
+    assert.match(await page.textContent('#focusScore'),/Continuous practice 0\/1/);
     assert.deepEqual(errors, [], errors.join('\n'));
     console.log('PASS browser: focused learning, timeout, reset, fast answer, summary, 20 s glide, records, classic mode, six languages');
     await browser.close();

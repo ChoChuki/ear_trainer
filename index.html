@@ -46,8 +46,8 @@
             <p id="status" class="status" aria-live="polite"></p>
         </header>
 
-        <a class="af-entry secondary" href="#ap" id="focusEntry">Focused AP practice</a>
-        <section id="focusPanel" hidden aria-labelledby="focusTitle">
+        <nav class="af-entries" aria-label="Focused practice"><a class="af-entry secondary" href="#ap" id="focusEntry">Focused AP practice</a><a class="af-entry secondary" href="#iv" id="ivEntry">Focused interval practice</a></nav>
+        <section id="focusPanel" class="af-panel" hidden aria-labelledby="focusTitle">
             <div class="af-head"><div><p class="af-instrument" id="focusInstrument"></p><h2 id="focusTitle"></h2></div><a href="#tools" data-af="back"></a></div>
             <div id="focusHome" hidden>
                 <p id="focusDaily"></p>
@@ -61,8 +61,10 @@
                     <div id="focusPicker" class="af-notes" role="group"></div>
                     <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
                     <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
+                    <label class="af-option"><span data-af="recognition"></span><input id="focusRecognition" type="checkbox"></label>
+                    <label class="af-option"><span data-af="repeats"></span><input id="focusRepeats" type="checkbox"></label>
                     <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
-                    <label class="af-option"><span data-af="limit"></span><select id="focusLimit"><option value="strict"></option><option value="relaxed"></option><option value="off"></option></select></label>
+                    <label class="af-option"><span data-af="limit"></span><select id="focusLimit"><option value="fast"></option><option value="off"></option></select></label>
                     <p class="af-muted" data-af="limitHelp"></p>
                     <label class="af-option"><span data-af="share"></span><select id="focusShare"><option value="0">0%</option><option value="0.2">20%</option><option value="0.5">50%</option></select></label>
                     <details><summary data-af="thresholds"></summary>
@@ -74,6 +76,7 @@
                 <details id="focusEvidence"><summary data-af="evidence"></summary>
                     <p id="focusProgress"></p><p id="focusRates"></p><p id="focusFirst"></p>
                     <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option></select></div>
+                    <details id="focusRestLog" hidden><summary data-af="restLog"></summary><ol id="focusRestRows"></ol></details>
                     <table><thead><tr><th data-af="note"></th><th data-af="practice"></th><th data-af="check"></th><th data-af="days"></th></tr></thead><tbody id="focusStats"></tbody></table>
                     <p class="af-muted" data-af="recordHelp"></p><p class="af-muted" data-af="countsLocal"></p>
                     <div class="af-actions"><button class="secondary" type="button" id="focusBackup" data-af="backup"></button><button class="secondary" type="button" id="focusRestore" data-af="restore"></button><input type="file" id="focusFile" hidden accept=".json,application/json"></div>
@@ -84,7 +87,7 @@
                 <p class="af-live" id="focusPrompt" role="status" aria-live="polite"></p>
                 <div class="af-timer" id="focusTimer" aria-hidden="true" hidden><span></span></div>
                 <div id="focusAnswers" class="af-notes"></div>
-                <p class="af-muted" id="focusAnswerHint" data-af="helpAnswer"></p>
+                <p class="af-muted" id="focusAnswerHint"></p>
                 <div class="af-actions">
                     <button type="button" class="primary" id="focusNext"></button>
                     <button type="button" class="secondary" id="focusRelative" data-af="relative"></button>
@@ -99,6 +102,58 @@
                 <details><summary data-af="results"></summary><ol id="focusReview"></ol></details>
             </div>
             <p id="focusNotice" class="af-muted" aria-live="polite"></p>
+        </section>
+
+        <section id="ivPanel" class="af-panel" hidden aria-labelledby="ivTitle">
+            <div class="af-head"><div><p class="af-instrument" id="ivInstrument"></p><h2 id="ivTitle"></h2></div><a href="#tools" data-iv="back"></a></div>
+            <div id="ivHome" hidden>
+                <p id="ivDaily"></p>
+                <fieldset class="af-octaves"><legend data-iv="octaves"></legend><div id="ivOctaves" class="af-notes"></div></fieldset>
+                <p id="ivRangeHint" class="af-muted" role="status" hidden></p>
+                <div id="ivModes" class="af-modes"></div>
+                <p id="ivRules" class="af-muted"></p>
+                <div class="af-group"><strong data-iv="set"></strong><span id="ivCurrent"></span><button class="primary" type="button" id="ivAdd" hidden></button></div>
+                <details id="ivGuide"><summary data-iv="examples"></summary><div id="ivExamples"></div></details>
+                <details id="ivSettings"><summary data-iv="settings"></summary>
+                    <div id="ivPicker" class="af-notes" role="group"></div>
+                    <label class="af-option"><span data-iv="direction"></span><select id="ivDirection"><option value="up"></option><option value="down"></option><option value="both"></option><option value="harmonic"></option></select></label>
+                    <label class="af-option"><span data-iv="size"></span><select id="ivSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
+                    <label class="af-option"><span id="ivAutoText"></span><input id="ivAuto" type="checkbox"></label>
+                    <label class="af-option"><span data-iv="recognition"></span><input id="ivRecognition" type="checkbox"></label>
+                    <label class="af-option"><span data-iv="repeats"></span><input id="ivRepeats" type="checkbox"></label>
+                    <label class="af-option"><span data-iv="limit"></span><select id="ivLimit"><option value="fast"></option><option value="off"></option></select></label>
+                    <p class="af-muted" data-iv="limitHelp"></p>
+                    <details><summary data-iv="thresholds"></summary>
+                        <label class="af-option"><span data-iv="hit"></span><input id="ivHit" type="number" min="50" max="100"></label>
+                        <label class="af-option"><span data-iv="fa"></span><input id="ivFa" type="number" min="0" max="50"></label>
+                    </details>
+                </details>
+                <details id="ivEvidence"><summary data-iv="evidence"></summary>
+                    <p id="ivProgress"></p><p id="ivRates"></p><p id="ivChecks"></p>
+                    <table><thead><tr><th data-iv="interval"></th><th data-iv="practice"></th><th data-iv="check"></th><th data-iv="days"></th></tr></thead><tbody id="ivStats"></tbody></table>
+                    <p class="af-muted" data-iv="recordHelp"></p><p class="af-muted" data-iv="countsLocal"></p>
+                    <div class="af-actions"><button class="secondary" type="button" id="ivBackup" data-iv="backup"></button><button class="secondary" type="button" id="ivRestore" data-iv="restore"></button><input type="file" id="ivFile" hidden accept=".json,application/json"></div>
+                </details>
+            </div>
+            <div id="ivRound" hidden>
+                <p class="af-instrument" id="ivIndex"></p>
+                <p class="af-live" id="ivPrompt" role="status" aria-live="polite"></p>
+                <div class="af-timer" id="ivTimer" aria-hidden="true" hidden><span></span></div>
+                <div id="ivAnswers" class="af-notes"></div>
+                <p class="af-muted" id="ivAnswerHint"></p>
+                <div class="af-actions">
+                    <button type="button" class="primary" id="ivNext"></button>
+                    <button type="button" class="secondary" id="ivReplay" data-iv="replay"></button>
+                    <button type="button" class="secondary" id="ivAnswerSound" data-iv="answerSound"></button>
+                    <button type="button" class="af-plain" id="ivFault" data-iv="audio"></button>
+                </div>
+                <button type="button" class="af-plain af-end" id="ivEnd" data-iv="finish"></button>
+            </div>
+            <div id="ivSummary" hidden><h3 id="ivSummaryTitle"></h3><p id="ivScore"></p>
+                <div id="ivContinue" class="af-actions"></div>
+                <details><summary data-iv="results"></summary><ol id="ivReview"></ol></details>
+            </div>
+            <p id="ivNotice" class="af-muted" aria-live="polite"></p>
         </section>
 
         <p id="storageWarning" role="alert" hidden></p>
@@ -150,6 +205,7 @@
                         <option value="apLearn">AP learning</option>
                         <option value="apCold">AP cold check</option>
                         <option value="rpCourse">Relative pitch course</option>
+                        <option value="ivFocus">Focused interval practice</option>
                     </select>
                 </label>
                 <button id="applyButton" class="secondary" disabled>Apply</button>
@@ -214,6 +270,8 @@
                     <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
                 </div>
                 <label class="option-row" id="autoNextRow"><input id="autoNextCheck" type="checkbox" checked><span id="autoNextText">Continue automatically after each answer</span></label>
+                <label class="limit-picker" for="answerLimitSelect" id="answerLimitRow"><span id="answerLimitLabel">Answer window</span><select id="answerLimitSelect"><option value="fast">1.3 s</option><option value="off">No limit</option></select></label>
+                <p id="answerLimitHelp" class="ap-description"></p>
             </div>
         </section>
 
@@ -297,6 +355,7 @@
             <div id="answerText" class="answer-text">Free play mode</div>
             <span id="referenceChip" class="reference-chip" hidden></span>
             <button id="intervalReplayButton" class="secondary interval-replay-button" type="button" hidden>Replay</button>
+            <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
         </section>
 
         <section class="keyboard-card">
@@ -314,6 +373,7 @@
     <script src="./i18n.js"></script>
     <script src="./demo-score.js"></script>
     <script src="./training-core.js"></script>
+    <script src="./answer-timer.js"></script>
     <script src="./training-copy.js"></script>
     <script src="./ap-science.js"></script>
     <script src="./training-tracker.js"></script>
@@ -325,6 +385,9 @@
     <script src="./ap-focus-model.js"></script>
     <script src="./ap-focus-audio.js"></script>
     <script src="./ap-focus.js"></script>
+    <script src="./interval-focus-copy.js"></script>
+    <script src="./interval-focus-model.js"></script>
+    <script src="./interval-focus.js"></script>
     <script src="./app.js"></script>
 </body>
 </html>

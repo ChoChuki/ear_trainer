@@ -203,6 +203,6 @@
     const cfg=LEVELS[index];
     return cfg.directionOnly?T(lang,'rpDirections'):`${Math.min(...cfg.distances)}–${Math.max(...cfg.distances)} ${T(lang,'rpSemitones')}`;
   }
-  function csv(records) {const keys=['protocol','sessionId','timbre','repair','day','site','level','activity','direction','reference','target','distance','signed','selected','selectedMidi','correct','replayed','hints','rtMs','time','id','checkedBy','producedMidi','cents'];return ['\ufeff'+keys.join(','),...(records||[]).map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\r\n');}
+  function csv(records) {const keys=['protocol','sessionId','timbre','repair','day','site','level','activity','direction','reference','target','distance','signed','selected','selectedMidi','correct','replayed','hints','rtMs','time','id','checkedBy','producedMidi','cents','result','limitMs','lateSelected'];return ['\ufeff'+keys.join(','),...(records||[]).map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\r\n');}
   root.RelativePitchCourse=Object.freeze({LEVELS,ALL_LEVEL,SHORT,PROTOCOL,availableDistances,drawPair,T,name,label,referencePool,reviewWeights,focusList,createRound,question,memoryKey,levelName,load,save,hydrate,append,whenSaved,history,csv});
 })(typeof window!=='undefined'?window:globalThis);

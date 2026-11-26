@@ -1,40 +1,77 @@
-# Ear Trainer · Violin & Piano 2.8.0
+# Ear Trainer 2.8.3 · 小提琴与钢琴
 
-[Open focused AP practice](./#ap)
+解压后，单文件入口是 `single-file/index.html`。用能运行 JavaScript 和 Web Audio 的浏览器打开。这个文件内嵌了原版小提琴、钢琴音源和播放器。包根目录的 `index.html` 是带独立资源的入口，需要同目录的 JS、CSS 和 `vendor/`。音色授权见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
-## 2.8.0: closing the interval routes in AP practice
+首次打开默认小提琴。页首可切换钢琴。集中训练首页可勾选任意组合的可用八度，每件乐器分别保存选择。小提琴覆盖 G3–C8，钢琴覆盖 A0–C8，两种乐器混合时使用共有音域。
 
-In 2.7.0 a note could still be named from the previous one. Four routes stayed open, and 2.8.0 closes or narrows each:
+## 2.8.3 更新
 
-1. **The sequence gave answers away.** Consecutive questions never shared a note name, and the first question after an example never used the example's name. With one learned name, F was always followed by “Other”. Note names are now drawn independently of the previous question: a name may follow itself as often as chance predicts. In focused practice a block is a plain shuffle; in the classic AP modes each name is drawn with its weight.
-2. **Successive notes were often a semitone apart.** Only the register now depends on the previous note (or on the last labelled example): the next note is more than 12 semitones away whenever the selected octaves allow, otherwise as far as possible. Pitch-naming tests use the same rule to blunt interval judgements (for example the pre/post tests of Wong et al. 2025). The default octaves 4–6 allow it for almost every note; with less than three octaves a hint appears.
-3. **The interference was easy to hold through.** The reset before a question now lasts 2.4 s: about 18 short, non-tempered tones over the practice register, roughly 40% of them 0.3–1.2 semitones from the previous note (where an intervening tone disturbs pitch memory most; Deutsch 1970, 1972) and none on the previous note itself in any octave, then a fast Shepard glide through every chroma, then a 0.7–1.2 s pause. When a block without feedback (consolidation or the independent check) starts within five minutes of a labelled sound (examples, “Hear the answer” or active-learning feedback), a 20 s Shepard glide plays first, as between sample tones and no-feedback levels in Wong et al. (2025). The reset setting uses a new storage key, so it is on again for everyone; it can still be switched off.
-4. **There was no time pressure.** “I used an interval” relies on noticing it. Focused practice now has an answer window, timed from the estimated audible onset: **Strict** (default) follows Wong et al. (2025), 1,183 ms with one learned name rising linearly to 2,028 ms with twelve, plus 150 ms for touch input and onset uncertainty; **Relaxed** adds 0.7 s; **Off** removes it. A countdown bar shows the window. A tap after the window, or none, is recorded as *too slow*: an attempt without a hit. Active learning then shows the name and waits for Next; the other modes reveal it at the end. A finger already on a button when the window closes still counts by its touch time. Learning feedback and the block review show each response time, and the summary adds late answers and the median correct time. A replay cancels the window (a replayed note is already assisted).
+作答时限不再随按钮数量变化：所有练习只有“1.3 秒”（默认）和“不限时”。旧版的“严格”“宽松”“依选项数”升级后都改为 1.3 秒。
 
-Focused records now carry protocol 8 and add `limitMs`, `lateGuess`, `reset` (`short`/`long`) and `jump` (semitones from the previous sound); sessions add `late`, `limit`, `limitMs` and `resetOn`. Protocol 7 blocks stay in the history and statistics but no longer count towards a new-note suggestion, because interval routes could raise their scores. The classic AP modes share the sequence, register and reset changes (protocol 7 there); their response limit is unchanged. Tests: `tests/test_ap_sequence.cjs` (replaces `test_ap_no_repeat.cjs`), `tests/test_ap_reset.cjs` and an updated `tests/test_ap_focus.cjs`.
+AP 集中训练的答案改为两组固定按钮：音名（下排白键 C–B，上排五个黑键）和八度数字（所选练习八度）。各点一个就是答案，顺序不限，计时以第二次点击为准；学习音集再大，按钮也不变。学习与巩固另有“其他音”，三个模式都有“不确定”，“我是靠音程推算的”仍在下方。音名对就计为答对，便于和以前的记录比较；八度单独统计为“八度也对”。打开“其他音也算答对”后，音集外的音答“其他音”或答出正确音名都算对。
 
-References: Deutsch, D. (1970). Tones and numbers: Specificity of interference in immediate memory. *Science*, 168, 1604–1605 · Deutsch, D. (1972). Mapping of interactions in the pitch memory store. *Science*, 175, 1020–1022 · Shepard, R. N. (1964). Circularity in judgments of relative pitch. *JASA*, 36, 2346–2353 · Wong, Y. K., Cheung, L. Y. T., Ngan, V. S. H., & Wong, A. C.-N. (2025). Learning fast and accurate absolute pitch judgment in adulthood. *Psychonomic Bulletin & Review*, 32, 1676–1688.
+音程集中训练和相对音程课程的答案按钮只显示半音数。
 
-## How it works
+## 2.8.2 更新
 
-Choose **Violin** or **Piano** in the header. The main link opens on violin. The [piano link](./?instrument=piano#ap) opens the same app on piano. Switching during a focused block saves the answered questions and ends that block. Each instrument uses its original practice history on the same browser origin.
+所有需要作答的练习都有作答时限：单音、两音、AP 挑战、AP 学习、AP 冷启动检查、相对音程课程（“先唱 / 先奏”自评除外），以及新增的音程集中训练。设置卡片里的“作答时限”统一管前面几项；两个集中训练各自在设置里保存。
 
-**Relative pitch course** and **Two notes** start with all twelve pitch classes across G3–E6 on violin or C2–B6 on piano. Change **From**, **To**, or **Notes** to narrow the selection for that instrument. The course starts with all its intervals (unison through two octaves). An explicit level limits the interval set. Each new question excludes the preceding target note name in every octave, including after reopening the app or switching instruments. This also applies to single-note tests, but no longer to AP exercises (see 2.8.0 above). Relative exercises can still test a unison or an octave within one question. Relative questions also change the interval when the settings provide another choice. Replay repeats the current question.
+时限从估计的发声时刻起算。两音和音程题从第二个音起算，同时发声的音程从两音一起响起时起算。答案按钮在发声时就能点，不再等音结束。超时记为答错，单独统计；重播过的题不计时。
 
-The focused course is integrated into the existing trainer. Open **Focused AP practice** on the home screen. On the first day you can listen to labelled examples and start active learning. On subsequent days the independent check has 12 single-listen questions before practice. Active learning gives immediate feedback. Consolidation gives feedback at the end of each block. Set the note names yourself, or accept the suggested next name when the practice evidence supports it.
+| 选项 | 时长 |
+| --- | --- |
+| 1.3 秒（默认） | 不论按钮多少，与 2.8.0 “F / 其他音”二选一的时限相同 |
+| 不限时 | 只记录反应时间 |
 
-All instrument notes in focused practice use the two original [WebAudioFont presets](THIRD_PARTY.md) and the same player as the regular exercises. Choose any combination of practice octaves on the focused home screen. The initial selection is 4, 5 and 6. Available notes run from G3 to C8 for violin and A0 to C8 for piano. Each instrument remembers its selection. The two-instrument mix uses pitches both can play. Guide examples, checks and practice use the selected octaves. Active learning and consolidation default to 24 questions. With two or more learned names and available outside notes, a quarter of each block comes from outside the set. With a single learned name, about 34–41% of questions use it. Any name, learned or outside, can follow itself. “Other” means outside the set. “Not sure” records uncertainty. The second instrument can be mixed at 20% or 50% after hearing its examples. Independent checks use the instrument selected in the header.
+另修正一处相邻同名：在示范、自由弹奏或答题提示里听过有音名的音之后 5 分钟内，下一题不会与它同音名，不同八度也算。2.8.1 只排除上一题，示范音只用来拉开八度。
 
-With the reset enabled, new focused questions follow the 2.4 s reset and pause described above, and the first question of a block without feedback after a labelled sound follows the 20 s glide. The first question before any practice sound that day, examples and replays play directly. “I used an interval” records how you answered. A target identified this way counts as an attempt and earns no independent hit. Its name appears immediately in active learning and at the end of the block in the other modes. Response time starts at the estimated audible onset of the note.
+## 绝对音高练习
 
-A new-note suggestion uses up to six completed protocol 8 focused practice blocks with the same learning set from the last fourteen days. The primary instrument needs two blocks, at least five first responses to each target and ten first responses outside the set. Default thresholds are a 75% equal-weight target hit rate and at most 25% false alarms. Replays, late answers and interrupted audio are identified separately. Thresholds and the learning set are editable. Each block and each trial retain the primary site, sound source and actual instrument.
+| 模式 | 怎么练 | 什么时候看到答案 |
+| --- | --- | --- |
+| 主动学习（Active learning） | 学习音集里的音出现得更频繁。答案是一个音名加一个八度数字，也可以选“其他音”“不确定”或“靠音程推算”。 | 每题作答后 |
+| 巩固练习（Consolidate） | 沿用当前学习音集和答题设置。 | 整组结束后 |
+| 盲听报音名（Blind note naming） | 12 题。题目从当前音域能发出的音名中抽取，独立于学习音集。每题播放一次，答案是一个音名加一个八度数字，音名对即计为报对，八度另计。做完第一题也可以结束。 | 本组结束后 |
 
-Answers use the original site's device-local AP database. The first visit picks up an existing course level or previous course evidence when available. Earlier course versions and scores remain available in the original AP history. Each site's focused records can be exported and restored under **Practice records**. The existing tracker combines active training across instruments and sessions. At 60 minutes per Tokyo calendar day it shows a dismissible in-app reminder, including during a round. Background time is excluded. The reminder is shown once per day in this browser. On a shared origin the two trainers can observe a previous local audio exposure; other devices or origins have separate histories.
+若你只在学 F，可以在设置里打开“其他音”，专练“是不是 F”。默认要求报出实际音名，所以即使能排除 F，仍需辨认剩余的音。设置中也能允许相邻音名重复。默认跨八度去重，F4 后接 F5 同样算重复；刚听过的有音名示范音也算上一音。主动重播属于同一道题。
 
-## Previous release notes
+相邻题会尽量相距至少 13 个半音。音域不足时，选择该音名与前音距离最远的可用八度。休息后的盲听首题另行随机选八度。题间干扰音、作答限时、八度和练习组长度均可调整。限时从估计的发声时刻起算，固定 1.3 秒，也可以关闭。程序单独记录超时及自行标记的音程推算。
 
-Independent PWA deployment. All files in this directory belong in the site's Cloudflare deployment root.
-Deploy the files at one site root with `vendor/` beside `index.html`. Both instrument presets and the player are included there. The release ZIP also includes `single-file/index.html`, which embeds those same files. HTTPS is required for PWA installation and for the optional microphone check.
+## 音程集中训练
+
+从页首的“音程集中训练”按钮或模式菜单进入（地址 `#iv`）。结构与 AP 集中训练相同，题目是两个音之间的音程（小二度到八度）。
+
+| 模式 | 怎么练 | 什么时候看到答案 |
+| --- | --- | --- |
+| 主动学习 | 学习音程集里的音程出现得更频繁，只学一个时约占三到四成。默认在全部音程中选一个，也可以打开“其他音程”。 | 每题作答后 |
+| 巩固练习 | 沿用当前设置。 | 整组结束后 |
+| 盲听音程 | 12 题，从所选八度能奏出的音程中均匀抽取。每题听一次，必须答出具体音程。 | 本组结束后 |
+
+每题在所选八度内随机取音区。相邻题的音程不同（设置里可允许重复），第二个音也不与上一题的目标音同音名。方向可选上行、下行、上下行混合或同时发声。新增音程的建议条件与 AP 相同：最近 14 天、相同设置的至少两组完整练习，每个学习音程至少 5 次首答，音程集外至少 10 次首答，平均命中率和误报率达到自设门槛。建议顺序是纯五度、八度、大三度、小三度、纯四度、大二度、大六度、小二度、小六度、小七度、大七度、三全音。记录保存在本浏览器，可导出、导入备份。示范和反馈只说出音程，不显示音名。
+
+## 怎么看自己有没有进步
+
+练习记录把**间隔至少 4 小时后的盲听首音**与**连续练习**分别列出。观察前一个数字时，看几天累积的“答对数 / 作答数”，也可以展开最近十二次休息后的首音，逐条核对日期、播放的音和你的回答。第一次使用、以及所选音域不足十二音名时的首音也分别显示。
+
+4 小时是便于重复比较的记录条件。本程序只知道同一浏览器和来源记录的练习，无法知道这期间是否在其他地方听过音乐。后续 11 题即使没有反馈，仍有上一题可供比较。选“不确定”、标记音程推算或超时，都会计入作答次数。播放失败和中断的题排除。
+
+旧版集中训练记录仍可从原来的历史记录查看并随 JSON 备份导出。新版盲听统计从 2.8.1 开始。新增学习音名的建议取最近 14 天、相同音集、八度、限时和答题设置的至多六组完整练习。达到自设门槛后，由你决定是否加入。
+
+## 相对音高和计时
+
+相对音高课程和双音练习默认使用当前乐器预设音域内的全部十二音名。两者都从第二个音起计时，超时的题记为答错并写入记录。手动选择音域、音名或课程级别后使用你的选择。相邻题的目标音跨八度去重。相对音高练习在选项允许时，也会更换相邻题的音程。
+
+同一浏览器来源下，两种乐器的有效练习时间可以分段累计。按东京日期，当天累计满 60 分钟会在训练器内提醒一次。暂停、长时间闲置和切到后台的时间不计入。
+
+## 版本对照
+
+2.7.0 排除相邻同名题，单独练 F 时，听到 F 后下一题必定属于“其他音”。2.8.0 允许连续同名，增加跨八度距离、题间干扰和可调限时。在两个版本的默认“独立检查”里，仅用 F / 其他音即可作答。2.8.1 把学习音集与可选答案分开，盲听检查始终要求具体音名。2.8.2 把作答时限扩展到所有作答类练习，并新增音程集中训练。2.8.3 改为固定 1.3 秒，AP 答案改为音名加八度两组按钮。模拟抽题只能验证程序行为。实际训练效果由使用者自己的跨日记录衡量。
+
+源代码包含六种界面语言、原版 WebAudioFont 乐器文件、可选的训练时长同步和 PWA 资源。若沿用既有部署，把根目录文件与 `vendor/` 一同放在原地址即可沿用该来源的浏览器数据。
+
+## Earlier releases and references
+
+Deutsch, D. (1970). Tones and numbers: Specificity of interference in immediate memory. *Science*, 168, 1604–1605 · Deutsch, D. (1972). Mapping of interactions in the pitch memory store. *Science*, 175, 1020–1022 · Shepard, R. N. (1964). Circularity in judgments of relative pitch. *JASA*, 36, 2346–2353 · Wong, Y. K., Cheung, L. Y. T., Ngan, V. S. H., & Wong, A. C.-N. (2025). Learning fast and accurate absolute pitch judgment in adulthood. *Psychonomic Bulletin & Review*, 32, 1676–1688.
 
 Round 3 (Claude) changes from 2.3.1, in short:
 
@@ -52,5 +89,3 @@ RP level structure, six languages, stored history formats (new fields are additi
 
 Updating an installed PWA: open it online once; when "Update to the new version" appears in the header, tap it
 outside a round (or close every window of the app and reopen it).
-
-See the full source package: README_START_HERE.md and docs/CLAUDE_ROUND3_REPORT_zh.md.

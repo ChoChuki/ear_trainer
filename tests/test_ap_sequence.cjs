@@ -38,7 +38,14 @@ const runCases = [
     {from:60,to:71,known:[5],total:20000,knownWeights:{5:4}},
 ];
 for (const c of runCases) {
-    const a = Array.from(S.makeSequence({...c,previousMidi:64}));
+    const hard = S.makeSequence({...c,previousMidi:64});
+    assert.equal(hard.length,c.total);
+    hard.forEach((m,i) => {
+        const prev = i ? hard[i-1] : 64;
+        assert.notEqual(m%12,prev%12);
+        checkRegister(m,prev,c.from,c.to);
+    });
+    const a = Array.from(S.makeSequence({...c,previousMidi:64,allowRepeats:true}));
     assert.equal(a.length,c.total);
     const count = Array(12).fill(0);
     let last = 64, same = 0, wide = 0;
@@ -58,7 +65,7 @@ for (const c of runCases) {
 }
 
 // The previous answer predicts nothing: with one learned name, F follows F as often as it follows Other.
-const seq = Array.from(S.makeSequence({from:60,to:95,total:40000,known:[5]}));
+const seq = Array.from(S.makeSequence({from:60,to:95,total:40000,known:[5],allowRepeats:true}));
 const after = {F:[0,0], O:[0,0]};
 for (let i = 1; i < seq.length; i++) {
     const key = seq[i-1] % 12 === 5 ? 'F' : 'O';
@@ -70,8 +77,9 @@ assert(Math.abs(pF - .5) < .03, 'one learned name and Other share the sequence e
 console.log('PASS independent names: P(F|F)=' + pF.toFixed(3) + ' P(F|Other)=' + pO.toFixed(3));
 
 // Forced reviews keep their name even when it repeats the previous one; only the octave moves.
-assert.deepEqual(Array.from(S.makeSequence({from:60,to:95,total:1,known:[5,4],previousMidi:65,forcedPC:5})),[89]);
-assert.deepEqual(Array.from(S.makeSequence({from:60,to:71,total:1,known:[5],previousMidi:65,forcedPC:5})),[65], 'one octave: the only F');
+assert.deepEqual(Array.from(S.makeSequence({from:60,to:95,total:1,known:[5,4],previousMidi:65,forcedPC:5,allowRepeats:true})),[89]);
+assert.deepEqual(Array.from(S.makeSequence({from:60,to:71,total:1,known:[5],previousMidi:65,forcedPC:5,allowRepeats:true})),[65], 'one octave: the only F');
+assert.deepEqual(Array.from(S.makeSequence({from:60,to:95,total:1,known:[5,4],previousMidi:65,forcedPC:5})),[],'defer a colliding repair in the default mode');
 let prior = 64;
 for (let i = 0; i < 6000; i++) {
     const forced = i % 2 === 0 ? 5 : 4;
