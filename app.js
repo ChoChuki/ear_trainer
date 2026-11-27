@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.2";
+const APP_VERSION = "3.0.3";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -376,16 +376,19 @@ function option(select,value,text){const o=document.createElement('option');o.va
 function display(){return mode==='single'?cfg.apDisplay:cfg.rpDisplay;}
 function limit(){return mode==='single'?cfg.apLimit:cfg.rpLimit;}
 function currentPool(){return U.pitches(instrumentMode,cfg.octaves);}
-// A completed interval is no longer an assessment: all physical pitches can
-// be auditioned, including pitches outside the configured question range.
-function intervalReview(){return testActive&&session?.mode==='interval'&&session.display==='instrument'&&phase==='done';}
-function idleBoardPlay(){return !testActive&&(mode==='free'||(mode==='interval'&&display()==='instrument'));}
-function boardPitchEnabled(midi){if(!testActive||!session||intervalReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
-function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||(phase!=='answer'&&!intervalReview()));}}
+function hasOutside(pitches,known){return pitches.some(m=>!known.includes(m%12));}
+// Both instrument drills allow post-answer audition, including pitches
+// outside the question range. A blind AP test withholds all pitch cues
+// until the session is stopped.
+function boardReview(){return testActive&&session?.display==='instrument'&&!session.blind&&phase==='done';}
+function idleBoardPlay(){return !testActive&&(mode==='free'||display()==='instrument');}
+function boardPitchEnabled(midi){if(!testActive||!session||boardReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
+function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||(phase!=='answer'&&!boardReview()));}}
 function toggleChoice(key,value,allowed){if(testActive)return;const current=cfg[key];if(current.includes(value)&&current.length===1)return;cfg[key]=(current.includes(value)?current.filter(n=>n!==value):[...current,value]).filter(n=>allowed.includes(n)).sort((a,b)=>a-b);saveConfig();renderSettings();}
 function renderSettings(){
  $('modeSelect').value=mode;$('displayRow').hidden=mode==='free';$('displaySelect').value=display();$('apSettings').hidden=mode!=='single';$('rpSettings').hidden=mode!=='interval';$('commonSettings').hidden=mode==='free';$('maskRow').hidden=mode!=='single';
  $('learningNotes').replaceChildren(...U.names.map((n,pc)=>{const b=button(n,()=>toggleChoice('known',pc,U.range(0,11)));b.dataset.pc=pc;b.setAttribute('aria-pressed',String(cfg.known.includes(pc)));return b;}));
+ $('otherHint').hidden=!hasOutside(currentPool(),cfg.known);
  $('octaves').replaceChildren(...U.range(0,8).map(o=>{const b=button(String(o),()=>toggleChoice('octaves',o,allOctaves));b.dataset.octave=o;b.disabled=!allOctaves.includes(o);b.setAttribute('aria-pressed',String(cfg.octaves.includes(o)));return b;}));
  $('blindCheck').checked=cfg.blind;$('autoNextCheck').checked=cfg.auto;$('maskCheck').checked=cfg.mask;$('directionSelect').value=cfg.direction;
  $('minIntervalSelect').value=String(cfg.min);$('maxIntervalSelect').value=cfg.max===null?'unlimited':String(cfg.max);$('maxIntervalSelect').options[0].textContent=tr('unlimited');
@@ -402,8 +405,13 @@ function render(){
  $('nextButton').hidden=!testActive||!['done','error'].includes(phase);$('nextButton').textContent=tr('next');
  $('replayButton').hidden=!testActive||!!session?.blind||!['answer','done','error'].includes(phase);$('replayButton').textContent=tr('replay');
  $('keyboardCard').hidden=testActive?session.display!=='instrument':!idleBoardPlay();$('answerCard').hidden=!testActive&&mode!=='free';$('buttonBoard').hidden=!testActive||session.display!=='buttons';
- $('extraAnswers').hidden=!testActive||session.mode!=='single';$('relativeButton').hidden=!session?.blind;$('otherButton').hidden=!!session&&session.known.length===12;
+ $('extraAnswers').hidden=!testActive||session.mode!=='single';$('relativeButton').hidden=!session?.blind;
  for(const e of $('extraAnswers').querySelectorAll('button'))e.disabled=phase!=='answer';
+ // Other is an explicit AP answer, not an uncertainty or skip action.
+ // Keep it in a fixed position; disable only when no outside pitch can occur.
+ const outside=session?.mode==='single'&&hasOutside(session.pitches,session.known);
+ $('otherButton').disabled=phase!=='answer'||!outside;
+ $('otherButton').title=tr(outside?'otherHint':'otherUnavailable');
  $('apNameKeys').hidden=mode!=='single';$('apOctaveKeys').hidden=mode!=='single';$('intervalAnswers').hidden=mode!=='interval';
  $('sessionScore').textContent=testActive?session.blind?`${tr('questions')} ${session.total}`:`${tr('score')} ${session.correct}/${session.total}`:'';
  if(!testActive){$('answerTimer').hidden=true;if(mode==='free')msg(tr('freeHint'));}
@@ -428,15 +436,15 @@ function clearPreviewMark(){for(const b of elements.keyboard.querySelectorAll('.
 // As in the legacy instrument drill, a tap after grading plays just that
 // pitch. Explicit review takes priority over automatic replay/auto-next;
 // preserve the original score, reference and correction markers.
-async function previewIntervalPitch(midi){if(!ready||!intervalReview())return;
+async function previewBoardPitch(midi){if(!ready||!boardReview())return;
  session.reviewPaused=true;cancelAudio();clearPreviewMark();const token=generation;
- try{await ensureAudio();if(!canContinue(token)||!intervalReview())return;
+ try{await ensureAudio();if(!canContinue(token)||!boardReview())return;
   queueInstrumentNote(instrumentMode,midi,audioContext.currentTime+.02,PLAY_DURATION);
   markPitch(midi,'active');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
   setTimeout(()=>{if(generation===token)clearPreviewMark();},PLAY_DURATION*1000+60);
  }catch(_){if(generation===token)status('audioError');}
 }
-function pressKey(midi,pointerId,when=performance.now()){if(!testActive){freePlay(midi,pointerId);return;}if(intervalReview()){previewIntervalPitch(midi);return;}if(phase!=='answer'||session.display!=='instrument'||!boardPitchEnabled(midi))return;
+function pressKey(midi,pointerId,when=performance.now()){if(!testActive){freePlay(midi,pointerId);return;}if(boardReview()){previewBoardPitch(midi);return;}if(phase!=='answer'||session.display!=='instrument'||!boardPitchEnabled(midi))return;
  if(session.mode==='single')submit(midi%12,U.octave(midi),null,when);
  else if(midi===trial.reference)replay();else submit(Math.abs(midi-trial.reference),null,midi,when);}
 function answerStamp(e){const pressed=answerClock.pressed();return e?.detail!==0&&Number.isFinite(pressed)&&performance.now()-pressed<=800?pressed:AnswerTimer.stamp(e);}
@@ -502,7 +510,7 @@ async function playTrial(replaying){if(!session||!trial||!testActive)return;canc
   if(!canContinue(token)||trial!==row)return;
   if(!replaying){TrainingCore.rememberQuestion(instrumentMode,row.reference,row.target);a.recent.push(row.target);if(a.recent.length>4)a.recent.shift();}
   saveRow(a.mode==='single'?'ap':'iv','trials',row);
-  onset=clock.when;deadline=a.limit===null?null:onset+a.limit;phase='answer';markReference();msg(tr(a.mode==='single'?(a.display==='buttons'?'apAnswer':'answer'):(a.display==='buttons'?'rpAnswer':'rpBoard')));render();if(a.limit!==null)answerClock.start(onset,a.limit,()=>submit('timeout'));
+  onset=clock.when;deadline=a.limit===null?null:onset+a.limit;phase='answer';markReference();msg(tr(a.mode==='single'?(hasOutside(a.pitches,a.known)?(a.display==='buttons'?'apAnswer':'apBoardAnswer'):'answer'):(a.display==='buttons'?'rpAnswer':'rpBoard')));render();if(a.limit!==null)answerClock.start(onset,a.limit,()=>submit('timeout'));
  }catch(_){audioFailure(token);}
 }
 function feedbackText(row,a){const actual=a.mode==='single'?label(row.target):String(row.size)+' · '+label(row.reference)+' → '+label(row.target);const key=row.result==='timeout'?'timeout':row.correct?(row.octaveCorrect===false?'octaveWrong':'correct'):'wrong';return tr(key)+' · '+actual;}

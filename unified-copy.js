@@ -1,6 +1,9 @@
 /* Localized labels for the unified practice screen. */
 const UNIFIED_LANGS=['en','zh-TW','ja','de','it','el'];
 const UNIFIED_COPY={
+ otherHint:['Other means any note outside the selected learning notes. No need to identify its name or octave.','其他音：不屬於所選學習音名的任何音，無須辨認音名或八度。','学習外：選択した学習音名以外の音。音名やオクターブの特定は不要です。','Anderer Ton: jeder Ton außerhalb der gewählten Lerntöne. Tonname und Oktave sind nicht nötig.','Altra nota: qualsiasi nota fuori da quelle selezionate. Non occorre identificarne nome o ottava.','Άλλη νότα: κάθε νότα εκτός των επιλεγμένων. Δεν χρειάζεται όνομα ή οκτάβα.'],
+ otherUnavailable:['All playable note names are in the learning set.','所有可出題的音名均屬於學習音集。','出題可能な音名はすべて学習対象です。','Alle spielbaren Tonnamen sind Lerntöne.','Tutte le note disponibili sono nel gruppo di apprendimento.','Όλες οι διαθέσιμες νότες είναι στο σύνολο εκμάθησης.'],
+ apBoardAnswer:['Select the note or Other','選擇對應音或其他音','音を選択、または学習外','Ton wählen oder Anderer Ton','Scegli la nota o Altra nota','Επίλεξε τη νότα ή Άλλη νότα'],
  firstTry:['First-listen accuracy','首次聽音正確率','初回聴取正答率','Treffer beim ersten Hören','Accuratezza al primo ascolto','Ακρίβεια πρώτης ακρόασης'],legacyRP:['Earlier RP course records (retained)','舊相對音感課程記錄（已保留）','旧相対音感コースの記録（保持）','Frühere RP-Kursdaten (erhalten)','Dati RP precedenti (conservati)','Παλαιότερα δεδομένα RP (διατηρούνται)'],
  mode:['Mode','模式','モード','Modus','Modalità','Λειτουργία'],
  one:['One Note','單音','単音','Ein Ton','Una nota','Μία νότα'],two:['Two Notes','雙音','二音','Zwei Töne','Due note','Δύο νότες'],free:['Free Play','自由演奏','自由演奏','Freies Spiel','Suona liberamente','Ελεύθερο παίξιμο'],

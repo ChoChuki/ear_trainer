@@ -456,6 +456,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 #buttonBoard button.correct{background:#dcfce7;border-color:#16a34a;color:#166534;opacity:1}
 #buttonBoard button.wrong{background:#fee2e2;border-color:#dc2626;color:#991b1b;opacity:1}
 .extra-answers{display:flex;gap:6px;margin:5px 0}.extra-answers button{flex:1;min-height:39px;font-size:12px;padding:0 4px}
+/* A first-class AP answer, consistently above either answer surface. */
+.extra-answers #otherButton{flex:2;min-height:44px;font-size:16px;border:2px solid #64748b;background:#fff;color:#111827}
+.extra-answers #otherButton:disabled{opacity:.45}
 #statistics{margin-top:10px;font-size:13px}#statistics summary{cursor:pointer;font-weight:700}#historyBody p,#summaryBody p{margin:5px 0;font-size:13px;line-height:1.5}#sessionSummary h2{font-size:16px;margin:0 0 6px}#reviewList{padding-left:23px;font-size:13px;line-height:1.6;max-height:40vh;overflow:auto}
 .history-actions{display:flex;gap:6px;margin-top:8px}.history-actions button{flex:1;font-size:12px;min-height:36px}
 .training-round #statistics,.training-round #sessionSummary,.training-round #settingsCard,.training-round #dailyGoalNotice{display:none!important}
@@ -515,7 +518,7 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
                 <label id="displayRow"><span data-i="answerWith"></span><select id="displaySelect"><option value="buttons" data-i="buttons"></option><option value="instrument" data-i="instrument"></option></select></label>
             </div>
             <div id="apSettings">
-                <fieldset><legend data-i="learningNotes"></legend><div id="learningNotes" class="note-grid"></div></fieldset>
+                <fieldset><legend data-i="learningNotes"></legend><div id="learningNotes" class="note-grid"></div><p id="otherHint" class="mini" data-i="otherHint" hidden></p></fieldset>
                 <fieldset><legend data-i="octaves"></legend><div id="octaves" class="octave-grid"></div></fieldset>
                 <label class="option-row"><input type="checkbox" id="blindCheck"><span data-i="blind"></span></label>
             </div>
@@ -549,12 +552,12 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
             <div id="answerText" role="status" aria-live="polite"></div>
             <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
         </section>
+        <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" type="button" class="secondary other-answer" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
         <section id="buttonBoard" class="button-board" hidden>
             <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
             <div id="apOctaveKeys" class="octave-grid" role="group" aria-label="Octave"></div>
             <div id="intervalAnswers" class="interval-answers" role="group" aria-label="Semitones"></div>
         </section>
-        <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" class="secondary" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
         <section class="keyboard-card" id="keyboardCard" hidden>
             <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
         </section>
@@ -3983,6 +3986,9 @@ root.UnifiedModel={octave,limits,range,names,pitches,apPoolValid,drawAP,rpGroups
 /* Localized labels for the unified practice screen. */
 const UNIFIED_LANGS=['en','zh-TW','ja','de','it','el'];
 const UNIFIED_COPY={
+ otherHint:['Other means any note outside the selected learning notes. No need to identify its name or octave.','其他音：不屬於所選學習音名的任何音，無須辨認音名或八度。','学習外：選択した学習音名以外の音。音名やオクターブの特定は不要です。','Anderer Ton: jeder Ton außerhalb der gewählten Lerntöne. Tonname und Oktave sind nicht nötig.','Altra nota: qualsiasi nota fuori da quelle selezionate. Non occorre identificarne nome o ottava.','Άλλη νότα: κάθε νότα εκτός των επιλεγμένων. Δεν χρειάζεται όνομα ή οκτάβα.'],
+ otherUnavailable:['All playable note names are in the learning set.','所有可出題的音名均屬於學習音集。','出題可能な音名はすべて学習対象です。','Alle spielbaren Tonnamen sind Lerntöne.','Tutte le note disponibili sono nel gruppo di apprendimento.','Όλες οι διαθέσιμες νότες είναι στο σύνολο εκμάθησης.'],
+ apBoardAnswer:['Select the note or Other','選擇對應音或其他音','音を選択、または学習外','Ton wählen oder Anderer Ton','Scegli la nota o Altra nota','Επίλεξε τη νότα ή Άλλη νότα'],
  firstTry:['First-listen accuracy','首次聽音正確率','初回聴取正答率','Treffer beim ersten Hören','Accuratezza al primo ascolto','Ακρίβεια πρώτης ακρόασης'],legacyRP:['Earlier RP course records (retained)','舊相對音感課程記錄（已保留）','旧相対音感コースの記録（保持）','Frühere RP-Kursdaten (erhalten)','Dati RP precedenti (conservati)','Παλαιότερα δεδομένα RP (διατηρούνται)'],
  mode:['Mode','模式','モード','Modus','Modalità','Λειτουργία'],
  one:['One Note','單音','単音','Ein Ton','Una nota','Μία νότα'],two:['Two Notes','雙音','二音','Zwei Töne','Due note','Δύο νότες'],free:['Free Play','自由演奏','自由演奏','Freies Spiel','Suona liberamente','Ελεύθερο παίξιμο'],
@@ -4566,7 +4572,7 @@ var _tone_0400_JCLive_sf2_file={
 	]
 };
 
-const APP_VERSION = "3.0.2";
+const APP_VERSION = "3.0.3";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -4944,16 +4950,19 @@ function option(select,value,text){const o=document.createElement('option');o.va
 function display(){return mode==='single'?cfg.apDisplay:cfg.rpDisplay;}
 function limit(){return mode==='single'?cfg.apLimit:cfg.rpLimit;}
 function currentPool(){return U.pitches(instrumentMode,cfg.octaves);}
-// A completed interval is no longer an assessment: all physical pitches can
-// be auditioned, including pitches outside the configured question range.
-function intervalReview(){return testActive&&session?.mode==='interval'&&session.display==='instrument'&&phase==='done';}
-function idleBoardPlay(){return !testActive&&(mode==='free'||(mode==='interval'&&display()==='instrument'));}
-function boardPitchEnabled(midi){if(!testActive||!session||intervalReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
-function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||(phase!=='answer'&&!intervalReview()));}}
+function hasOutside(pitches,known){return pitches.some(m=>!known.includes(m%12));}
+// Both instrument drills allow post-answer audition, including pitches
+// outside the question range. A blind AP test withholds all pitch cues
+// until the session is stopped.
+function boardReview(){return testActive&&session?.display==='instrument'&&!session.blind&&phase==='done';}
+function idleBoardPlay(){return !testActive&&(mode==='free'||display()==='instrument');}
+function boardPitchEnabled(midi){if(!testActive||!session||boardReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
+function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||(phase!=='answer'&&!boardReview()));}}
 function toggleChoice(key,value,allowed){if(testActive)return;const current=cfg[key];if(current.includes(value)&&current.length===1)return;cfg[key]=(current.includes(value)?current.filter(n=>n!==value):[...current,value]).filter(n=>allowed.includes(n)).sort((a,b)=>a-b);saveConfig();renderSettings();}
 function renderSettings(){
  $('modeSelect').value=mode;$('displayRow').hidden=mode==='free';$('displaySelect').value=display();$('apSettings').hidden=mode!=='single';$('rpSettings').hidden=mode!=='interval';$('commonSettings').hidden=mode==='free';$('maskRow').hidden=mode!=='single';
  $('learningNotes').replaceChildren(...U.names.map((n,pc)=>{const b=button(n,()=>toggleChoice('known',pc,U.range(0,11)));b.dataset.pc=pc;b.setAttribute('aria-pressed',String(cfg.known.includes(pc)));return b;}));
+ $('otherHint').hidden=!hasOutside(currentPool(),cfg.known);
  $('octaves').replaceChildren(...U.range(0,8).map(o=>{const b=button(String(o),()=>toggleChoice('octaves',o,allOctaves));b.dataset.octave=o;b.disabled=!allOctaves.includes(o);b.setAttribute('aria-pressed',String(cfg.octaves.includes(o)));return b;}));
  $('blindCheck').checked=cfg.blind;$('autoNextCheck').checked=cfg.auto;$('maskCheck').checked=cfg.mask;$('directionSelect').value=cfg.direction;
  $('minIntervalSelect').value=String(cfg.min);$('maxIntervalSelect').value=cfg.max===null?'unlimited':String(cfg.max);$('maxIntervalSelect').options[0].textContent=tr('unlimited');
@@ -4970,8 +4979,13 @@ function render(){
  $('nextButton').hidden=!testActive||!['done','error'].includes(phase);$('nextButton').textContent=tr('next');
  $('replayButton').hidden=!testActive||!!session?.blind||!['answer','done','error'].includes(phase);$('replayButton').textContent=tr('replay');
  $('keyboardCard').hidden=testActive?session.display!=='instrument':!idleBoardPlay();$('answerCard').hidden=!testActive&&mode!=='free';$('buttonBoard').hidden=!testActive||session.display!=='buttons';
- $('extraAnswers').hidden=!testActive||session.mode!=='single';$('relativeButton').hidden=!session?.blind;$('otherButton').hidden=!!session&&session.known.length===12;
+ $('extraAnswers').hidden=!testActive||session.mode!=='single';$('relativeButton').hidden=!session?.blind;
  for(const e of $('extraAnswers').querySelectorAll('button'))e.disabled=phase!=='answer';
+ // Other is an explicit AP answer, not an uncertainty or skip action.
+ // Keep it in a fixed position; disable only when no outside pitch can occur.
+ const outside=session?.mode==='single'&&hasOutside(session.pitches,session.known);
+ $('otherButton').disabled=phase!=='answer'||!outside;
+ $('otherButton').title=tr(outside?'otherHint':'otherUnavailable');
  $('apNameKeys').hidden=mode!=='single';$('apOctaveKeys').hidden=mode!=='single';$('intervalAnswers').hidden=mode!=='interval';
  $('sessionScore').textContent=testActive?session.blind?`${tr('questions')} ${session.total}`:`${tr('score')} ${session.correct}/${session.total}`:'';
  if(!testActive){$('answerTimer').hidden=true;if(mode==='free')msg(tr('freeHint'));}
@@ -4996,15 +5010,15 @@ function clearPreviewMark(){for(const b of elements.keyboard.querySelectorAll('.
 // As in the legacy instrument drill, a tap after grading plays just that
 // pitch. Explicit review takes priority over automatic replay/auto-next;
 // preserve the original score, reference and correction markers.
-async function previewIntervalPitch(midi){if(!ready||!intervalReview())return;
+async function previewBoardPitch(midi){if(!ready||!boardReview())return;
  session.reviewPaused=true;cancelAudio();clearPreviewMark();const token=generation;
- try{await ensureAudio();if(!canContinue(token)||!intervalReview())return;
+ try{await ensureAudio();if(!canContinue(token)||!boardReview())return;
   queueInstrumentNote(instrumentMode,midi,audioContext.currentTime+.02,PLAY_DURATION);
   markPitch(midi,'active');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
   setTimeout(()=>{if(generation===token)clearPreviewMark();},PLAY_DURATION*1000+60);
  }catch(_){if(generation===token)status('audioError');}
 }
-function pressKey(midi,pointerId,when=performance.now()){if(!testActive){freePlay(midi,pointerId);return;}if(intervalReview()){previewIntervalPitch(midi);return;}if(phase!=='answer'||session.display!=='instrument'||!boardPitchEnabled(midi))return;
+function pressKey(midi,pointerId,when=performance.now()){if(!testActive){freePlay(midi,pointerId);return;}if(boardReview()){previewBoardPitch(midi);return;}if(phase!=='answer'||session.display!=='instrument'||!boardPitchEnabled(midi))return;
  if(session.mode==='single')submit(midi%12,U.octave(midi),null,when);
  else if(midi===trial.reference)replay();else submit(Math.abs(midi-trial.reference),null,midi,when);}
 function answerStamp(e){const pressed=answerClock.pressed();return e?.detail!==0&&Number.isFinite(pressed)&&performance.now()-pressed<=800?pressed:AnswerTimer.stamp(e);}
@@ -5070,7 +5084,7 @@ async function playTrial(replaying){if(!session||!trial||!testActive)return;canc
   if(!canContinue(token)||trial!==row)return;
   if(!replaying){TrainingCore.rememberQuestion(instrumentMode,row.reference,row.target);a.recent.push(row.target);if(a.recent.length>4)a.recent.shift();}
   saveRow(a.mode==='single'?'ap':'iv','trials',row);
-  onset=clock.when;deadline=a.limit===null?null:onset+a.limit;phase='answer';markReference();msg(tr(a.mode==='single'?(a.display==='buttons'?'apAnswer':'answer'):(a.display==='buttons'?'rpAnswer':'rpBoard')));render();if(a.limit!==null)answerClock.start(onset,a.limit,()=>submit('timeout'));
+  onset=clock.when;deadline=a.limit===null?null:onset+a.limit;phase='answer';markReference();msg(tr(a.mode==='single'?(hasOutside(a.pitches,a.known)?(a.display==='buttons'?'apAnswer':'apBoardAnswer'):'answer'):(a.display==='buttons'?'rpAnswer':'rpBoard')));render();if(a.limit!==null)answerClock.start(onset,a.limit,()=>submit('timeout'));
  }catch(_){audioFailure(token);}
 }
 function feedbackText(row,a){const actual=a.mode==='single'?label(row.target):String(row.size)+' · '+label(row.reference)+' → '+label(row.target);const key=row.result==='timeout'?'timeout':row.correct?(row.octaveCorrect===false?'octaveWrong':'correct'):'wrong';return tr(key)+' · '+actual;}

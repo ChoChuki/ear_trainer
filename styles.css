@@ -445,6 +445,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 #buttonBoard button.correct{background:#dcfce7;border-color:#16a34a;color:#166534;opacity:1}
 #buttonBoard button.wrong{background:#fee2e2;border-color:#dc2626;color:#991b1b;opacity:1}
 .extra-answers{display:flex;gap:6px;margin:5px 0}.extra-answers button{flex:1;min-height:39px;font-size:12px;padding:0 4px}
+/* A first-class AP answer, consistently above either answer surface. */
+.extra-answers #otherButton{flex:2;min-height:44px;font-size:16px;border:2px solid #64748b;background:#fff;color:#111827}
+.extra-answers #otherButton:disabled{opacity:.45}
 #statistics{margin-top:10px;font-size:13px}#statistics summary{cursor:pointer;font-weight:700}#historyBody p,#summaryBody p{margin:5px 0;font-size:13px;line-height:1.5}#sessionSummary h2{font-size:16px;margin:0 0 6px}#reviewList{padding-left:23px;font-size:13px;line-height:1.6;max-height:40vh;overflow:auto}
 .history-actions{display:flex;gap:6px;margin-top:8px}.history-actions button{flex:1;font-size:12px;min-height:36px}
 .training-round #statistics,.training-round #sessionSummary,.training-round #settingsCard,.training-round #dailyGoalNotice{display:none!important}
