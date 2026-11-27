@@ -26,7 +26,7 @@ with sync_playwright() as p:
     context=b.new_context(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.1'
+    assert page.text_content('#appVersion')=='3.0.2'
     assert page.locator('#focusEntry,#ivEntry,#focusPanel,#ivPanel').count()==0
     assert page.locator('#modeSelect option').count()==3
     assert page.locator('#displaySelect option').count()==2
@@ -36,7 +36,10 @@ with sync_playwright() as p:
     page.locator('#commonSettings details summary').tap();page.locator('#autoNextCheck').uncheck()
     page.evaluate('''() => {window.maskCounts=[];const orig=TrainingCore.resetTones;TrainingCore.resetTones=(queue,at,opts)=>{const mask=[];const end=orig((...args)=>{mask.push(args[0]);return queue(...args);},at,opts);maskCounts.push(mask);return end;};}''')
     def start():
-        page.locator('#playButton').tap();page.wait_for_function("phase==='countdown'",timeout=3000);assert not page.locator('#answerTimer').is_visible();wait_answer()
+        is_ap=page.evaluate("mode==='single'")
+        page.locator('#playButton').tap()
+        if is_ap:page.wait_for_function("phase==='countdown'",timeout=3000);assert not page.locator('#answerTimer').is_visible()
+        wait_answer()
     def wait_answer():
         page.wait_for_function("phase==='answer'",timeout=15000)
         assert page.locator('#answerTimer').is_visible(),page.evaluate('({phase,hidden:document.getElementById("answerTimer").hidden,limit:session.limit})')

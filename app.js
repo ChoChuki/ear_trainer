@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.1";
+const APP_VERSION = "3.0.2";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -376,8 +376,12 @@ function option(select,value,text){const o=document.createElement('option');o.va
 function display(){return mode==='single'?cfg.apDisplay:cfg.rpDisplay;}
 function limit(){return mode==='single'?cfg.apLimit:cfg.rpLimit;}
 function currentPool(){return U.pitches(instrumentMode,cfg.octaves);}
-function boardPitchEnabled(midi){if(!testActive||!session)return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
-function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||phase!=='answer');}}
+// A completed interval is no longer an assessment: all physical pitches can
+// be auditioned, including pitches outside the configured question range.
+function intervalReview(){return testActive&&session?.mode==='interval'&&session.display==='instrument'&&phase==='done';}
+function idleBoardPlay(){return !testActive&&(mode==='free'||(mode==='interval'&&display()==='instrument'));}
+function boardPitchEnabled(midi){if(!testActive||!session||intervalReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
+function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||(phase!=='answer'&&!intervalReview()));}}
 function toggleChoice(key,value,allowed){if(testActive)return;const current=cfg[key];if(current.includes(value)&&current.length===1)return;cfg[key]=(current.includes(value)?current.filter(n=>n!==value):[...current,value]).filter(n=>allowed.includes(n)).sort((a,b)=>a-b);saveConfig();renderSettings();}
 function renderSettings(){
  $('modeSelect').value=mode;$('displayRow').hidden=mode==='free';$('displaySelect').value=display();$('apSettings').hidden=mode!=='single';$('rpSettings').hidden=mode!=='interval';$('commonSettings').hidden=mode==='free';$('maskRow').hidden=mode!=='single';
@@ -397,7 +401,7 @@ function render(){
  $('settingsCard').hidden=testActive;$('playButton').hidden=!testActive&&mode==='free';$('playButton').textContent=tr(testActive?'stop':'start');$('playButton').classList.toggle('danger',testActive);$('playButton').classList.toggle('primary',!testActive);if(testActive)$('playButton').disabled=false;
  $('nextButton').hidden=!testActive||!['done','error'].includes(phase);$('nextButton').textContent=tr('next');
  $('replayButton').hidden=!testActive||!!session?.blind||!['answer','done','error'].includes(phase);$('replayButton').textContent=tr('replay');
- $('keyboardCard').hidden=testActive?session.display!=='instrument':mode!=='free';$('answerCard').hidden=!testActive&&mode!=='free';$('buttonBoard').hidden=!testActive||session.display!=='buttons';
+ $('keyboardCard').hidden=testActive?session.display!=='instrument':!idleBoardPlay();$('answerCard').hidden=!testActive&&mode!=='free';$('buttonBoard').hidden=!testActive||session.display!=='buttons';
  $('extraAnswers').hidden=!testActive||session.mode!=='single';$('relativeButton').hidden=!session?.blind;$('otherButton').hidden=!!session&&session.known.length===12;
  for(const e of $('extraAnswers').querySelectorAll('button'))e.disabled=phase!=='answer';
  $('apNameKeys').hidden=mode!=='single';$('apOctaveKeys').hidden=mode!=='single';$('intervalAnswers').hidden=mode!=='interval';
@@ -419,8 +423,20 @@ function clearFeedback(){resetKeyboardColors();for(const b of $('buttonBoard').q
 function markReference(){if(session?.mode==='interval'&&session.display==='instrument'&&trial)markPitch(trial.reference,'reference');}
 function cancelAudio(){generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingSound=null;}
 function renderHeldNotes(){const notes=[...new Set(activePointers.values())];resetKeyboardColors();for(const p of notes)markPitch(p,'active');if(!testActive&&mode==='free')msg(notes.length?notes.map(label).join('  '):tr('freeHint'));}
-function freePlay(midi,pointerId){if(!ready||mode!=='free'||testActive)return;TrainingTracker.activity('free-play');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);activePointers.set(pointerId,midi);if(!activeVoices.has(midi)&&!pendingVoices.has(midi)){pendingVoices.add(midi);ensureAudio().then(()=>{pendingVoices.delete(midi);if(mode==='free'&&!testActive&&[...activePointers.values()].includes(midi)&&!activeVoices.has(midi))playFreeVoice(midi);}).catch(()=>{pendingVoices.delete(midi);status('audioError');});}renderHeldNotes();}
-function pressKey(midi,pointerId,when=performance.now()){if(!testActive){freePlay(midi,pointerId);return;}if(phase!=='answer'||session.display!=='instrument'||!boardPitchEnabled(midi))return;
+function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;TrainingTracker.activity('free-play');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);activePointers.set(pointerId,midi);if(!activeVoices.has(midi)&&!pendingVoices.has(midi)){pendingVoices.add(midi);ensureAudio().then(()=>{pendingVoices.delete(midi);if(idleBoardPlay()&&[...activePointers.values()].includes(midi)&&!activeVoices.has(midi))playFreeVoice(midi);}).catch(()=>{pendingVoices.delete(midi);status('audioError');});}renderHeldNotes();}
+function clearPreviewMark(){for(const b of elements.keyboard.querySelectorAll('.active'))b.classList.remove('active');}
+// As in the legacy instrument drill, a tap after grading plays just that
+// pitch. Explicit review takes priority over automatic replay/auto-next;
+// preserve the original score, reference and correction markers.
+async function previewIntervalPitch(midi){if(!ready||!intervalReview())return;
+ session.reviewPaused=true;cancelAudio();clearPreviewMark();const token=generation;
+ try{await ensureAudio();if(!canContinue(token)||!intervalReview())return;
+  queueInstrumentNote(instrumentMode,midi,audioContext.currentTime+.02,PLAY_DURATION);
+  markPitch(midi,'active');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
+  setTimeout(()=>{if(generation===token)clearPreviewMark();},PLAY_DURATION*1000+60);
+ }catch(_){if(generation===token)status('audioError');}
+}
+function pressKey(midi,pointerId,when=performance.now()){if(!testActive){freePlay(midi,pointerId);return;}if(intervalReview()){previewIntervalPitch(midi);return;}if(phase!=='answer'||session.display!=='instrument'||!boardPitchEnabled(midi))return;
  if(session.mode==='single')submit(midi%12,U.octave(midi),null,when);
  else if(midi===trial.reference)replay();else submit(Math.abs(midi-trial.reference),null,midi,when);}
 function answerStamp(e){const pressed=answerClock.pressed();return e?.detail!==0&&Number.isFinite(pressed)&&performance.now()-pressed<=800?pressed:AnswerTimer.stamp(e);}
@@ -449,11 +465,11 @@ const delay=ms=>new Promise(r=>setTimeout(r,Math.max(0,ms)));
 async function start(){if(!ready||testActive||mode==='free'||!validate())return;
  releaseAllKeys();$('sessionSummary').hidden=true;summarySession=null;
  const pitches=currentPool();session={id:instrumentMode+(mode==='single'?'-focus-':'-iv-')+id(),mode,display:display(),blind:mode==='single'&&cfg.blind,started:Date.now(),known:mode==='single'?[...cfg.known]:U.range(cfg.min,Math.min(cfg.max??rpHi-rpLo,rpHi-rpLo)),octaves:[...cfg.octaves],pitches,lo:rpLo,hi:rpHi,min:cfg.min,max:cfg.max,direction:cfg.direction,limit:limit(),mask:cfg.mask,auto:cfg.auto,rows:[],recent:[],total:0,correct:0,ordinal:0};
- trial=null;testActive=true;phase='countdown';msg(tr('prepare')+' · 3');clearFeedback();buildAnswers();render();updateBoardRange();
+ trial=null;testActive=true;phase=session.mode==='single'?'countdown':'starting';msg(session.mode==='single'?tr('prepare')+' · 3':tr('listen'));clearFeedback();buildAnswers();render();updateBoardRange();
  const token=++generation;
- try{await ensureAudio();for(let i=3;i>=1;i--){if(!canContinue(token))return;msg(tr('prepare')+' · '+i);await delay(1000);}if(canContinue(token))newQuestion();}catch(_){audioFailure(token);}
+ try{await ensureAudio();if(session?.mode==='single'){for(let i=3;i>=1;i--){if(!canContinue(token))return;msg(tr('prepare')+' · '+i);await delay(1000);}}if(canContinue(token))newQuestion();}catch(_){audioFailure(token);}
 }
-function newQuestion(){if(!testActive||!session||!['countdown','done','error'].includes(phase))return;cancelAudio();clearFeedback();pickName=pickOctave=pickNameAt=null;
+function newQuestion(){if(!testActive||!session||!['countdown','starting','done','error'].includes(phase))return;cancelAudio();session.reviewPaused=false;clearFeedback();pickName=pickOctave=pickNameAt=null;
  const previous=TrainingCore.lastQuestion(instrumentMode);let q;
  if(session.mode==='single'){const pitch=U.drawAP(session.pitches,session.known,previous?.target,session.recent,session.blind,TrainingCore.recentLabel(instrumentMode));if(pitch!==null)q={pitch,target:pitch,reference:null};}
  else {const pair=U.drawRP(U.rpGroups(session.lo,session.hi,session.min,session.max,session.direction,previous),previous);if(pair)q=pair;}
@@ -522,7 +538,7 @@ function submit(guess,octave=null,selectedMidi=null,now=performance.now()){if(!t
 function replay(){if(!testActive||session?.blind||!trial)return;
  if(phase==='answer'){if(deadline!==null&&performance.now()>deadline){submit('timeout');return;}trial.replayed++;playTrial(true);}
  else if(phase==='error'){playTrial(false);}
- else if(phase==='done'){cancelAudio();const token=generation;try{const at=audioContext.currentTime+.04;if(session.mode==='interval'){queueInstrumentNote(instrumentMode,trial.reference,at,.6);queueInstrumentNote(instrumentMode,trial.target,at+.8);}else queueInstrumentNote(instrumentMode,trial.target,at);S.markLabel(instrumentMode);TrainingCore.rememberLabel(trial.target);TrainingTracker.activity('answer');if(session.auto)nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done')newQuestion();},session.mode==='interval'?1800:1100);}catch(_){msg(tr('audioError'),'bad');}}
+ else if(phase==='done'){cancelAudio();clearPreviewMark();const token=generation;try{const at=audioContext.currentTime+.04;if(session.mode==='interval'){queueInstrumentNote(instrumentMode,trial.reference,at,.6);queueInstrumentNote(instrumentMode,trial.target,at+.8);}else queueInstrumentNote(instrumentMode,trial.target,at);S.markLabel(instrumentMode);TrainingCore.rememberLabel(trial.target);TrainingTracker.activity('answer');if(session.auto&&!session.reviewPaused)nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done')newQuestion();},session.mode==='interval'?1800:1100);}catch(_){msg(tr('audioError'),'bad');}}
 }
 function stop(interrupted=false){if(!testActive)return;cancelAudio();releaseAllKeys();if(trial&&phase==='answer'){trial.result='interrupted';trial.submittedAt=Date.now();saveRow(session.mode==='single'?'ap':'iv','trials',trial);}saveSession(!interrupted,interrupted);TrainingTracker.pause();const done=session;testActive=false;phase='idle';session=null;trial=null;clearFeedback();render();summarySession=done;if(done.total)showSummary(done);status(interrupted?'interrupted':'ready');if($('statistics').open)refreshHistory();}
 function percent(n,d){return d?`${n}/${d} (${Math.round(100*n/d)}%)`:'—';}
@@ -545,7 +561,7 @@ function changeMode(next){if(testActive||!['single','interval','free'].includes(
 function setup(){
  currentLanguage=language();$('appVersion').textContent=APP_VERSION;$('instrumentSelect').value=instrumentMode;$('languageSelect').value=currentLanguage;
  for(let p=low;p<=high;p++){option($('startNote'),p,label(p));option($('endNote'),p,label(p));}option($('maxIntervalSelect'),'unlimited',tr('unlimited'));for(let d=1;d<=high-low;d++){option($('minIntervalSelect'),d,d);option($('maxIntervalSelect'),d,d);}
- $('modeSelect').onchange=e=>changeMode(e.target.value);$('displaySelect').onchange=e=>{cfg[mode==='single'?'apDisplay':'rpDisplay']=e.target.value;saveConfig();renderSettings();};
+ $('modeSelect').onchange=e=>changeMode(e.target.value);$('displaySelect').onchange=e=>{releaseAllKeys();cfg[mode==='single'?'apDisplay':'rpDisplay']=e.target.value;saveConfig();renderSettings();};
  $('blindCheck').onchange=e=>{cfg.blind=e.target.checked;saveConfig();};$('autoNextCheck').onchange=e=>{cfg.auto=e.target.checked;saveConfig();};$('maskCheck').onchange=e=>{cfg.mask=e.target.checked;saveConfig();};$('answerLimitSelect').onchange=e=>{const k=mode==='single'?'apLimit':'rpLimit';cfg[k]=AnswerTimer.parse(e.target.value,cfg[k]);e.target.value=AnswerTimer.text(cfg[k],currentLanguage);saveConfig();};
  $('minIntervalSelect').onchange=e=>{cfg.min=Number(e.target.value);if(cfg.max!==null&&cfg.max<cfg.min)cfg.max=cfg.min;saveConfig();renderSettings();};$('maxIntervalSelect').onchange=e=>{cfg.max=e.target.value==='unlimited'?null:Number(e.target.value);if(cfg.max!==null&&cfg.min>cfg.max)cfg.min=cfg.max;saveConfig();renderSettings();};$('directionSelect').onchange=e=>{cfg.direction=e.target.value;saveConfig();renderSettings();};
  $('startNote').onchange=e=>{rpLo=Number(e.target.value);if(rpLo>=rpHi)rpHi=Math.min(high,rpLo+1);if(rpLo>=rpHi)rpLo=rpHi-1;renderSettings();};$('endNote').onchange=e=>{rpHi=Number(e.target.value);if(rpHi<=rpLo)rpLo=Math.max(low,rpHi-1);if(rpHi<=rpLo)rpHi=rpLo+1;renderSettings();};
