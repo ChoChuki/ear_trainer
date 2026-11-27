@@ -1,4 +1,4 @@
-const APP_VERSION = "2.8.9";
+const APP_VERSION = "2.8.10";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -1989,16 +1989,21 @@ function relativeRange() {
     try { saved = JSON.parse(localStorage.getItem(relativeRangeKey)); } catch (_) {}
     if (Array.isArray(saved) && saved.length === 2 && saved.every(Number.isInteger) &&
         saved[0] >= SUPPORTED_MIN_MIDI && saved[0] < saved[1] && saved[1] <= SUPPORTED_MAX_MIDI) return saved;
-    // Keep the previous default training range for new users; the selectors now also offer A0-C8.
+    // Legacy RP course default; Two Notes has its own full-register entry rule below.
     return instrumentMode === "piano" ? [36, 95] : [SUPPORTED_MIN_MIDI, SUPPORTED_MAX_MIDI];
 }
 function selectExercise(mode) {
     const wasRelative = isRelativeMode(testMode), nextRelative = isRelativeMode(mode);
-    if (wasRelative !== nextRelative) {
+    const enteringTwoNotes = mode === "interval" && testMode !== "interval";
+    if (wasRelative !== nextRelative || enteringTwoNotes) {
         let range = priorRange;
         if (nextRelative) {
-            priorRange = [Number(elements.startNote.value), Number(elements.endNote.value)];
-            range = customRangeEntered ? priorRange : relativeRange();
+            if (!wasRelative) priorRange = [Number(elements.startNote.value), Number(elements.endNote.value)];
+            // Every entry into Two Notes starts at the instrument's complete playable range.
+            // Neither a previous single-note range nor a saved legacy range can narrow it.
+            // Applying a manual range while in Two Notes is still supported.
+            range = enteringTwoNotes ? [SUPPORTED_MIN_MIDI, SUPPORTED_MAX_MIDI]
+                : customRangeEntered ? priorRange : relativeRange();
         }
         elements.startNote.value = String(range[0]);
         elements.endNote.value = String(range[1]);

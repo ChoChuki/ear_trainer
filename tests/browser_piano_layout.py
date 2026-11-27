@@ -80,8 +80,9 @@ with sync_playwright() as p:
     assert 'correct' in key(page,midi).get_attribute('class').split()
     page.locator('#playButton').tap()
     page.select_option('#modeSelect','interval')
-    assert page.evaluate('[minMidi,maxMidi]')==[36,95]
-    page.select_option('#startNote','21'); page.select_option('#endNote','108'); page.locator('#applyButton').tap()
+    assert page.evaluate('[minMidi,maxMidi]')==[21,108]
+    assert page.input_value('#startNote')=='21' and page.input_value('#endNote')=='108'
+    assert page.locator('#keyboard .out-of-range').count()==0
     page.locator('#playButton').tap()
     page.wait_for_function('testActive && legacyAudioReady')
     assert page.evaluate('[minMidi,maxMidi]')==[21,108]
