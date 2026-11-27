@@ -410,3 +410,54 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
         --piano-row-height: clamp(56px, calc((100svh - 174px) / 7), 86px);
     }
 }
+/* 3.0 unified practice. Legacy course panels are no longer mounted. */
+[hidden]{display:none!important}
+#settingsCard{display:grid;gap:10px}
+#settingsCard fieldset{margin:7px 0;padding:0;border:0;min-width:0}
+#settingsCard legend,#settingsCard summary,#settingsCard .time-setting span{font-weight:700;font-size:13px;color:#374151}
+.note-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin:5px 0}
+.octave-grid{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:4px;margin:5px 0}
+.note-grid button,.octave-grid button,.interval-answers button{min-width:0;min-height:44px;padding:2px;font-size:15px}
+.note-grid button[aria-pressed=true],.octave-grid button[aria-pressed=true]{background:#dcfce7;color:#166534;border-color:#16a34a;box-shadow:inset 0 0 0 1px #16a34a}
+.note-grid button.learning{border:2px solid #16a34a}
+.note-grid button.picked,.octave-grid button.picked{background:#dbeafe;border-color:#2563eb;box-shadow:inset 0 0 0 1px #2563eb}
+#settingsCard .wide{grid-column:1/-1}
+#settingsCard .option-row{display:flex;align-items:center;gap:6px;min-height:36px;font-size:13px}
+#settingsCard .option-row input{width:18px;height:18px}
+#settingsCard details{margin-top:8px}
+#settingsCard details .settings-grid{margin-top:6px}
+.time-setting{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.time-setting input{width:76px;height:36px;text-align:center;border:1px solid #cbd5e1;border-radius:8px;font:inherit}
+.mini{font-size:12px;color:#6b7280;margin:6px 0}
+#configError,#storageWarning{font-size:13px;color:#991b1b;margin:4px 0}
+.unified-controls{display:flex;gap:6px;position:static!important;padding:0!important;margin:8px 0!important}
+.unified-controls button{flex:1;min-height:44px}
+#answerCard{padding:6px 9px;margin:6px 0;display:block;min-height:0}
+.session-score{color:#64748b;font-size:12px;font-weight:700;line-height:16px;text-align:center}
+#answerText{text-align:center;font-size:14px;font-weight:700;min-height:20px;line-height:20px;overflow-wrap:anywhere}
+#answerText.good{color:#166534}#answerText.bad{color:#991b1b}
+#answerTimer{width:100%;margin:3px 0 0}
+.button-board{background:white;border:1px solid #e5e7eb;border-radius:12px;padding:7px;margin:6px 0}
+.button-board .note-grid button,.button-board .octave-grid button{min-height:52px}
+.button-board .octave-grid button{min-height:46px}
+.interval-answers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.interval-answers button{min-height:52px;font-size:20px}
+#buttonBoard button.correct{background:#dcfce7;border-color:#16a34a;color:#166534;opacity:1}
+#buttonBoard button.wrong{background:#fee2e2;border-color:#dc2626;color:#991b1b;opacity:1}
+.extra-answers{display:flex;gap:6px;margin:5px 0}.extra-answers button{flex:1;min-height:39px;font-size:12px;padding:0 4px}
+#statistics{margin-top:10px;font-size:13px}#statistics summary{cursor:pointer;font-weight:700}#historyBody p,#summaryBody p{margin:5px 0;font-size:13px;line-height:1.5}#sessionSummary h2{font-size:16px;margin:0 0 6px}#reviewList{padding-left:23px;font-size:13px;line-height:1.6;max-height:40vh;overflow:auto}
+.history-actions{display:flex;gap:6px;margin-top:8px}.history-actions button{flex:1;font-size:12px;min-height:36px}
+.training-round #statistics,.training-round #sessionSummary,.training-round #settingsCard,.training-round #dailyGoalNotice{display:none!important}
+.training-round .app-header .status{display:none}.training-round .app-header{margin:0}.training-round #controls{margin-top:0!important}
+.training-round .keyboard.violin-board .violin-note.out-of-range{opacity:.35}
+.training-round .keyboard.piano-board .piano-row{height:var(--piano-row-height)}
+.training-round .keyboard.piano-board{--piano-row-height:clamp(52px,calc((100svh - 175px)/7),86px);gap:3px}
+.training-round .keyboard.piano-board .piano-key.out-of-range.correct{background:#86d17c}.training-round .keyboard.piano-board .piano-key.out-of-range.wrong{background:#e88b8b}
+@media(max-width:360px){.note-grid{gap:3px}.octave-grid{gap:2px}.note-grid button,.octave-grid button{font-size:13px}.app-shell{padding-left:8px;padding-right:8px}}
+/* The shared clock used to live in the retired focused stylesheet. */
+.answer-timer{height:5px;overflow:hidden;border-radius:4px;background:#dbe3ef;display:block}
+.answer-timer>span{display:block;width:100%;height:100%;background:#2563eb;transform-origin:left center;transform:scaleX(1)}
+.training-round .keyboard-card button:disabled:not(.out-of-range){opacity:1;cursor:default}
+#buttonBoard button:disabled:not([data-available=false]){opacity:1}
+#settingsCard .settings-grid{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+#settingsCard .settings-grid label select{width:100%}

@@ -11,7 +11,6 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" href="./icon-192.png">
     <link rel="stylesheet" href="./styles.css">
-    <link rel="stylesheet" href="./ap-focus.css">
 </head>
 <body>
     <aside id="dailyGoalNotice" class="daily-goal-notice" hidden>
@@ -46,290 +45,61 @@
             <p id="status" class="status" aria-live="polite"></p>
         </header>
 
-        <nav class="af-entries" aria-label="Focused practice"><a class="af-entry secondary" href="#ap" id="focusEntry">Focused AP practice</a><a class="af-entry secondary" href="#iv" id="ivEntry">Focused interval practice</a></nav>
-        <section id="focusPanel" class="af-panel" hidden aria-labelledby="focusTitle">
-            <div class="af-head"><div><p class="af-instrument" id="focusInstrument"></p><h2 id="focusTitle"></h2></div><a href="#tools" data-af="back"></a></div>
-            <div id="focusHome" hidden>
-                <p id="focusDaily"></p>
-                <fieldset class="af-octaves"><legend data-af="octaves"></legend><div id="focusOctaves" class="af-notes"></div></fieldset>
-                <p id="focusRangeHint" class="af-muted" role="status" hidden></p>
-                <div id="focusModes" class="af-modes"></div>
-                <p id="focusRules" class="af-muted"></p>
-                <div class="af-group"><strong data-af="set"></strong><span id="focusCurrent"></span><button class="primary" type="button" id="focusAdd" hidden></button></div>
-                <details id="focusGuide"><summary data-af="examples"></summary><div id="focusExamples"></div></details>
-                <details id="focusSettings"><summary data-af="settings"></summary>
-                    <div id="focusPicker" class="af-notes" role="group"></div>
-                    <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
-                    <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
-                    
-                    <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
-                    <label class="af-option"><span data-af="limitSeconds"></span><input id="focusLimit" class="af-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
-                    <p class="af-muted" data-af="limitHelp"></p>
-                    <label class="af-option"><span data-af="share"></span><select id="focusShare"><option value="0">0%</option><option value="0.2">20%</option><option value="0.5">50%</option></select></label>
-                    <details><summary data-af="thresholds"></summary>
-                        <label class="af-option"><span data-af="hit"></span><input id="focusHit" type="number" min="50" max="100"></label>
-                        <label class="af-option"><span data-af="fa"></span><input id="focusFa" type="number" min="0" max="50"></label>
-                    </details>
-                </details>
-                <div id="focusInvite" class="af-group" hidden><span id="focusInvitation"></span><button class="secondary" id="focusSecond" type="button" data-af="second"></button></div>
-                <details id="focusEvidence"><summary data-af="evidence"></summary>
-                    <p id="focusProgress"></p><p id="focusRates"></p><p id="focusFirst"></p>
-                    <div class="af-filters"><select id="focusFilterTimbre" aria-label="Instrument"></select><select id="focusFilterOctave" aria-label="Octave"><option value="all"></option></select></div>
-                    <details id="focusRestLog" hidden><summary data-af="restLog"></summary><ol id="focusRestRows"></ol></details>
-                    <table><thead><tr><th data-af="note"></th><th data-af="practice"></th><th data-af="check"></th><th data-af="days"></th></tr></thead><tbody id="focusStats"></tbody></table>
-                    <p class="af-muted" data-af="recordHelp"></p><p class="af-muted" data-af="countsLocal"></p>
-                    <div class="af-actions"><button class="secondary" type="button" id="focusBackup" data-af="backup"></button><button class="secondary" type="button" id="focusRestore" data-af="restore"></button><input type="file" id="focusFile" hidden accept=".json,application/json"></div>
-                </details>
-            </div>
-            <div id="focusRound" hidden>
-                <p class="af-instrument" id="focusIndex"></p>
-                <p class="af-live" id="focusPrompt" role="status" aria-live="polite"></p>
-                <div class="af-timer" id="focusTimer" aria-hidden="true" hidden><span></span></div>
-                <div id="focusAnswers" class="af-notes"></div>
-                <p class="af-muted" id="focusAnswerHint"></p>
-                <div class="af-actions">
-                    <button type="button" class="primary" id="focusNext"></button>
-                    <button type="button" class="secondary" id="focusRelative" data-af="relative"></button>
-                    <button type="button" class="secondary" id="focusReplay" data-af="replay"></button>
-                    <button type="button" class="secondary" id="focusAnswerSound" data-af="answerSound"></button>
-                    <button type="button" class="af-plain" id="focusFault" data-af="audio"></button>
-                </div>
-                <button type="button" class="af-plain af-end" id="focusEnd" data-af="finish"></button>
-            </div>
-            <div id="focusSummary" hidden><h3 id="focusSummaryTitle"></h3><p id="focusScore"></p>
-                <div id="focusContinue" class="af-actions"></div>
-                <details><summary data-af="results"></summary><ol id="focusReview"></ol></details>
-            </div>
-            <p id="focusNotice" class="af-muted" aria-live="polite"></p>
-        </section>
-
-        <section id="ivPanel" class="af-panel" hidden aria-labelledby="ivTitle">
-            <div class="af-head"><div><p class="af-instrument" id="ivInstrument"></p><h2 id="ivTitle"></h2></div><a href="#tools" data-iv="back"></a></div>
-            <div id="ivHome" hidden>
-                <p id="ivDaily"></p>
-                <fieldset class="af-octaves"><legend data-iv="octaves"></legend><div id="ivOctaves" class="af-notes"></div></fieldset>
-                <p id="ivRangeHint" class="af-muted" role="status" hidden></p>
-                <div id="ivModes" class="af-modes"></div>
-                <p id="ivRules" class="af-muted"></p>
-                <div class="af-group"><strong data-iv="set"></strong><span id="ivCurrent"></span><button class="primary" type="button" id="ivAdd" hidden></button></div>
-                <details id="ivGuide"><summary data-iv="examples"></summary><div id="ivExamples"></div></details>
-                <details id="ivSettings"><summary data-iv="settings"></summary>
-                    <div id="ivPicker" class="af-notes" role="group"></div>
-                    <label class="af-option"><span data-iv="direction"></span><select id="ivDirection"><option value="up"></option><option value="down"></option><option value="both"></option><option value="harmonic"></option></select></label>
-                    <label class="af-option"><span data-iv="size"></span><select id="ivSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
-                    <label class="af-option"><span id="ivAutoText"></span><input id="ivAuto" type="checkbox"></label>
-                    
-                    <label class="af-option"><span data-iv="repeats"></span><input id="ivRepeats" type="checkbox"></label>
-                    <label class="af-option"><span data-iv="limitSeconds"></span><input id="ivLimit" class="af-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
-                    <p class="af-muted" data-iv="limitHelp"></p>
-                    <details><summary data-iv="thresholds"></summary>
-                        <label class="af-option"><span data-iv="hit"></span><input id="ivHit" type="number" min="50" max="100"></label>
-                        <label class="af-option"><span data-iv="fa"></span><input id="ivFa" type="number" min="0" max="50"></label>
-                    </details>
-                </details>
-                <details id="ivEvidence"><summary data-iv="evidence"></summary>
-                    <p id="ivProgress"></p><p id="ivRates"></p><p id="ivChecks"></p>
-                    <table><thead><tr><th data-iv="interval"></th><th data-iv="practice"></th><th data-iv="check"></th><th data-iv="days"></th></tr></thead><tbody id="ivStats"></tbody></table>
-                    <p class="af-muted" data-iv="recordHelp"></p><p class="af-muted" data-iv="countsLocal"></p>
-                    <div class="af-actions"><button class="secondary" type="button" id="ivBackup" data-iv="backup"></button><button class="secondary" type="button" id="ivRestore" data-iv="restore"></button><input type="file" id="ivFile" hidden accept=".json,application/json"></div>
-                </details>
-            </div>
-            <div id="ivRound" hidden>
-                <p class="af-instrument" id="ivIndex"></p>
-                <p class="af-live" id="ivPrompt" role="status" aria-live="polite"></p>
-                <div class="af-timer" id="ivTimer" aria-hidden="true" hidden><span></span></div>
-                <div id="ivAnswers" class="af-notes"></div>
-                <p class="af-muted" id="ivAnswerHint"></p>
-                <div class="af-actions">
-                    <button type="button" class="primary" id="ivNext"></button>
-                    <button type="button" class="secondary" id="ivReplay" data-iv="replay"></button>
-                    <button type="button" class="secondary" id="ivAnswerSound" data-iv="answerSound"></button>
-                    <button type="button" class="af-plain" id="ivFault" data-iv="audio"></button>
-                </div>
-                <button type="button" class="af-plain af-end" id="ivEnd" data-iv="finish"></button>
-            </div>
-            <div id="ivSummary" hidden><h3 id="ivSummaryTitle"></h3><p id="ivScore"></p>
-                <div id="ivContinue" class="af-actions"></div>
-                <details><summary data-iv="results"></summary><ol id="ivReview"></ol></details>
-            </div>
-            <p id="ivNotice" class="af-muted" aria-live="polite"></p>
-        </section>
-
         <p id="storageWarning" role="alert" hidden></p>
-        <!-- AP prompt, answers and results come first: during a round the settings are hidden,
-             after a round the result is read before anything else. -->
-        <section class="ap-answer-panel" id="apAnswerPanel" hidden>
-            <p id="apMessage" class="ap-message" role="status" aria-live="polite"></p>
-            <div id="apAnswers" class="ap-answer-buttons af-two" aria-label="Absolute pitch answers">
-                <div id="apNameKeys" class="af-keys" role="group"></div>
-                <div id="apOctaveKeys" class="af-octave-row" role="group"></div>
-                <div id="apExtraKeys" class="af-extra"></div>
-            </div>
-            <button id="apRepeatNote" type="button" class="secondary ap-repeat-note" hidden>Replay correct note</button>
-            <div id="apReview" class="ap-review" hidden></div>
-        </section>
-
-        <section class="settings-card">
+        <section class="settings-card" id="settingsCard">
             <div class="settings-grid">
-                <label>
-                    <span id="fromLabel">From</span>
-                    <select id="startNote"></select>
-                </label>
-                <label>
-                    <span id="toLabel">To</span>
-                    <select id="endNote"></select>
-                </label>
-                <label>
-                    <span id="keyLabel">Key</span>
-                    <select id="keySelect"></select>
-                </label>
-                <label class="legacy-clef-control" hidden>
-                    <span id="clefLabel">Clef</span>
-                    <select id="clefSelect">
-                        <option value="Treble">Treble</option>
-                        <option value="Bass">Bass</option>
-                        <option value="Auto">Auto</option>
-                    </select>
-                </label>
+                <label><span data-i="mode"></span><select id="modeSelect"><option value="single" data-i="one"></option><option value="interval" data-i="two"></option><option value="free" data-i="free"></option></select></label>
+                <label id="displayRow"><span data-i="answerWith"></span><select id="displaySelect"><option value="buttons" data-i="buttons"></option><option value="instrument" data-i="instrument"></option></select></label>
             </div>
-            <details id="relativeNotes" class="rp-note-filter" hidden>
-                <summary id="relativeNotesLabel">Notes</summary>
-                <div id="relativeNoteButtons" class="af-notes"></div>
-                <button type="button" class="secondary" id="relativeAllNotes">Select all</button>
-            </details>
-            <div class="settings-actions">
-                <label class="mode-picker" for="modeSelect">
-                    <span id="modeLabel">Mode</span>
-                    <select id="modeSelect">
-                        <option value="single">One Note</option>
-                        <option value="interval">Two Notes</option>
-                        <option value="free">Free Play</option>
-                    </select>
-                </label>
-                <button id="applyButton" class="secondary" disabled>Apply</button>
-                <div class="interval-settings" id="intervalPicker" hidden>
-                    <label class="interval-picker" for="minIntervalSelect">
-                        <span id="minIntervalLabel">Min interval (semitones)</span>
-                        <select id="minIntervalSelect" aria-labelledby="minIntervalLabel"></select>
-                    </label>
-                    <label class="interval-picker" for="maxIntervalSelect">
-                        <span id="maxIntervalLabel">Max interval (semitones)</span>
-                        <select id="maxIntervalSelect" aria-labelledby="maxIntervalLabel"></select>
-                    </label>
-                    <label class="interval-picker" for="directionSelect">
-                        <span id="targetDirectionLabel">Target direction</span>
-                        <select id="directionSelect" aria-labelledby="targetDirectionLabel">
-                            <option value="higher">Higher</option>
-                            <option value="lower">Lower</option>
-                            <option value="both">Both (random)</option>
-                        </select>
-                    </label>
+            <div id="apSettings">
+                <fieldset><legend data-i="learningNotes"></legend><div id="learningNotes" class="note-grid"></div></fieldset>
+                <fieldset><legend data-i="octaves"></legend><div id="octaves" class="octave-grid"></div></fieldset>
+                <label class="option-row"><input type="checkbox" id="blindCheck"><span data-i="blind"></span></label>
+            </div>
+            <div id="rpSettings" hidden>
+                <div class="settings-grid">
+                    <label><span data-i="minInterval"></span><select id="minIntervalSelect"></select></label>
+                    <label><span data-i="maxInterval"></span><select id="maxIntervalSelect"></select></label>
+                    <label class="wide"><span data-i="direction"></span><select id="directionSelect"><option value="both" data-i="random"></option><option value="higher" data-i="up"></option><option value="lower" data-i="down"></option></select></label>
                 </div>
-                <div class="ap-settings" id="apPicker" hidden>
-                    <div id="apAssessmentOptions" class="ap-configuration">
-                    <label class="ap-picker" for="apTrialsSelect" id="apTrialsPicker">
-                        <span id="apTrialsLabel">Questions per round</span>
-                        <select id="apTrialsSelect"><option value="12">12</option><option value="20">20</option><option value="36">36</option><option value="48">48</option></select>
-                    </label>
-                    <label class="ap-picker" for="apTimeSelect" id="apTimePicker">
-                        <span id="apTimeLabel">Response limit</span>
-                        <select id="apTimeSelect"><option value="5">5 seconds</option><option value="2">2 seconds</option><option value="none">No limit</option></select>
-                    </label>
-                    <label class="ap-picker" for="apTimbre" id="apTimbrePicker">
-                        <span id="apTimbreLabel">Check sound</span>
-                        <select id="apTimbre"><option value="instrument">Instrument</option><option value="neutral">Neutral tone</option><option value="mixed">Mixed sounds</option></select>
-                    </label>
-                    </div>
-                    <div class="ap-course-info" id="apCourseInfo" hidden>
-                        <p id="apCourseLevel"></p>
-                        <div id="apStudyPanel" class="ap-study-panel" hidden>
-                            <p id="apStudyTitle" class="ap-study-title">1 · Listen & remember</p>
-                            <p id="apStudySubtitle" class="ap-study-subtitle">Tap each note repeatedly before attempting retrieval.</p>
-                            <div id="apStudyOctaves" class="ap-study-octaves" hidden></div>
-                            <div id="apStudyCards" class="ap-study-cards"></div>
-                            <p id="apStudyDue" class="ap-study-subtitle"></p>
-                        </div>
-                        <label class="ap-picker" for="apLevelSelect" id="apLevelPicker">
-                            <span id="apLevelLabel">Learning difficulty</span>
-                            <select id="apLevelSelect"></select>
-                        </label>
-                        <p id="apCourseDescription"></p>
-                        <div id="apColdConfirmation" class="ap-cold-confirm" hidden>
-                            <p class="ap-description" id="apColdRangeText"></p>
-                            <p class="ap-description" id="apBreakInfo"></p>
-                            <label class="ap-picker" for="apColdDevice"><span id="apColdDeviceLabel"></span>
-                                <select id="apColdDevice"><option value="speaker">Speaker</option><option value="wired">Wired headphones</option><option value="bluetooth">Bluetooth</option><option value="other">Other/unknown</option></select>
-                            </label>
-                            <label class="ap-opt"><input id="apHideColdCheck" type="checkbox"><span id="apHideColdText"></span></label>
-                        </div>
-                    </div>
-                    <label class="option-row" id="apMaskRow"><input id="apMaskCheck" type="checkbox" checked><span id="apMaskText">Play a short instrumental phrase before each question</span></label>
-                    <p id="apDescription" class="ap-description">Consecutive targets have different note names. Answers appear after the round.</p>
-                    <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
-                </div>
-                <label class="option-row" id="autoNextRow"><input id="autoNextCheck" type="checkbox" checked><span id="autoNextText">Continue automatically after each answer</span></label>
-                <label class="limit-picker" for="answerLimitSelect" id="answerLimitRow"><span id="answerLimitLabel">Answer window</span><input id="answerLimitSelect" class="limit-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="1.3"></label>
-                <p id="answerLimitHelp" class="ap-description"></p>
+                <details id="rangeDetails"><summary><span data-i="pitchRange"></span> · <span id="rangeLabel"></span></summary>
+                    <div class="settings-grid"><label><span data-i="from"></span><select id="startNote"></select></label><label><span data-i="to"></span><select id="endNote"></select></label></div>
+                </details>
             </div>
+            <div id="commonSettings">
+                <label class="time-setting"><span data-i="answerTime"></span><input id="answerLimitSelect" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Answer time (seconds)"></label>
+                <details><summary data-i="advanced"></summary>
+                    <label class="option-row"><input type="checkbox" id="autoNextCheck" checked><span data-i="autoNext"></span></label>
+                    <label class="option-row" id="maskRow"><input type="checkbox" id="maskCheck" checked><span data-i="mask"></span></label>
+                    <p class="mini" data-i="timeHint"></p>
+                </details>
+            </div>
+            <p id="configError" role="alert" hidden></p>
         </section>
-
-
-        <section id="rpPanel" class="rp-panel" hidden>
-            <div class="rp-config">
-                <label><span id="rpLevelLabel">Level</span><select id="rpLevel"></select></label>
-                <label><span id="rpActivityLabel">Exercise</span>
-                    <select id="rpActivity">
-                        <option value="practice">Guided practice</option>
-                        <option value="review">Weak intervals</option>
-                        <option value="test">Independent check</option>
-                        <option value="locate">Instrument location</option>
-                        <option value="melody">Short melody</option>
-                        <option value="produce">Sing / play first</option>
-                    </select></label>
-                <label><span id="rpDirectionLabel">Direction</span>
-                    <select id="rpDirection"><option value="both">Both</option><option value="higher">Ascending</option><option value="lower">Descending</option></select></label>
-            </div>
-            <label class="rp-timbre"><span id="rpTimbreLabel">Check sound</span><select id="rpTimbre"><option value="instrument">Instrument</option><option value="neutral">Neutral tone</option></select></label>
-            <label class="option-row rp-mic" id="rpMicRow" hidden><input id="rpMicCheck" type="checkbox"><span id="rpMicText">Check with the microphone (experimental)</span></label>
-            <p id="rpFocus" class="rp-caption rp-focus" hidden></p>
-            <details class="rp-examples" id="rpExamples">
-                <summary id="rpSampleSummary">Show / hide examples</summary>
-                <div id="rpSamples" class="rp-sample-grid"></div>
-            </details>
-            <div class="rp-progress"><strong id="rpQuestionNumber"></strong><span id="rpMessage">Press Play to begin</span></div>
-            <div id="rpReference" class="rp-reference" hidden></div>
-            <div id="rpAnswers" class="rp-answer-grid" hidden></div>
-            <div id="rpProduce" class="rp-produce" hidden>
-                <p id="rpProducePrompt" class="rp-produce-prompt"></p>
-                <button id="rpProduceReveal" type="button" class="primary">Hear the answer</button>
-                <div id="rpProduceRate" class="rp-produce-rate" hidden>
-                    <button id="rpProduceMatched" type="button" class="secondary">Matched</button>
-                    <button id="rpProduceMissed" type="button" class="secondary">Off</button>
-                </div>
-            </div>
-            <div class="rp-audio-controls">
-                <button id="rpReplay" type="button" class="secondary" hidden>Replay pair</button>
-                <button id="rpCorrectAudio" type="button" class="secondary" hidden>Play correct</button>
-                <button id="rpSelectedAudio" type="button" class="secondary" hidden>Play my answer</button>
-            </div>
-            <div id="rpResults" class="rp-results" hidden></div>
-            <details class="rp-history"><summary id="rpHistorySummary">Recent results</summary>
-                <p id="rpStats"></p><button id="rpExport" class="secondary" type="button">Export RP CSV</button></details>
-            <p id="rpIntro" class="rp-caption">Intervals are scored by semitone distance.</p>
+        <section id="controls" class="controls unified-controls">
+            <button id="playButton" class="primary" disabled data-i="start"></button>
+            <button id="nextButton" class="secondary" hidden data-i="next"></button>
+            <button id="replayButton" class="secondary" hidden data-i="replay"></button>
         </section>
-
-        <section class="controls">
-            <button id="playButton" class="primary" disabled>Play</button>
-            <button id="nextButton" class="secondary" disabled>Next</button>
-            <button id="demoButton" class="secondary" disabled>Demo</button>
+        <section id="answerCard" class="answer-card" hidden>
+            <div id="sessionScore" class="session-score"></div>
+            <div id="answerText" role="status" aria-live="polite"></div>
+            <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
         </section>
-
-        <details class="ap-history-panel" id="apHistoryPanel">
-            <summary id="apProgressTitle">AP progress</summary>
-            <div id="apRecentHistory"></div>
-            <button type="button" class="secondary" id="apExportButton">Export trial CSV</button>
-        </details>
-
+        <section id="buttonBoard" class="button-board" hidden>
+            <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
+            <div id="apOctaveKeys" class="octave-grid" role="group" aria-label="Octave"></div>
+            <div id="intervalAnswers" class="interval-answers" role="group" aria-label="Semitones"></div>
+        </section>
+        <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" class="secondary" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
+        <section class="keyboard-card" id="keyboardCard" hidden>
+            <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
+        </section>
+        <section id="sessionSummary" class="settings-card" hidden><h2 data-i="results"></h2><div id="summaryBody"></div><details id="reviewDetails" hidden><summary data-i="review"></summary><ol id="reviewList"></ol></details></section>
+        <details id="statistics" class="settings-card history-card">
+            <summary data-i="statistics"></summary><div id="historyBody"></div>
+            <div class="history-actions"><button id="exportButton" class="secondary" data-i="backup"></button><button id="importButton" class="secondary" data-i="restore"></button><input id="importFile" type="file" accept=".json,application/json" hidden></div>
+            <p class="mini" id="historyNotice" role="status"></p>
         <section class="tracker-strip" aria-label="Training time">
             <p id="trackerStatus">今日有效训练 0/60 分钟 · 仅本机，未同步</p>
             <details class="tracker-config">
@@ -349,42 +119,18 @@
             </details>
         </section>
 
-        <section class="answer-card">
-            <div id="answerText" class="answer-text">Free play mode</div>
-            <span id="referenceChip" class="reference-chip" hidden></span>
-            <button id="intervalReplayButton" class="secondary interval-replay-button" type="button" hidden>Replay</button>
-            <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
-        </section>
-
-        <section class="keyboard-card">
-            <div id="keyboardScroller" class="keyboard-scroller">
-                <div id="keyboard" class="keyboard"></div>
-            </div>
-        </section>
-        <p id="helpText" class="hint"></p>
+        </details>
     </main>
-    <!-- Legacy notation target kept off-screen for compatibility with unchanged Demo logic. -->
-    <svg id="staff" hidden aria-hidden="true" style="display:none"></svg>
-
     <script src="./vendor/WebAudioFontPlayer.js"></script>
     <script src="./i18n.js"></script>
-    <script src="./demo-score.js"></script>
     <script src="./training-core.js"></script>
     <script src="./answer-timer.js"></script>
-    <script src="./training-copy.js"></script>
     <script src="./ap-science.js"></script>
     <script src="./training-tracker.js"></script>
-    <script src="./ap-memory.js"></script>
-    <script src="./relative-course.js"></script>
-    <script src="./pitch-detect.js"></script>
-    <script src="./relative-ui.js"></script>
-    <script src="./ap-focus-copy.js"></script>
     <script src="./ap-focus-model.js"></script>
-    <script src="./ap-focus-audio.js"></script>
-    <script src="./ap-focus.js"></script>
-    <script src="./interval-focus-copy.js"></script>
-    <script src="./interval-focus-model.js"></script>
-    <script src="./interval-focus.js"></script>
+    <script src="./relative-course.js"></script>
+    <script src="./unified-model.js"></script>
+    <script src="./unified-copy.js"></script>
     <script src="./app.js"></script>
 </body>
 </html>
