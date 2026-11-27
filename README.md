@@ -1,4 +1,9 @@
-# Ear Trainer 3.0.3 · 统一训练版
+# Ear Trainer 3.0.4 · 统一训练版
+
+## 3.0.4 修复
+
+- 普通练习答题后，Buttons 和 Instrument 共用试听逻辑。One Note 可点击任意音名或乐器实际存在的八度试听（初始为本题正确音，超出练习音域也可试听）；Two Notes 可点击当前显示的任意半音数字，播放对应的两个音，方向与本题一致，优先保留参考音，必要时平移至可演奏音域。试听保留原评分，暂停自动下一题，按 Next 继续。Stop 后保留按钮试听；盲测进行中仍不开放试听，停止后可以试听。Other 和 Not sure 无对应固定音高，不作为试听按钮。
+- 普通版和单文件版同步，缓存版本更新。训练算法、评分与计时不变。
 
 ## 3.0.3 修复
 
@@ -50,6 +55,7 @@
 - `python tests/browser_unified.py index.html piano`（或 `violin`；单文件改用 `single-file/index.html`）为新版 Chromium 浏览器交互测试，需要 Playwright 与 Chromium。测试采用内存加载和模拟存储来源，不能代替实机/PWA 升级验证。
 - `python tests/browser_interval_review.py index.html violin` 验证双音无开场倒计时、评分后自由试听、暂停/恢复自动下一题、停止后自由演奏及 AP 倒计时保留。
 - `python tests/browser_interval_feedback.py index.html violin` 验证上一版双音重播与参考音同步。
+- `python tests/browser_button_review.py index.html piano`（或 `violin`、`single-file/index.html`）验证两种模式的按钮试听、正确/错误/超时、自动下一题暂停、盲测隔离和停止后试听；`node tests/test_button_review.cjs` 验证全部可用音域的试听音高及音程映射。
 - 包含其他旧版回归测试，主要用于验证复用模块及历史算法；旧页面交互测试针对历史界面，不再是新版 UI 测试。
 
 听觉训练效果以本人实际练习、跨日测试为准，模拟仅验证程序逻辑。音源授权见 [THIRD_PARTY.md](THIRD_PARTY.md)。

@@ -42,5 +42,17 @@ function drawRP(groups,previous){if(!groups.length)return null;const old=previou
  const group=choose(groups,groups.map(g=>g.distance===old ? .55 : 1));const reference=choose(group.refs);return {reference,target:reference+group.signed,size:group.distance,direction:group.direction};}
 function gradeAP(target,guess,guessOctave,known){const correct=TrainingCore.matchesLearningSet(target%12,guess,known,0,11);
  return {correct,octaveCorrect:known.includes(target%12)&&guess===target%12&&Number.isInteger(guessOctave)?guessOctave===octave(target):null};}
-root.UnifiedModel={octave,limits,range,names,pitches,apPoolValid,drawAP,rpGroups,rpPoolValid,drawRP,gradeAP};
+// Review is independent of the question pool: choose real pitches only.
+function apReviewPitch(current,kind,value,lo,hi){
+ const desired=kind==='name'?12*(octave(current)+1)+value:12*(value+1)+current%12;
+ const candidates=range(lo,hi).filter(m=>kind==='name'?m%12===value:octave(m)===value);
+ return candidates.reduce((best,m)=>best===null||Math.abs(m-desired)<Math.abs(best-desired)?m:best,null);
+}
+function rpReviewPair(reference,target,distance,lo,hi){
+ if(!Number.isInteger(distance)||distance<1||distance>hi-lo)return null;
+ const signed=target<reference?-distance:distance;
+ const r=Math.max(lo+Math.max(0,-signed),Math.min(hi-Math.max(0,signed),reference));
+ return [r,r+signed];
+}
+root.UnifiedModel={octave,limits,range,names,pitches,apPoolValid,drawAP,rpGroups,rpPoolValid,drawRP,gradeAP,apReviewPitch,rpReviewPair};
 })(typeof window==='undefined'?globalThis:window);
