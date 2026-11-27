@@ -1,12 +1,12 @@
-const APP_VERSION = "2.8.8";
+const APP_VERSION = "2.8.9";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
     for (const [locale, copy] of Object.entries(PIANO_TRANSLATIONS)) Object.assign(TRANSLATIONS[locale], copy);
 }
 const PLAY_DURATION = 0.7;
-const SUPPORTED_MIN_MIDI = instrumentMode === "violin" ? 55 : 36;
-const SUPPORTED_MAX_MIDI = instrumentMode === "violin" ? 88 : 95;
+const SUPPORTED_MIN_MIDI = instrumentMode === "violin" ? 55 : 21;
+const SUPPORTED_MAX_MIDI = instrumentMode === "violin" ? 88 : 108;
 const DEFAULT_MIN_MIDI = 60;
 const DEFAULT_MAX_MIDI = 71;
 const VIOLIN_OPEN_STRINGS = [{ name: "E5", midi: 76 }, { name: "A4", midi: 69 }, { name: "D4", midi: 62 }, { name: "G3", midi: 55 }];
@@ -140,9 +140,10 @@ const KEY_OPTIONS = [
     "Ab minor"
 ];
 
-// An octave fits fully inside the available phone viewport, including B.
-let WHITE_WIDTH = 52;
-let BLACK_WIDTH = 32;
+// A complete piano, always laid out in seven fixed rows, low to high.
+// Edge octaves are partial: attach A0-B0 to octave 1 and C8 to octave 7.
+const PIANO_ROWS = [[21,35], [36,47], [48,59], [60,71], [72,83], [84,95], [96,108]];
+const PIANO_BLACK_RATIO = 0.70;
 
 const elements = {
     status: document.getElementById("status"),
@@ -190,9 +191,6 @@ let legacyPlayback = 0;
 let ready = false;
 let demoRunning = false;
 let demoCancelled = false;
-let keyboardMinX = 0;
-let demoSelectedOctave = null;
-let demoOctaveTapTimeout = null;
 let demoTimer = null;
 let demoResolve = null;
 const demoWaits = new Set();
@@ -354,13 +352,6 @@ function setLanguage(language) {
     for (const option of clefSelect.options) {
         option.textContent = t(option.value.toLowerCase());
     }
-    document.getElementById("octaveNav").setAttribute("aria-label", t("octaveNavigation"));
-    for (const button of document.querySelectorAll(".octave-jump")) {
-        const label = instrumentMode === "violin"
-            ? t("violinJump", { position: button.textContent })
-            : t("jumpToOctave", { note: noteName(Number(button.dataset.midi)) });
-        button.setAttribute("aria-label", label);
-    }
     if (instrumentMode === "violin") {
         elements.keyboard.querySelectorAll(".violin-note").forEach((button) => {
             button.setAttribute("aria-label", `${button.dataset.string} \u00b7 ${t("violinPosition", { position: button.dataset.position })}`);
@@ -518,11 +509,11 @@ function whiteGlobalIndex(midi) {
 
 function keyBounds(midi) {
     if (isWhiteKey(midi)) {
-        const left = whiteGlobalIndex(midi) * WHITE_WIDTH;
+        const left = whiteGlobalIndex(midi);
 
         return {
             left,
-            right: left + WHITE_WIDTH,
+            right: left + 1,
             black: false
         };
     }
@@ -537,11 +528,11 @@ function keyBounds(midi) {
         10: 5
     }[pitchClass];
 
-    const boundary = (octave * 7 + leftWhiteOffset + 1) * WHITE_WIDTH;
+    const boundary = octave * 7 + leftWhiteOffset + 1;
 
     return {
-        left: boundary - BLACK_WIDTH / 2,
-        right: boundary + BLACK_WIDTH / 2,
+        left: boundary - PIANO_BLACK_RATIO / 2,
+        right: boundary + PIANO_BLACK_RATIO / 2,
         black: true
     };
 }
@@ -580,9 +571,7 @@ function drawViolinFingerboard() {
     board.style.height = `${header + (VIOLIN_MAX_POSITION + 1) * rowHeight + 4}px`;
     board.style.removeProperty("--white-width");
     board.style.removeProperty("--black-width");
-    keyElements.clear(); keyboardMinX = 0;
-    const nav = document.getElementById("octaveNav");
-    nav.replaceChildren(); nav.hidden = true; nav.style.display = "none";
+    keyElements.clear();
     scroller.style.overflowX = "hidden";
     scroller.style.overflowY = "visible";
     scroller.onscroll = null;
@@ -642,153 +631,63 @@ function drawViolinFingerboard() {
         }
     });
 }
-function octaveGroups() {
-    if (instrumentMode === "violin") return [
-        { midi: 0, label: "0\u20134" }, { midi: 5, label: "5\u20138" }, { midi: 9, label: "9\u201312" }
-    ];
-    const groups = [];
-    const first = Math.floor(minMidi / 12) * 12;
-
-    for (let base = first; base <= maxMidi; base += 12) {
-        const firstNote = Math.max(base, minMidi);
-        if (firstNote > maxMidi) continue;
-        groups.push({
-            midi: firstNote,
-            label: noteName(firstNote)
-        });
-    }
-
-    return groups;
-}
-
-function showOctave(midi, behavior = "smooth") {
-    if (instrumentMode === "violin") {
-        // All 52 positions are visible: preserve the user's visual reference.
-        return;
-    }
-    const bounds = keyBounds(midi);
-    const left = Math.max(0, bounds.left - keyboardMinX);
-    elements.keyboardScroller.scrollTo({ left, behavior });
-}
-
-function highlightOctave(midi) {
-    document.querySelectorAll(".octave-jump").forEach((button) => {
-        button.classList.toggle("current", Number(button.dataset.midi) === midi);
-    });
-}
-
 function drawKeyboard() {
     if (instrumentMode === "violin") {
         drawViolinFingerboard();
         return;
     }
-    elements.keyboard.classList.remove("violin-board");
-    // Keep natural-size keys when possible, but fit seven white keys (C-B)
-    // on a phone. Every octave uses the same width and left alignment.
-    const viewport = elements.keyboardScroller.clientWidth || Math.max(280, Math.min(window.innerWidth - 40, 720));
-    WHITE_WIDTH = Math.min(52, Math.max(36, (viewport - 2) / 7));
-    BLACK_WIDTH = WHITE_WIDTH * (32 / 52);
-    elements.keyboard.style.setProperty("--white-width", `${WHITE_WIDTH}px`);
-    elements.keyboard.style.setProperty("--black-width", `${BLACK_WIDTH}px`);
-    elements.keyboard.replaceChildren();
+    const board = elements.keyboard;
+    board.classList.remove("violin-board");
+    board.classList.add("piano-board");
+    board.replaceChildren();
     keyElements.clear();
-
-    const midis = [];
-
-    for (let midi = minMidi; midi <= maxMidi; midi += 1) {
-        midis.push(midi);
-    }
-
-    const bounds = midis.map((midi) => keyBounds(midi));
-    const minX = Math.min(...bounds.map((item) => item.left));
-    const maxX = Math.max(...bounds.map((item) => item.right));
-    // Leave enough horizontal content for every octave jump to align its
-    // starting key at the same left-side position in the fixed viewport.
-    const finalOctaveStart = keyBounds(
-        Math.floor(maxMidi / 12) * 12
-    ).left - minX;
-    const viewWidth = viewport;
-    const width = Math.max(maxX - minX, finalOctaveStart + viewWidth, 100);
-
-    keyboardMinX = minX;
-    elements.keyboard.style.width = `${width}px`;
-
-    const nav = document.getElementById("octaveNav");
-    nav.replaceChildren();
-    const groups = octaveGroups();
-    nav.hidden = groups.length <= 1;
-    nav.setAttribute("aria-label", t("octaveNavigation"));
-    const navButtons = [];
-
-    groups.forEach((group) => {
-        const button = document.createElement("button");
-        button.className = "octave-jump";
-        button.type = "button";
-        button.textContent = group.label;
-        button.dataset.midi = String(group.midi);
-        button.setAttribute("aria-label", t("jumpToOctave", { note: group.label }));
-        button.addEventListener("click", () => {
-            if (!demoRunning) showOctave(group.midi);
-        });
-        nav.appendChild(button);
-        navButtons.push({ button, midi: group.midi });
-
-        const marker = document.createElement("span");
-        marker.className = "octave-mark";
-        marker.textContent = group.label;
-        marker.style.left = `${Math.max(0, keyBounds(group.midi).left - minX) + 4}px`;
-        elements.keyboard.appendChild(marker);
-    });
-
-    const markCurrentOctave = () => {
-        if (demoRunning && demoSelectedOctave !== null) {
-            highlightOctave(demoSelectedOctave);
-            return;
-        }
-        const offset = elements.keyboardScroller.scrollLeft;
-        let selected = 0;
-        for (let i = 0; i < navButtons.length; i += 1) {
-            const groupX = keyBounds(navButtons[i].midi).left - minX;
-            if (groupX <= offset + 14) selected = i;
-        }
-        navButtons.forEach(({ button }, i) => button.classList.toggle("current", i === selected));
-    };
-    elements.keyboardScroller.onscroll = markCurrentOctave;
-    markCurrentOctave();
-
-    const ordered = [
-        ...midis.filter((midi) => isWhiteKey(midi)),
-        ...midis.filter((midi) => !isWhiteKey(midi))
-    ];
-
-    ordered.forEach((midi) => {
-        const boundsForKey = keyBounds(midi);
-        const key = document.createElement("button");
-
-        key.type = "button";
-        key.className = `piano-key ${boundsForKey.black ? "black-key" : "white-key"}`;
-        key.style.left = `${boundsForKey.left - minX}px`;
-        key.style.width = `${boundsForKey.right - boundsForKey.left}px`;
-        key.dataset.midi = String(midi);
-        key.setAttribute("aria-label", noteName(midi));
-
-        key.addEventListener("pointerdown", (event) => {
-            if (demoRunning) {
-                return;
+    // Percentage geometry keeps the same keys and feedback across orientation,
+    // viewport and panel changes; no resize-driven DOM redraw or scrolling.
+    for (const [first, last] of PIANO_ROWS) {
+        const row = document.createElement("div");
+        row.className = "piano-row";
+        row.setAttribute("role", "group");
+        row.setAttribute("aria-label", `${noteName(first)}–${noteName(last)}`);
+        const left = keyBounds(first).left;
+        const span = keyBounds(last).right - left;
+        for (let midi = first; midi <= last; midi++) {
+            const bounds = keyBounds(midi);
+            const key = document.createElement("button");
+            key.type = "button";
+            key.className = `piano-key ${bounds.black ? "black-key" : "white-key"}${midi < minMidi || midi > maxMidi ? " out-of-range" : ""}`;
+            key.style.left = `${100 * (bounds.left - left) / span}%`;
+            key.style.width = `${100 * (bounds.right - bounds.left) / span}%`;
+            key.dataset.midi = String(midi);
+            key.setAttribute("aria-label", noteName(midi));
+            // C labels identify every octave without covering the playing surface.
+            if (midi % 12 === 0 || midi === SUPPORTED_MIN_MIDI) {
+                const label = document.createElement("span");
+                label.className = "piano-note-label";
+                label.textContent = noteName(midi);
+                label.setAttribute("aria-hidden", "true");
+                key.appendChild(label);
             }
-            event.preventDefault();
-            try { key.setPointerCapture(event.pointerId); } catch (_) { /* pointer already released */ }
-            pressKey(midi, event.pointerId);
-        });
-        key.addEventListener("pointerup", (event) => releasePointer(event.pointerId));
-        key.addEventListener("pointercancel", (event) => releasePointer(event.pointerId));
-        key.addEventListener("lostpointercapture", (event) => releasePointer(event.pointerId));
-
-        elements.keyboard.appendChild(key);
-        keyElements.set(midi, key);
-    });
-
-    elements.keyboardScroller.scrollLeft = 0;
+            key.addEventListener("pointerdown", event => {
+                if (demoRunning) return;
+                event.preventDefault();
+                try { key.setPointerCapture(event.pointerId); } catch (_) { /* pointer already released */ }
+                pressKey(midi, event.pointerId);
+            });
+            key.addEventListener("pointerup", event => releasePointer(event.pointerId));
+            key.addEventListener("pointercancel", event => releasePointer(event.pointerId));
+            key.addEventListener("lostpointercapture", event => releasePointer(event.pointerId));
+            // Keyboard/assistive technology activation; pointer clicks must not submit twice.
+            key.addEventListener("click", event => {
+                if (event.detail !== 0 || demoRunning) return;
+                const pointerId = `piano-keyboard-${midi}`;
+                pressKey(midi, pointerId);
+                if (activePointers.has(pointerId)) window.setTimeout(() => releasePointer(pointerId), 220);
+            });
+            row.appendChild(key);
+            keyElements.set(midi, key);
+        }
+        board.appendChild(row);
+    }
 }
 
 function setControlsEnabled(enabled) {
@@ -899,28 +798,6 @@ function drawQuestionStaff() {
 function markReferenceKey() {
     if (testActive && testMode === "interval" && currentReferenceMidi !== null) {
         markPitch(currentReferenceMidi, "reference");
-    }
-}
-
-function jumpToReferenceOctave() {
-    if (currentReferenceMidi === null) return;
-    if (instrumentMode === "violin") { showOctave(currentReferenceMidi, "instant"); return; }
-    const group = octaveGroups().find(({ midi }, index, groups) =>
-        currentReferenceMidi >= midi &&
-        (index === groups.length - 1 || currentReferenceMidi < groups[index + 1].midi));
-    if (group) showOctave(group.midi, "instant");
-}
-
-function showCorrectKeyIfHidden() {
-    if (instrumentMode === "violin") { showOctave(currentMidi, "instant"); return; }
-    const key = keyElements.get(currentMidi);
-    if (!key) return;
-    const viewport = elements.keyboardScroller.getBoundingClientRect();
-    const rect = key.getBoundingClientRect();
-    if (rect.left < viewport.left + 2 || rect.right > viewport.right - 2) {
-        const group = octaveGroups().find(({ midi }, index, groups) =>
-            currentMidi >= midi && (index === groups.length - 1 || currentMidi < groups[index + 1].midi));
-        if (group) showOctave(group.midi, "instant");
     }
 }
 
@@ -1071,7 +948,6 @@ function answerTimeout() {
     setAnswer("raw", {text: formatAnswerText()});
     if (testMode === "interval") {
         drawAnsweredStaff();
-        showCorrectKeyIfHidden();
         playQuestion(true).catch(() => setStatus("audioRetry"));
     } else {
         drawStaff(currentMidi);
@@ -1828,7 +1704,6 @@ function newQuestion() {
         setStatus("listenInterval", { note: spelledNoteName(currentReferenceMidi, KEY_FIFTHS[keyName]) });
         setAnswer("chooseInterval");
         markReferenceKey();
-        jumpToReferenceOctave();
     } else {
         setStatus("listen");
         setAnswer("choose");
@@ -1943,7 +1818,6 @@ function answer(selectedMidi) {
         });
         setAnswer("raw", { text: formatAnswerText() });
         drawAnsweredStaff();
-        showCorrectKeyIfHidden();
         playQuestion().catch(() => setStatus("audioRetry"));
     } else {
         setStatus(correctAnswer ? "correct" : "wrong", { note: targetName });
@@ -1961,6 +1835,8 @@ function pressKey(midi, pointerId) {
     if (!ready) {
         return;
     }
+
+    if (instrumentMode === "piano" && testActive && (midi < minMidi || midi > maxMidi)) return;
 
     if (testActive && currentMidi !== null && !answered) {
         if (testMode === "interval" && midi === currentReferenceMidi) {
@@ -2113,7 +1989,8 @@ function relativeRange() {
     try { saved = JSON.parse(localStorage.getItem(relativeRangeKey)); } catch (_) {}
     if (Array.isArray(saved) && saved.length === 2 && saved.every(Number.isInteger) &&
         saved[0] >= SUPPORTED_MIN_MIDI && saved[0] < saved[1] && saved[1] <= SUPPORTED_MAX_MIDI) return saved;
-    return [SUPPORTED_MIN_MIDI, SUPPORTED_MAX_MIDI];
+    // Keep the previous default training range for new users; the selectors now also offer A0-C8.
+    return instrumentMode === "piano" ? [36, 95] : [SUPPORTED_MIN_MIDI, SUPPORTED_MAX_MIDI];
 }
 function selectExercise(mode) {
     const wasRelative = isRelativeMode(testMode), nextRelative = isRelativeMode(mode);
@@ -2402,23 +2279,7 @@ if (window.ResizeObserver) {
     }).observe(elements.keyboardScroller);
 }
 window.addEventListener("resize", () => {
-    if (demoRunning) return;
-    const previousOffset = elements.keyboardScroller.scrollLeft;
-    if (instrumentMode === "violin") {
-        redrawViolinBoard();
-        return;
-    }
-    const oldMinX = keyboardMinX;
-    const target = octaveGroups().reduce((best, group) => {
-        const distance = Math.abs(keyBounds(group.midi).left - oldMinX - previousOffset);
-        return distance < best.distance ? { midi: group.midi, distance } : best;
-    }, { midi: minMidi, distance: Infinity });
-    releaseAllKeys();
-    drawKeyboard();
-    showOctave(target.midi, "auto");
-    markReferenceKey();
-    if (testActive && ["single","interval"].includes(testMode) && answered) markPitch(currentMidi,"correct");
-    if (testMode === "rpCourse") RPUI.redraw();
+    if (!demoRunning && instrumentMode === "violin") redrawViolinBoard();
 });
 initializeAudio();
 registerServiceWorker();
@@ -2573,7 +2434,6 @@ function startDemoQuestion(midi, referenceMidi = null) {
         setStatus("listenInterval", { note: spelledNoteName(referenceMidi, KEY_FIFTHS[keyName]) });
         setAnswer("chooseInterval");
         markReferenceKey();
-        jumpToReferenceOctave();
     } else {
         setStatus("listen");
         setAnswer("choose");
@@ -2583,7 +2443,7 @@ function startDemoQuestion(midi, referenceMidi = null) {
 
 async function demoAnswer(selectedMidi) {
     const key = keyElements.get(selectedMidi);
-
+    if (instrumentMode === "piano") key?.scrollIntoView({block: "nearest", behavior: "instant"});
     await pointToElement(key);
     answer(selectedMidi);
 }
@@ -2601,30 +2461,6 @@ function prepareDemoEvents(data) {
 }
 
 const DEMO_EVENTS = prepareDemoEvents(demoScore);
-
-function demoJumpOctave(midi) {
-    if (instrumentMode === "violin") {
-        const step = violinPositionForMidi(midi)?.step ?? 0;
-        midi = step >= 9 ? 9 : step >= 5 ? 5 : 0;
-    }
-    if (midi === null || midi === demoSelectedOctave) return;
-    const button = [...document.querySelectorAll(".octave-jump")].find((element) => (
-        Number(element.dataset.midi) === midi
-    ));
-    if (!button) return;
-    demoSelectedOctave = midi;
-    showOctave(midi, "auto");
-    highlightOctave(midi);
-    const pointer = demoPointer();
-    const rect = button.getBoundingClientRect();
-    pointer.style.left = `${rect.left + rect.width / 2}px`;
-    pointer.style.top = `${rect.top + rect.height / 2}px`;
-    pointer.classList.add("visible", "tap");
-    window.clearTimeout(demoOctaveTapTimeout);
-    demoOctaveTapTimeout = window.setTimeout(() => {
-        pointer.classList.remove("visible", "tap");
-    }, 145);
-}
 
 function buildDemoMusicPointers() {
     if (document.querySelector(".demo-music-pointer")) return;
@@ -2698,15 +2534,6 @@ async function playInstrumentDemo() {
                 );
             }
             const sounding = events.filter((event) => event.start <= tick && tick < event.end);
-            // Do not choose the most-used octave of an entire measure.
-            // It can hide currently playing notes across C4/C5 boundaries.
-            // The melody is monophonic; follow its current pitch directly.
-            // In a rest, get ready for the next note so the first key is visible.
-            const visibleEvent = sounding[0] || events.find((event) => event.start > tick);
-            if (visibleEvent) {
-                demoJumpOctave(instrumentMode === "violin"
-                    ? visibleEvent.midi : Math.floor(visibleEvent.midi / 12) * 12);
-            }
             const signature = sounding.map((event) => event.midi).sort((a, b) => a - b).join(",");
             if (signature !== previousSignature) {
                 renderDemoChord(sounding);
@@ -2750,7 +2577,6 @@ function captureDemoSnapshot() {
             midi,
             state: ["correct", "wrong", "reference"].filter((name) => element.classList.contains(name))
         })),
-        keyboardScrollLeft: elements.keyboardScroller.scrollLeft,
         pageScrollY: window.scrollY
     };
 }
@@ -2810,7 +2636,6 @@ function restoreDemoSnapshot(snapshot) {
     setStatus(snapshot.status.key, snapshot.status.args);
     setAnswer(snapshot.answer.key, snapshot.answer.args);
     updateApView();
-    elements.keyboardScroller.scrollTo({ left: snapshot.keyboardScrollLeft, behavior: "instant" });
     window.scrollTo({ top: snapshot.pageScrollY, behavior: "instant" });
 }
 
@@ -2917,14 +2742,12 @@ async function runDemo() {
     } finally {
         hideDemoPointer();
         hideDemoMusicPointers();
-        window.clearTimeout(demoOctaveTapTimeout);
         if (demoTimer !== null) {
             window.clearInterval(demoTimer);
             demoTimer = null;
         }
         demoResolve = null;
         player.cancelQueue(audioContext); TrainingCore.cancelAudio();
-        demoSelectedOctave = null;
         demoRunning = false;
         demoCancelled = false;
         releaseAllKeys();

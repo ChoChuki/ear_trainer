@@ -1,6 +1,6 @@
 /* A cache belongs to this app and scope; unrelated PWAs are never deleted. */
 const PREFIX = "violin-ear-trainer";
-const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.8.8';
+const CACHE_NAME = PREFIX + ':' + encodeURIComponent(self.registration.scope) + ':2.8.9';
 const ASSETS = [
   "./",
   "./index.html",

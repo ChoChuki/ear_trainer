@@ -63,11 +63,6 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .keyboard-card { padding: 7px; }
 .keyboard-scroller { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; scrollbar-width: thin; overscroll-behavior-x: contain; }
 .keyboard { position: relative; height: 214px; min-width: 100%; user-select: none; }
-.octave-nav { min-height: 38px; display: flex; gap: 7px; overflow-x: auto; scrollbar-width: thin; padding: 1px 0 5px; }
-.octave-nav[hidden] { display: flex; visibility: hidden; }
-.octave-jump { min-width: 58px; min-height: 32px; flex-shrink: 0; padding: 4px 9px; font-size: 13px; border: 1px solid #d1d5db; color: #374151; background: #f9fafb; border-radius: 9px; }
-.octave-jump.current { color: #1d4ed8; background: #eff6ff; border-color: #93c5fd; }
-.octave-mark { position: absolute; top: 192px; display: inline-flex; align-items: center; padding: 0 3px; height: 18px; color: #1d4ed8; font-size: 11px; font-weight: 800; white-space: nowrap; pointer-events: none; z-index: 4; border-left: 2px solid #60a5fa; background: #eff6ff; border-radius: 0 3px 3px 0; }
 
 .piano-key { position: absolute; top: 0; border: 1px solid #111827; border-radius: 0 0 7px 7px; padding: 0; touch-action: pan-x; user-select: none; }
 .white-key { width: 52px; height: 186px; background: #ffffff; z-index: 1; }
@@ -121,7 +116,6 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 /* Demo uses the regular keyboard and stable staff dimensions. */
 .app-shell.demo-running .settings-card,
 .app-shell.demo-running .controls,
-.app-shell.demo-running .octave-nav,
 .app-shell.demo-running .keyboard,
 .app-shell.demo-running .header-picker {
     pointer-events: none;
@@ -138,7 +132,6 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
     .keyboard { height: 194px; }
     .white-key { height: 170px; }
     .black-key { height: 109px; }
-    .octave-mark { top: 175px; }
 }
 
 @media (max-height: 700px) and (max-width: 619px) {
@@ -152,11 +145,9 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
     .controls { margin: 5px 0; }
     .controls button { min-height: 36px; }
     .answer-text { height: 32px; line-height: 28px; }
-    .octave-nav { min-height: 32px; }
     .keyboard { height: 171px; }
     .white-key { height: 150px; }
     .black-key { height: 96px; }
-    .octave-mark { top: 152px; }
 }
 
 /* Schematic, chromatic violin fingerboard. Numbers are semitone offsets from each open string,
@@ -383,3 +374,39 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .training-round .interval-replay-button { min-height:40px; min-width:48px; }
 
 .rp-answer-grid.all-distances {grid-template-columns:repeat(5,minmax(0,1fr));}
+
+/* 2.8.9: full, stationary 88-key piano. Seven rows in every orientation.
+   Keep short displays scrollable vertically rather than shrinking touch targets
+   to unusable sizes. No horizontal scroll or octave controls. */
+.keyboard-card:has(.piano-board) { padding: 5px; }
+.keyboard-scroller:has(.piano-board) { overflow-x: hidden; overflow-y: visible; padding-bottom: 0; }
+.keyboard.piano-board {
+    display: grid;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    max-width: 560px;
+    height: auto;
+    margin: 0 auto;
+    --piano-row-height: clamp(64px, calc((100vh - 205px) / 7), 86px);
+    --piano-row-height: clamp(64px, calc((100svh - 205px) / 7), 86px);
+}
+.piano-row { position: relative; height: var(--piano-row-height); }
+.piano-board .piano-key { min-height: 0; min-width: 0; touch-action: pan-y; border-radius: 0 0 4px 4px; }
+.piano-board .white-key { height: 100%; color: #334155; border-color: #87909d; }
+.piano-board .black-key { height: 57%; color: white; }
+.piano-note-label { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 800; line-height: 14px; pointer-events: none; }
+/* Outside the question range is still playable in free play. Show this
+   distinction only during an active round, without changing any key positions. */
+.training-round .piano-board .white-key.out-of-range { background: #e4e7eb; color: #64748b; }
+.training-round .piano-board .black-key.out-of-range { background: #65707e; border-color: #65707e; }
+.piano-board .piano-key:focus-visible { outline: 3px solid #2563eb; outline-offset: -3px; }
+/* A short portrait viewport needs tighter row gaps to show every octave during
+   the question. Landscape and very short windows can still scroll vertically. */
+@media (max-height: 720px) {
+    .keyboard.piano-board {
+        gap: 3px;
+        --piano-row-height: clamp(56px, calc((100vh - 174px) / 7), 86px);
+        --piano-row-height: clamp(56px, calc((100svh - 174px) / 7), 86px);
+    }
+}
