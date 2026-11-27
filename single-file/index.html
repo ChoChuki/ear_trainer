@@ -4469,8 +4469,8 @@ DEMO_SCORES.piano = {
  }
  // An unlabelled phrase uses the loaded instrument samples. Its pitches never depend
  // on the upcoming target. Excluding the preceding labelled pitch avoids echoing it.
- function resetTones(queueNote, at, {long = false, previous = null} = {}) {
-  const count = long ? 6 : 4;
+ function resetTones(queueNote, at, {long = false, previous = null, count:requestedCount} = {}) {
+  const count = Number.isInteger(requestedCount) && requestedCount >= 4 && requestedCount <= 8 ? requestedCount : long ? 6 : 4;
   const register = Array.from({length: 25}, (_, i) => 55 + i);
   const used = new Set();
   if (Number.isInteger(previous)) used.add(previous % 12);
@@ -6389,6 +6389,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         timeUp: ['Time’s up · counted as a miss','時間到 · 記為答錯','時間切れ · 不正解として記録','Zeit abgelaufen · als Fehler gezählt','Tempo scaduto · contato come errore','Τέλος χρόνου · μετρά ως λάθος'],
         lateCount: ['too slow {n}','超時 {n} 題','時間切れ {n}問','zu langsam {n}','troppo tardi {n}','πολύ αργά {n}'],
         medianTime: ['median time {s}','反應時間中位數 {s}','反応時間の中央値 {s}','Median-Antwortzeit {s}','tempo mediano {s}','διάμεσος χρόνος {s}'],
+        activeReset: ["6–8 intervening notes, then the test note…", "6–8 個干擾音後，接著是題目音…", "6〜8音のあとに出題します…", "Nach 6–8 Zwischentönen folgt der Testton …", "Dopo 6–8 note ascolterai la nota da riconoscere…", "Μετά από 6–8 νότες ακολουθεί η νότα της άσκησης…"],
         resetting: ["Four intervening notes, then the test note…", "四個干擾音後，接著是題目音…", "4音のあとに出題します…", "Nach vier Zwischentönen folgt der Testton …", "Dopo quattro note ascolterai la nota da riconoscere…", "Μετά από τέσσερις νότες ακολουθεί η νότα της δοκιμής…"],
         clearing: ["Six intervening notes, then the test note…", "六個干擾音後，接著是題目音…", "6音のあとに出題します…", "Nach sechs Zwischentönen folgt der Testton …", "Dopo sei note ascolterai la nota da riconoscere…", "Μετά από έξι νότες ακολουθεί η νότα της δοκιμής…"],
         jumpHint: ["In a narrow range, some consecutive notes must stay within an octave.","音域較窄時，部分相鄰題的音程會在一個八度以內。","音域が狭いと、連続する音の間隔が1オクターブ以内になることがあります。","Bei engem Tonumfang liegen manche aufeinanderfolgenden Töne innerhalb einer Oktave.","In un’estensione ridotta alcune note consecutive distano al massimo un’ottava.","Σε στενή έκταση μερικές διαδοχικές νότες απέχουν το πολύ μία οκτάβα."],
@@ -6528,7 +6529,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         }
         return result;
     }
-    function pickMidi(pc, pitches, previous, known, example = null, {blind = false, avoid = null} = {}) {
+    function pickMidi(pc, pitches, previous, known, example = null, {blind = false, avoid = null, active = false, recent = []} = {}) {
         const available = [...new Set(pitches.map(midi => midi % 12))];
         let legal = available.filter(name => !TrainingCore.sameNoteName(name, previous));
         // 2.8.2: a labelled example heard just before the question counts as its previous note too.
@@ -6544,6 +6545,17 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             pc = TrainingCore.choose(sameGroup.length ? sameGroup : legal);
         }
         const choices = pitches.filter(midi => midi % 12 === pc);
+        if (active) {
+            // A hard register jump creates a predictable low/high cycle in two-octave pools.
+            // Keep distance as a preference, never as a filter. Suppress, but do not ban,
+            // a recently heard exact pitch. This keeps both registers genuinely possible.
+            const anchor = example ?? previous;
+            return TrainingCore.choose(choices, choices.map(midi => {
+                const distance = Number.isInteger(anchor) && Math.abs(midi - anchor) >= 13 ? 1.5 : 1;
+                const age = [...recent].reverse().indexOf(midi);
+                return distance * (age >= 0 && age <= 1 ? .25 : age >= 2 && age <= 3 ? .65 : 1);
+            }));
+        }
         return blind ? TrainingCore.choose(choices) : TrainingCore.farPitch(choices, example ?? previous);
     }
     function plan(settings, mode, instrument, weights = {}, previousMidi = null) {
@@ -6568,6 +6580,9 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         let nTarget = outside.length ? n - Math.round(n / 4) : n;
         // A single name keeps a little over a third of the block, as in earlier releases.
         if (known.length === 1) nTarget = outside.length === 1 ? n / 2 : Math.round(n * (.34 + Math.random() * .07));
+        // Two target names otherwise consume 75% of a block, making their alternation
+        // too easy to anticipate. Insert more actual outside questions, not new learned names.
+        if (mode === 'learn' && known.length === 2 && outside.length >= 2) nTarget = Math.round(n * .60);
         const nOther = n - nTarget;
         const extra = mode === 'learn' ? Math.min(Math.floor(nTarget / 5), Math.max(0, nTarget - known.length)) : 0;
         let targetPCs = [];
@@ -6591,12 +6606,23 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const instruments = shuffle([...Array(secondary).fill(otherInstrument(instrument)), ...Array(n - secondary).fill(instrument)]);
         // Reserve a slot for any name that could otherwise occupy two adjacent draws.
         let previous = previousMidi;
+        const recent = Number.isInteger(previousMidi) ? [previousMidi % 12] : [];
         return instruments.map((name, i) => {
             const legal = [...available].filter(pc => !TrainingCore.sameNoteName(pc, previous));
             const unused = legal.filter(pc => remaining[pc] > 0);
             const required = unused.find(pc => remaining[pc] > (n - i) / 2);
-            const pc = required ?? (unused.length ? TrainingCore.choose(unused, unused.map(k => remaining[k])) : TrainingCore.choose(legal));
+            const choices = unused.length ? unused : legal;
+            // Soft anti-pattern weights: a name two questions back is less likely, but
+            // remains possible. A hard two-back ban would create a new predictable cycle.
+            const weights = choices.map(pc => {
+                const count = unused.length ? remaining[pc] : 1;
+                if (mode !== 'learn') return count;
+                return count * (pc === recent.at(-2) ? .35 : pc === recent.at(-3) || pc === recent.at(-4) ? .8 : 1);
+            });
+            const pc = required ?? TrainingCore.choose(choices, weights);
             remaining[pc]--; previous = pc;
+            recent.push(pc);
+            if (recent.length > 4) recent.shift();
             return {pc, instrument:name};
         });
     }
@@ -7014,7 +7040,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const prev = TrainingCore.lastQuestion(host.site)?.target ?? null;
         const blind = session.mode === 'cold' && !session.rows.length && unprimed();
         const pitch = M.pickMidi(tone.pc,session.pitches,prev,session.known,lastExample,
-            {blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
+            {blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site),
+                active:session.mode === 'learn', recent:session.rows.filter(row => row.playedAt !== null).slice(-4).map(row => row.pitch)});
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
             kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],learned:[...(session.learned || session.known)],pitch,
@@ -7022,7 +7049,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
             eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false,
-            reset:null,limitMs:null,lateGuess:null,guessOctave:null,octaveCorrect:null,lateOctave:null,
+            reset:null,resetNoteCount:0,limitMs:null,lateGuess:null,guessOctave:null,octaveCorrect:null,lateOctave:null,
             jump:Number.isInteger(lastExample ?? prev) ? Math.abs(pitch - (lastExample ?? prev)) : null};
         playQuestion(false);
     }
@@ -7041,11 +7068,15 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         const labelledAt = S.lastLabelAt();
         const long = mask && row.ordinal === 1 && session.mode !== 'learn' && labelledAt > 0 &&
             Date.now() - labelledAt < LABEL_MEMORY_MS;
-        pendingReset = mask ? (long ? 'long' : 'short') : null;
+        // Only Active Learning uses the longer, variable-length mask; other modes
+        // retain their original four/six-note protocols and rested first-note checks.
+        const activeMask = mask && session.mode === 'learn';
+        const maskCount = mask ? (activeMask ? 6 + Math.floor(Math.random() * 3) : long ? 6 : 4) : 0;
+        pendingReset = mask ? (activeMask ? 'active' : long ? 'long' : 'short') : null;
         phase = 'loading'; render();
         const token = ++audioToken;
         try {
-            const reset = mask ? {long, previous:lastExample ?? row.previousPitch} : null;
+            const reset = mask ? {long, count:maskCount, previous:lastExample ?? row.previousPitch} : null;
             const clock = await sound.play(row.timbre,row.pitch,reset);
             if (token !== audioToken || row !== trial) return;
             const now = Date.now();
@@ -7054,7 +7085,8 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
                 row.playedAt = Math.round(now + clock.when - performance.now());
                 row.day = S.day(new Date(row.playedAt));
                 row.timing = clock.method; row.resetSoundOn = mask;
-                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit);
+                row.reset = mask ? (long ? 'long' : 'short') : null;
+                row.resetNoteCount = maskCount; row.limitMs = M.answerWindow(settings.limit);
                 save('trials',row); // A reload before the response leaves an excluded trial.
             }
             lastOnset = clock.when;
@@ -7144,7 +7176,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
         const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
-        if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
+        if (loading) prompt.textContent = tr(pendingReset === 'active' ? 'activeReset' : pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
         else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
         else if (trial.result === 'timeout') prompt.textContent = session.mode === 'learn' ? tr('tooSlow') + ' · ' + named() : tr('timeUp');
@@ -8277,7 +8309,7 @@ window.TrainingCopy = {text:(lang,key)=>(TRAINING_COPY[lang]||TRAINING_COPY.en)[
 
 </script>
     <script>
-const APP_VERSION = "2.8.10";
+const APP_VERSION = "2.8.11";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {

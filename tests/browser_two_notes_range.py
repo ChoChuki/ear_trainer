@@ -65,7 +65,7 @@ with sync_playwright() as p:
             context = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True,
                                           has_touch=True, service_workers='block')
             page, errors = fixture(context, entry, instrument, saved='[60,67]')
-            assert page.text_content('#appVersion') == '2.8.10'
+            assert page.text_content('#appVersion') == '2.8.11'
             assert_range(page, 60, 71)
             set_range(page, 62, 69)
             page.select_option('#modeSelect', 'interval')

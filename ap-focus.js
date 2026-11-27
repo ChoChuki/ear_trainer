@@ -310,7 +310,8 @@
         const prev = TrainingCore.lastQuestion(host.site)?.target ?? null;
         const blind = session.mode === 'cold' && !session.rows.length && unprimed();
         const pitch = M.pickMidi(tone.pc,session.pitches,prev,session.known,lastExample,
-            {blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
+            {blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site),
+                active:session.mode === 'learn', recent:session.rows.filter(row => row.playedAt !== null).slice(-4).map(row => row.pitch)});
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
             kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],learned:[...(session.learned || session.known)],pitch,
@@ -318,7 +319,7 @@
             sampleId:M.sampleId(tone.instrument,pitch),day:S.day(),previousPitch:prev,guess:null,correct:false,
             result:'interrupted',repair:false,replayed:0,rtMs:null,assistedRtMs:null,timing:null,firstOfDay:false,
             eligibleCold:false,gapSincePracticeMs:null,playedAt:null,submittedAt:null,resetSoundOn:false,
-            reset:null,limitMs:null,lateGuess:null,guessOctave:null,octaveCorrect:null,lateOctave:null,
+            reset:null,resetNoteCount:0,limitMs:null,lateGuess:null,guessOctave:null,octaveCorrect:null,lateOctave:null,
             jump:Number.isInteger(lastExample ?? prev) ? Math.abs(pitch - (lastExample ?? prev)) : null};
         playQuestion(false);
     }
@@ -337,11 +338,15 @@
         const labelledAt = S.lastLabelAt();
         const long = mask && row.ordinal === 1 && session.mode !== 'learn' && labelledAt > 0 &&
             Date.now() - labelledAt < LABEL_MEMORY_MS;
-        pendingReset = mask ? (long ? 'long' : 'short') : null;
+        // Only Active Learning uses the longer, variable-length mask; other modes
+        // retain their original four/six-note protocols and rested first-note checks.
+        const activeMask = mask && session.mode === 'learn';
+        const maskCount = mask ? (activeMask ? 6 + Math.floor(Math.random() * 3) : long ? 6 : 4) : 0;
+        pendingReset = mask ? (activeMask ? 'active' : long ? 'long' : 'short') : null;
         phase = 'loading'; render();
         const token = ++audioToken;
         try {
-            const reset = mask ? {long, previous:lastExample ?? row.previousPitch} : null;
+            const reset = mask ? {long, count:maskCount, previous:lastExample ?? row.previousPitch} : null;
             const clock = await sound.play(row.timbre,row.pitch,reset);
             if (token !== audioToken || row !== trial) return;
             const now = Date.now();
@@ -350,7 +355,8 @@
                 row.playedAt = Math.round(now + clock.when - performance.now());
                 row.day = S.day(new Date(row.playedAt));
                 row.timing = clock.method; row.resetSoundOn = mask;
-                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit);
+                row.reset = mask ? (long ? 'long' : 'short') : null;
+                row.resetNoteCount = maskCount; row.limitMs = M.answerWindow(settings.limit);
                 save('trials',row); // A reload before the response leaves an excluded trial.
             }
             lastOnset = clock.when;
@@ -440,7 +446,7 @@
         $('Index').textContent = tr(session.mode) + ' · ' + trial.ordinal + ' / ' + session.plan.length;
         const prompt = $('Prompt');
         const named = () => M.label(trial.pitch) + (M.isTarget(trial) ? '' : ' (' + tr('out') + ')');
-        if (loading) prompt.textContent = tr(pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
+        if (loading) prompt.textContent = tr(pendingReset === 'active' ? 'activeReset' : pendingReset === 'long' ? 'clearing' : pendingReset ? 'resetting' : 'wait');
         else if (!done) prompt.textContent = tr('choose');
         else if (trial.result === 'relative') prompt.textContent = tr('relativeSaved') + (session.mode === 'learn' ? ' · ' + M.label(trial.pitch) : '');
         else if (trial.result === 'timeout') prompt.textContent = session.mode === 'learn' ? tr('tooSlow') + ' · ' + named() : tr('timeUp');

@@ -1,4 +1,4 @@
-const APP_VERSION = "2.8.10";
+const APP_VERSION = "2.8.11";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {

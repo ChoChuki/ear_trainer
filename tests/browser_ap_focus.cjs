@@ -60,7 +60,7 @@ async function rows(page, site) {
 
     // 2. Second question: the short reset plays first, then answer at once.
     await page.click('#focusNext');
-    await page.waitForFunction(() => /Four intervening notes/.test(document.getElementById('focusPrompt').textContent), null, {timeout:3000});
+    await page.waitForFunction(() => /6–8 intervening notes/.test(document.getElementById('focusPrompt').textContent), null, {timeout:3000});
     const resetStart = Date.now();
     await answerPhase(page);
     const resetMs = Date.now() - resetStart;
@@ -69,7 +69,7 @@ async function rows(page, site) {
     await page.click(`#focusAnswers .af-keys button[data-answer="${pitch % 12}"]`);
     const prompt = await page.textContent('#focusPrompt');
     console.log('reset + gap ≈', resetMs, 'ms; fast answer:', prompt);
-    assert(resetMs > 950 && resetMs < 3500, 'four notes and a gap');
+    assert(resetMs > 1500 && resetMs < 5500, 'six to eight notes and a gap');
     assert.match(prompt, /^Correct · .* · \d\.\d s$/);
 
     // 3. End the block: the summary counts the late answer.
@@ -101,8 +101,9 @@ async function rows(page, site) {
     assert.equal(trials[0].rtMs, null);
     assert.equal(trials[1].result, 'answered'); assert.equal(trials[1].correct, true); assert.equal(trials[1].reset, 'short');
     assert(trials[1].rtMs < 2178);
-    assert(trials[1].jump >= 12, 'register jump ' + trials[1].jump);
-    assert.equal(trials[2].reset, 'long'); assert.equal(trials[2].kind, 'consolidate');
+    assert.notEqual(trials[1].pitch % 12,trials[0].pitch % 12);
+    assert(trials[1].resetNoteCount >= 6 && trials[1].resetNoteCount <= 8);
+    assert.equal(trials[2].reset, 'long'); assert.equal(trials[2].resetNoteCount,6); assert.equal(trials[2].kind, 'consolidate');
     const blocks = data.sessions.filter(s => s.protocol === 9);
     assert(blocks.some(s => s.kind === 'learn' && s.late === 1 && s.limit === 1300 && s.limitMs === 1300 && s.resetOn === true));
     console.log('records:', trials.map(t => `${t.kind}:${t.result}:${t.reset}:jump=${t.jump}:rt=${t.rtMs}`).join(' | '));

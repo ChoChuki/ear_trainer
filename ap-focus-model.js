@@ -97,7 +97,7 @@
         }
         return result;
     }
-    function pickMidi(pc, pitches, previous, known, example = null, {blind = false, avoid = null} = {}) {
+    function pickMidi(pc, pitches, previous, known, example = null, {blind = false, avoid = null, active = false, recent = []} = {}) {
         const available = [...new Set(pitches.map(midi => midi % 12))];
         let legal = available.filter(name => !TrainingCore.sameNoteName(name, previous));
         // 2.8.2: a labelled example heard just before the question counts as its previous note too.
@@ -113,6 +113,17 @@
             pc = TrainingCore.choose(sameGroup.length ? sameGroup : legal);
         }
         const choices = pitches.filter(midi => midi % 12 === pc);
+        if (active) {
+            // A hard register jump creates a predictable low/high cycle in two-octave pools.
+            // Keep distance as a preference, never as a filter. Suppress, but do not ban,
+            // a recently heard exact pitch. This keeps both registers genuinely possible.
+            const anchor = example ?? previous;
+            return TrainingCore.choose(choices, choices.map(midi => {
+                const distance = Number.isInteger(anchor) && Math.abs(midi - anchor) >= 13 ? 1.5 : 1;
+                const age = [...recent].reverse().indexOf(midi);
+                return distance * (age >= 0 && age <= 1 ? .25 : age >= 2 && age <= 3 ? .65 : 1);
+            }));
+        }
         return blind ? TrainingCore.choose(choices) : TrainingCore.farPitch(choices, example ?? previous);
     }
     function plan(settings, mode, instrument, weights = {}, previousMidi = null) {
@@ -137,6 +148,9 @@
         let nTarget = outside.length ? n - Math.round(n / 4) : n;
         // A single name keeps a little over a third of the block, as in earlier releases.
         if (known.length === 1) nTarget = outside.length === 1 ? n / 2 : Math.round(n * (.34 + Math.random() * .07));
+        // Two target names otherwise consume 75% of a block, making their alternation
+        // too easy to anticipate. Insert more actual outside questions, not new learned names.
+        if (mode === 'learn' && known.length === 2 && outside.length >= 2) nTarget = Math.round(n * .60);
         const nOther = n - nTarget;
         const extra = mode === 'learn' ? Math.min(Math.floor(nTarget / 5), Math.max(0, nTarget - known.length)) : 0;
         let targetPCs = [];
@@ -160,12 +174,23 @@
         const instruments = shuffle([...Array(secondary).fill(otherInstrument(instrument)), ...Array(n - secondary).fill(instrument)]);
         // Reserve a slot for any name that could otherwise occupy two adjacent draws.
         let previous = previousMidi;
+        const recent = Number.isInteger(previousMidi) ? [previousMidi % 12] : [];
         return instruments.map((name, i) => {
             const legal = [...available].filter(pc => !TrainingCore.sameNoteName(pc, previous));
             const unused = legal.filter(pc => remaining[pc] > 0);
             const required = unused.find(pc => remaining[pc] > (n - i) / 2);
-            const pc = required ?? (unused.length ? TrainingCore.choose(unused, unused.map(k => remaining[k])) : TrainingCore.choose(legal));
+            const choices = unused.length ? unused : legal;
+            // Soft anti-pattern weights: a name two questions back is less likely, but
+            // remains possible. A hard two-back ban would create a new predictable cycle.
+            const weights = choices.map(pc => {
+                const count = unused.length ? remaining[pc] : 1;
+                if (mode !== 'learn') return count;
+                return count * (pc === recent.at(-2) ? .35 : pc === recent.at(-3) || pc === recent.at(-4) ? .8 : 1);
+            });
+            const pc = required ?? TrainingCore.choose(choices, weights);
             remaining[pc]--; previous = pc;
+            recent.push(pc);
+            if (recent.length > 4) recent.shift();
             return {pc, instrument:name};
         });
     }

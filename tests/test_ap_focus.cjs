@@ -27,7 +27,7 @@ for (let length = 1; length <= 12; length++) {
         else if (length === 1) {
             assert(targets >= Math.round(count * .34) && targets <= Math.round(count * .41));
             assert(block.some((x,i) => i && x.pc !== 5 && block[i-1].pc !== 5));
-        } else assert.equal(count-targets,length === 12 ? 0 : count/4);
+        } else assert.equal(count-targets,length === 12 ? 0 : length === 2 && mode === 'learn' ? count-Math.round(count*.60) : count/4);
         assert.equal(block.filter(n => n.instrument === 'piano').length,mode === 'cold' ? 0 : 5);
         let previous = 65;
         for (const item of block) {

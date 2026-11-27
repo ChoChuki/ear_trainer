@@ -25,7 +25,7 @@ async function menu(page) {
                 await menu(page);
                 assert.equal(await page.inputValue('#modeSelect'),'single');
                 assert.deepEqual(await page.locator('#modeSelect option').allTextContents(),['One Note','Two Notes','Free Play']);
-                assert.equal(await page.textContent('#appVersion'),'2.8.10');
+                assert.equal(await page.textContent('#appVersion'),'2.8.11');
                 for (const mode of expected) {
                     await page.selectOption('#modeSelect',mode);
                     await page.waitForFunction(mode=>testMode===mode,mode);
