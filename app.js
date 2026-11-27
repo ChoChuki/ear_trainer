@@ -1,4 +1,4 @@
-const APP_VERSION = "2.8.7";
+const APP_VERSION = "2.8.8";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -331,7 +331,10 @@ function setLanguage(language) {
         option.textContent = `${tonic} ${t(mode)}`;
     }
     for (const option of elements.modeSelect.options) {
-        option.textContent = option.value === "free" ? t("freeMode") : option.value === "rpCourse"
+        const englishFreeModes = {single: "One Note", interval: "Two Notes", free: "Free Play"};
+        option.textContent = currentLanguage === "en" && englishFreeModes[option.value]
+            ? englishFreeModes[option.value]
+            : option.value === "free" ? t("freeMode") : option.value === "rpCourse"
             ? RelativePitchCourse.T(currentLanguage,"course") : t(option.value);
     }
     elements.maxIntervalSelect.options[0].textContent = t("unlimited");
@@ -2194,7 +2197,7 @@ function initializeAudio() {
         ready = true;
         setControlsEnabled(true);
         const initialMode = pageOptions.get("mode");
-        if (!["#ap", "#iv"].includes(location.hash) && initialMode && !["apFocus", "ivFocus"].includes(initialMode) && [...elements.modeSelect.options].some(option => option.value === initialMode)) {
+        if (!["#ap", "#iv"].includes(location.hash) && ["single", "interval", "free"].includes(initialMode)) {
             elements.modeSelect.value = initialMode;
             selectExercise(initialMode);
         }
@@ -2302,16 +2305,6 @@ apLevelSelect.addEventListener("change", unlessDemo(() => {
 }));
 elements.applyButton.addEventListener("click", unlessDemo(applySettings));
 elements.modeSelect.addEventListener("change", unlessDemo(() => {
-    if (elements.modeSelect.value === "apFocus") {
-        elements.modeSelect.value = testMode;
-        location.hash = "ap";
-        return;
-    }
-    if (elements.modeSelect.value === "ivFocus") {
-        elements.modeSelect.value = testMode;
-        location.hash = "iv";
-        return;
-    }
     selectExercise(elements.modeSelect.value);
 }));
 elements.playButton.addEventListener("click", unlessDemo(() => {

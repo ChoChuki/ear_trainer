@@ -103,6 +103,8 @@ const ready = (page, selector) => page.waitForFunction(s => {
     await page.evaluate(() => stopTest());
 
     // 3. Relative pitch course: the window starts at the second note; a timeout is recorded.
+    // Legacy implementation check only: this mode is not offered in the 2.8.8 UI.
+    await page.evaluate(mode => document.getElementById('modeSelect').add(new Option(mode, mode)), 'rpCourse');
     await page.selectOption('#modeSelect', 'rpCourse');
     await page.waitForTimeout(300);
     const rpLimit = await page.inputValue('#answerLimitSelect');
@@ -118,6 +120,8 @@ const ready = (page, selector) => page.waitForFunction(s => {
     await page.evaluate(() => stopTest());
 
     // 4. Classic AP check: answers open at the onset, the window is shared, a timeout is recorded.
+    // Legacy implementation check only: this mode is not offered in the 2.8.8 UI.
+    await page.evaluate(mode => document.getElementById('modeSelect').add(new Option(mode, mode)), 'ap');
     await page.selectOption('#modeSelect', 'ap');
     await page.waitForTimeout(300);
     assert.equal(await page.isVisible('#apTimePicker'), false);

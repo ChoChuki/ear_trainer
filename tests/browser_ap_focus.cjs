@@ -109,6 +109,8 @@ async function rows(page, site) {
 
     // 5. Classic AP learning: one question with the shared reset.
     await page.goto(base + '#tools');
+    // Legacy implementation check only: this mode is not offered in the 2.8.8 UI.
+    await page.evaluate(mode => document.getElementById('modeSelect').add(new Option(mode, mode)), 'apLearn');
     await page.selectOption('#modeSelect', 'apLearn');
     await page.click('#playButton');
     await page.waitForFunction(() => [...document.querySelectorAll('#apAnswers button')].some(b => !b.hidden && !b.disabled), null, {timeout:20000});
