@@ -26,7 +26,7 @@ with sync_playwright() as p:
     context=b.new_context(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.0'
+    assert page.text_content('#appVersion')=='3.0.1'
     assert page.locator('#focusEntry,#ivEntry,#focusPanel,#ivPanel').count()==0
     assert page.locator('#modeSelect option').count()==3
     assert page.locator('#displaySelect option').count()==2

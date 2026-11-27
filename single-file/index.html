@@ -4566,7 +4566,7 @@ var _tone_0400_JCLive_sf2_file={
 	]
 };
 
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.0.1";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -5045,6 +5045,10 @@ async function playTrial(replaying){if(!session||!trial||!testActive)return;canc
   // First audible sound (including interference) ends the rest period even if stopped before the target.
   const firstClock=APFocusModel.outputClock(audioContext,firstNoteAt);
   if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(firstClock.when-performance.now())/1000,()=>canContinue(token))){audioFailure(token);return;}
+  if(!canContinue(token)||trial!==row)return;
+  // The first RP note is the public reference. Reveal its position at its
+  // audible onset, not at the second note when the answer window opens.
+  markReference();
   S.markPractice(instrumentMode);
   if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(clock.when-performance.now())/1000,()=>canContinue(token))){audioFailure(token);return;}
   if(!canContinue(token)||trial!==row)return;
@@ -5066,11 +5070,22 @@ function submit(guess,octave=null,selectedMidi=null,now=performance.now()){if(!t
  if(!late&&!relative){if(a.mode==='single')Object.assign(row,U.gradeAP(row.target,guess,octave,a.known));else row.correct=selectedMidi!==null?selectedMidi===row.target:guess===row.size;}
  if(!late){const rt=Math.max(0,Math.round(now-onset));if(row.replayed)row.assistedRtMs=rt;else row.rtMs=rt;}
  row.submittedAt=Date.now();cancelAudio();phase='done';a.total++;if(row.correct)a.correct++;a.rows.push({...row});saveRow(a.mode==='single'?'ap':'iv','trials',row);saveSession();TrainingTracker.activity('answer');
+ let nextDelay=a.blind?420:row.correct&&row.octaveCorrect!==false?750:a.mode==='interval'?1850:1250;
  if(a.blind){msg(tr('recorded'));}else{msg(feedbackText(row,a),row.correct&&row.octaveCorrect!==false?'good':'bad');paintFeedback(row,a);S.markLabel(instrumentMode);TrainingCore.rememberLabel(row.target);
-  // The labelled sound reinforces a miss; next question waits for it to finish.
-  if(!row.correct||row.octaveCorrect===false){try{const at=audioContext.currentTime+.03;if(a.mode==='interval'){queueInstrumentNote(instrumentMode,row.reference,at,.55);queueInstrumentNote(instrumentMode,row.target,at+.7,.6);}else queueInstrumentNote(instrumentMode,row.target,at,.7);}catch(_){}}
+  // Restore the original Two Notes reinforcement: a correct answer also
+  // replays the whole interval, with the same spacing as the question.
+  // Preserve the existing correction playback for misses and all AP behavior.
+  if(a.mode==='interval'||!row.correct||row.octaveCorrect===false){try{const at=audioContext.currentTime+.03;
+   if(a.mode==='interval'&&row.correct){
+    queueInstrumentNote(instrumentMode,row.reference,at,.6);
+    const voice=queueInstrumentNote(instrumentMode,row.target,at+.8,PLAY_DURATION);
+    // Allow the full feedback phrase to reach the output before auto-next.
+    const end=APFocusModel.outputClock(audioContext,(voice.when??at+.8)+PLAY_DURATION);
+    nextDelay=Math.max(2000,end.when-performance.now()+250);
+   }else if(a.mode==='interval'){queueInstrumentNote(instrumentMode,row.reference,at,.55);queueInstrumentNote(instrumentMode,row.target,at+.7,.6);}else queueInstrumentNote(instrumentMode,row.target,at,.7);
+  }catch(_){}}
  }
- render();if(a.auto){const token=generation;nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done')newQuestion();},a.blind?420:row.correct&&row.octaveCorrect!==false?750:a.mode==='interval'?1850:1250);}
+ render();if(a.auto){const token=generation;nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done')newQuestion();},nextDelay);}
 }
 function replay(){if(!testActive||session?.blind||!trial)return;
  if(phase==='answer'){if(deadline!==null&&performance.now()>deadline){submit('timeout');return;}trial.replayed++;playTrial(true);}
