@@ -77,33 +77,29 @@ for (const inst of ['violin','piano']) {
         }
     }
 }
-// The planned name is never replaced; the most recent sound (here an example, D4) only moves the octave.
-for(let i=0;i<100;i++){
-    assert.equal(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],62,{allowRepeats:true}),89);
-    assert.notEqual(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],62) % 12,5);
-    assert([65,89].includes(m.pickMidi(5,m.pitchPool([3,4,6],'violin'),77,[5],null,{allowRepeats:true})),'both F are an octave from F5');
-}
-// A name may follow itself, so the previous answer predicts nothing about the next one.
-let ff = 0, fAny = 0, of = 0, oAny = 0;
-for (let n = 0; n < 4000; n++) {
-    const block = m.plan({...m.defaults([5]),allowRepeats:true},'learn','violin');
-    for (let i = 1; i < block.length; i++) {
-        if (block[i-1].pc === 5) {fAny++; if (block[i].pc === 5) ff++;}
-        else {oAny++; if (block[i].pc === 5) of++;}
+// Restoring an old setting cannot permit adjacent pitch classes.
+for (const instrument of ['violin','piano']) {
+    const setup = {...m.defaults([5,4]), allowRepeats:true};
+    let prev = 77;
+    for (let round=0; round<500; round++) {
+        const mode=['cold','learn','consolidate'][round%3];
+        for (const q of m.plan(setup,mode,instrument,{},prev)) {
+            const actual=m.pickMidi(q.pc,m.pitchPool(setup.octaves,instrument),prev,setup.known,62,{allowRepeats:true});
+            assert.notEqual(actual%12,prev%12);
+            assert.notEqual(actual%12,2);
+            prev=actual;
+        }
     }
 }
-// Within a shuffled block a repeat is only slightly rarer than chance ((k-1)/(n-1) against k/(n-1)).
-assert(ff / fAny > .28 && Math.abs(ff / fAny - of / oAny) < .06, `P(F|F)=${ff/fAny} P(F|Other)=${of/oAny}`);
-console.log('PASS independent names in a block: P(F|F)=' + (ff/fAny).toFixed(3) + ' P(F|Other)=' + (of/oAny).toFixed(3));
 console.log('PASS '+checked+' consecutive focused targets, mixed instruments, selectable octaves and block boundaries');
 console.log('PASS: course size, pitch selection, outside trials and instrument mix');
 
 // Wong et al. (2025): 1,183 ms for one name to 2,028 ms for twelve, plus 150 ms for touch input.
-assert.equal(m.answerWindow('fast'),2500);
-assert.equal(m.answerWindow('strict'),2500,'older named choices read as the default');
+assert.equal(m.answerWindow('fast'),1300);
+assert.equal(m.answerWindow('strict'),1300,'older named choices read as the default');
 assert.equal(m.answerWindow(2500),2500); assert.equal(m.answerWindow(null),null); assert.equal(m.answerWindow(0),null);
 assert.equal(m.answerWindow('off',5),null);
-assert.equal(m.defaults().limit,2500);
+assert.equal(m.defaults().limit,1300);
 assert(m.validSettings({...m.defaults(),limit:'relaxed'},'violin'));
 assert(m.validSettings({...m.defaults(),limit:'fast'},'violin'), '2.8.2: fixed 1.3 s window');
 assert(!m.validSettings({...m.defaults(),limit:'rapid'},'violin'));
@@ -272,14 +268,16 @@ async function testFocusedPlayback() {
     const total = 88 + 54;  // one call per playable pitch
     assert.equal(calls.length,total);
     assert.deepEqual(loaded,calls.map(x=>x.instrument));
-    await sound.play('piano',65,true);
-    assert(calls.at(-1).when >= 2.04 + 2.4 + .7 && calls.at(-1).when <= 2.04 + 2.4 + 1.2,'2.4 s reset, then a variable gap');
-    const resetVoices = sources.filter(node => node.frequency).length;
-    assert(resetVoices >= 20, 'reset tones and glide partials: ' + resetVoices);
-    await sound.play('violin',77,{previous:65,low:60,high:95});
-    assert(calls.at(-1).when >= 2.04 + 3.1 && calls.at(-1).when <= 2.04 + 3.6);
-    await sound.play('violin',77,{long:true});
-    assert(calls.at(-1).when >= 2.04 + 20.7 && calls.at(-1).when <= 2.04 + 21.2,'20 s glide after labelled notes');
+    for (const [instrument, midi, count] of [['piano',65,4],['violin',77,4],['violin',77,6]]) {
+        const offset=calls.length;
+        await sound.play(instrument,midi,{previous:65,long:count===6});
+        const batch=calls.slice(offset);
+        assert.equal(batch.length,count+1);
+        assert(batch.every(voice=>voice.instrument===instrument));
+        assert.equal(batch.at(-1).midi,midi);
+        assert(batch.at(-1).when - batch.at(-2).when > .56);
+    }
+    assert(!sources.some(node=>node.frequency),'no electronic oscillator in the mask');
     sound.stop();
     assert(sources.every(node=>node.stopped),'replay and stop release each previous source');
 
@@ -287,10 +285,10 @@ async function testFocusedPlayback() {
     const pending=APFocusAudio.create(context,()=>new Promise(resolve=>{finishLoad=resolve;}),queue);
     const stale=pending.play('violin',75); pending.stop(); finishLoad();
     await assert.rejects(stale,/interrupted/);
-    assert.equal(calls.length,total+3,'a late decode must not play after cancellation');
+    assert.equal(calls.length,total+17,'a late decode must not play after cancellation');
     const failed=APFocusAudio.create(context,async()=>{throw Error('unavailable');},queue);
     await assert.rejects(failed.play('piano',65),/unavailable/);
-    assert.equal(calls.length,total+3);
+    assert.equal(calls.length,total+17);
     console.log('PASS original instrument files, all 142 playable pitches, short and long resets, mixed sources, cancellation and history');
 }
 testFocusedPlayback().catch(err=>{console.error(err);process.exitCode=1;});

@@ -1,10 +1,10 @@
 /* Answer window shared by the timed exercises outside the focused screens.
- * 2.8.4: the window is a number of seconds typed by the user (default 2.5 since 2.8.6), kept in ms;
+ * 2.8.4: the window is a number of seconds typed by the user (default 1.3), kept in ms;
  * an empty field or 0 means no limit. It starts at the estimated onset of the sound answered. */
 (function (root) {
     'use strict';
     const KEY = 'ear-answer-limit-v3';
-    const DEFAULT_MS = 2500, MIN_MS = 100, MAX_MS = 60000;
+    const DEFAULT_MS = 1300, MIN_MS = 100, MAX_MS = 60000;
     // Any stored value as ms or null: older named choices ("fast", "strict", "relaxed") read as the default.
     function normalize(limit) {
         if (limit === null || limit === 'off' || limit === 0) return null;
@@ -30,16 +30,22 @@
             const saved = localStorage.getItem(KEY);
             if (saved === 'off') return null;
             if (saved !== null && saved !== '' && Number.isFinite(Number(saved))) return normalize(Number(saved));
-            // 2.8.6: the default moved from 1.3 s to 2.5 s; an older typed value other than 1.3 s is kept.
             const older = localStorage.getItem('ear-answer-limit-v2') ?? localStorage.getItem('ear-answer-limit-v1');
             if (older === 'off') return null;
-            if (older !== null && older !== '' && Number.isFinite(Number(older)) && ![1300, 1333].includes(Number(older))) return normalize(Number(older));
+            if (older !== null && older !== '' && Number.isFinite(Number(older))) return normalize(Number(older));
         } catch (_) {}
         return DEFAULT_MS;
     }
     function save(limit) {
         const ms = normalize(limit);
         try { localStorage.setItem(KEY, ms === null ? 'off' : String(ms)); return true; } catch (_) { return false; }
+    }
+    function stamp(event) {
+        const now = performance.now(), value = event?.timeStamp;
+        if (!Number.isFinite(value) || value <= 0) return now;
+        const origin = Number.isFinite(performance.timeOrigin) ? performance.timeOrigin : Date.now() - now;
+        const at = value > 1e12 ? value - origin : value;
+        return Math.abs(at - now) < 60000 ? at : now;
     }
     // One countdown per screen. A finger that touched an answer before the deadline still
     // decides it (up to 0.8 s later), as in focused AP practice.
@@ -88,5 +94,5 @@
             place(element) { if (element && element !== bar) { hide(); bar = element; if (deadline !== null) draw(); } }
         };
     }
-    root.AnswerTimer = {KEY, DEFAULT_MS, MIN_MS, MAX_MS, normalize, windowMs, parse, text, load, save, createClock};
+    root.AnswerTimer = {KEY, DEFAULT_MS, MIN_MS, MAX_MS, normalize, windowMs, parse, text, load, save, stamp, createClock};
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,6 +1,6 @@
 /* Focused interval practice (2.8.2): the focused AP screen applied to interval sizes.
  * Two notes in a random register of the chosen octaves. The answer window starts at the
- * second note (at both notes when they sound together) and widens with the number of answers.
+ * second note (at both notes when they sound together) and stays fixed for every learning set.
  * Records stay in this browser (IndexedDB "iv-training-data-<instrument>"). */
 (function (root) {
     'use strict';
@@ -142,13 +142,8 @@
         const saved = read(kv('settings'));
         const merged = {...M.defaults(), ...(saved && typeof saved === 'object' ? saved : {})};
         settings = M.validSettings(merged, host.site) ? merged : M.defaults();
-        // 2.8.6: the default window moved from 1.3 s to 2.5 s; an older default moves once, a typed value stays.
         const before = JSON.stringify(settings);
         settings.limit = M.answerWindow(settings.limit);
-        if (settings.limitVersion !== 3) {
-            if (settings.limit === 1300 || settings.limit === 1333) settings.limit = 2500;
-            settings.limitVersion = 3;
-        }
         if (JSON.stringify(settings) !== before) TrainingCore.write(kv('settings'), settings);
     }
     const progress = () => M.promotion(rowsNow(), blocksNow(), settings);
@@ -268,7 +263,7 @@
             medianRt: S.median(good.map(r => r.rtMs).filter(Number.isFinite)),
             known: [...session.known], responseMode: session.responseMode, allowRepeats: session.allowRepeats,
             direction: session.direction, octaves: [...session.octaves], limit: session.limit,
-            limitMs: M.answerWindow(session.limit, session.names.length), timbre: host.site,
+            limitMs: M.answerWindow(session.limit), timbre: host.site,
             late: items.filter(r => r.result === 'timeout').length};
     }
     function start(mode) {
@@ -292,7 +287,7 @@
         const previous = TrainingCore.lastQuestion(host.site), before = M.intervalOf(previous);
         const ordinal = session.rows.length;
         const pair = M.pickQuestion(session.plan[ordinal], session.pitches, session.direction, previous, session.known, session.allowRepeats);
-        if (!pair) { finish(false); return; }
+        if (!pair) { finish(false); $('Notice').textContent = host.text('intervalNoRepeat'); return; }
         const size = pair.size;
         session.plan[ordinal] = size;
         trial = {protocol: M.protocol, source: host.site, id: session.id + '-' + (ordinal + 1), sessionId: session.id,
@@ -307,8 +302,9 @@
         if (!trial || !session || (replay && (phase !== 'answer' || session.mode === 'cold'))) return;
         clearTimeout(autoTimer);
         if (replay) {
+            if (deadline !== null && performance.now() > deadline) {submit('timeout', deadline); return;}
             trial.replayed++; trial.result = 'assisted';
-            disarm();  // a replayed pair is already assisted, so it is not timed
+            disarm();
             save('trials', trial);
         }
         const row = trial;
@@ -321,7 +317,7 @@
                 firstOnset = clock.when;
                 row.playedAt = Math.round(Date.now() + clock.when - performance.now());
                 row.day = S.day(new Date(row.playedAt)); row.timing = clock.method;
-                row.limitMs = M.answerWindow(session.limit, session.names.length);
+                row.limitMs = M.answerWindow(session.limit);
                 save('trials', row);  // a reload before the answer leaves an excluded trial
             }
             lastOnset = clock.when;
@@ -332,13 +328,13 @@
             if (!replay) host.remember(row.reference, row.target);
             S.markPractice(host.site);
             phase = 'answer'; render();
-            if (!replay && row.limitMs !== null) { deadline = firstOnset + row.limitMs; arm(row); }
+            if (row.limitMs !== null) { deadline = lastOnset + row.limitMs; arm(row); }
         } catch (_) { if (token === audioToken && row === trial) invalidate('audio-error'); }
     }
     function submit(guess, when) {
         if (phase !== 'answer' || !trial || when < lastOnset) return;
         // Past the window the pair counts as missed, whatever is chosen afterwards.
-        const late = guess === 'timeout' || (deadline !== null && !trial.replayed && when > deadline);
+        const late = guess === 'timeout' || (deadline !== null && when > deadline);
         stopSound();
         if (late) {
             trial.guess = null; trial.result = 'timeout'; trial.correct = false;
@@ -347,8 +343,8 @@
             trial.guess = guess; trial.result = 'answered'; trial.correct = M.correct(trial);
         }
         trial.submittedAt = Date.now();
-        if (trial.replayed) trial.assistedRtMs = Math.max(0, Math.round(when - lastOnset));
-        else if (guess !== 'timeout') trial.rtMs = Math.max(0, Math.round(when - firstOnset));
+        if (trial.replayed && !late) trial.assistedRtMs = Math.max(0, Math.round(when - lastOnset));
+        else if (!late) trial.rtMs = Math.max(0, Math.round(when - firstOnset));
         TrainingTracker.activity('answer');
         settle();
         if (document.getElementById('autoNextCheck').checked && (trial.kind !== 'learn' || trial.correct)) {
@@ -399,17 +395,17 @@
         else prompt.textContent = ap(trial.correct ? 'right' : 'wrong') + ' · ' + named() +
             (trial.replayed ? ' · ' + ap('aided') : Number.isFinite(trial.rtMs) ? ' · ' + seconds(trial.rtMs) : '');
         // 2.8.3: semitone numbers only, the same buttons whatever the learning set.
-        const choices = [...M.available(session.pitches)];
-        choices.push('unsure');
+        const choices = [...M.SIZES, 'out', 'unsure'];
         const buttons = choices.map(choice => {
             const b = button(Number.isInteger(choice) ? String(choice) : answerLabel(choice), null);
             b.dataset.answer = String(choice);
+            if (session.learned.includes(choice)) b.classList.add('af-set');
             b.disabled = phase !== 'answer';
             let touched = null;
-            b.addEventListener('pointerdown', e => { touched = pressedAt = e.timeStamp; });
+            b.addEventListener('pointerdown', e => { touched = pressedAt = AnswerTimer.stamp(e); });
             b.addEventListener('pointercancel', () => { touched = pressedAt = null; });
             b.addEventListener('click', e => {
-                const at = e.detail && touched !== null ? touched : e.timeStamp;
+                const at = e.detail && touched !== null ? touched : AnswerTimer.stamp(e);
                 pressedAt = null;
                 submit(choice, Math.abs(at - performance.now()) < 60000 ? at : performance.now());
             });
@@ -417,7 +413,7 @@
         });
         $('Answers').classList.toggle('af-naming', choices.length > 4);
         $('Answers').replaceChildren(...buttons); $('Answers').hidden = done;
-        $('AnswerHint').hidden = done || choices.every(d => d === 'unsure' || session.learned.includes(d));
+        $('AnswerHint').hidden = done;
         $('AnswerHint').textContent = tr('helpAnswer');
         $('Next').hidden = !done;
         $('Next').textContent = trial.ordinal === session.plan.length ? ap('results') : tr('next');

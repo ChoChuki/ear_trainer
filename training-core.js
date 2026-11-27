@@ -10,6 +10,12 @@
  function sameNoteName(pitch, previous) {
   return Number.isInteger(pitch) && Number.isInteger(previous) && pitch % 12 === previous % 12;
  }
+ // One answer category covers every pitch or interval outside this trial's learning set.
+ function matchesLearningSet(target, guess, learned, lowest, highest) {
+  const valid = Number.isInteger(guess) && guess >= lowest && guess <= highest;
+  if (learned.includes(target)) return valid && guess === target;
+  return guess === 'out' || (valid && !learned.includes(guess));
+ }
  // Rungs 1-4 (1, 3, 12, 60 min) can be earned inside one sitting. Day-scale rungs
  // need a recall made after a break ("cold"): a success right after labelled
  // feedback may rest on the previous note rather than on long-term memory.
@@ -150,111 +156,36 @@
   const best = Math.max(...candidates.map(p => Math.abs(p - previous)));
   return choose(candidates.filter(p => Math.abs(p - previous) === best));
  }
- const hz = midi => 440 * 2 ** ((midi - 69) / 12);
- function track(source, ...nodes) {
-  voices.add(source);
-  source.onended = () => {
-   voices.delete(source);
-   for (const node of [source, ...nodes]) { try { node.disconnect(); } catch (_) {} }
-  };
- }
- // Shepard-type glide (Shepard 1964): octave-spaced partials under a fixed spectral
- // envelope move continuously through every chroma, so there is no stable pitch left
- // to keep as a reference. A partial re-enters at the far end only where it is silent.
- function shepardGlide(context, at, seconds, {octavesPerSecond = .3, direction = -1, level = .07} = {}) {
-  const base = 27.5, span = 8, centre = 4, width = 1.15;
-  const speed = octavesPerSecond * (direction < 0 ? -1 : 1), offset = Math.random();
-  function segment(t0, t1, x0, x1) {
-   const duration = t1 - t0;
-   if (duration < .02) return;
-   const oscillator = context.createOscillator(), gain = context.createGain();
-   oscillator.type = 'sine';
-   oscillator.frequency.setValueAtTime(base * 2 ** x0, at + t0);
-   oscillator.frequency.exponentialRampToValueAtTime(base * 2 ** x1, at + t1);
-   const points = Math.max(4, Math.ceil(duration * 50)), curve = new Float32Array(points);
-   for (let i = 0; i < points; i++) {
-    const u = i / (points - 1), t = t0 + u * duration, x = x0 + (x1 - x0) * u;
-    const fade = Math.max(0, Math.min(1, t / .08, (seconds - t) / .12));
-    curve[i] = level * fade * Math.exp(-.5 * ((x - centre) / width) ** 2);
-   }
-   gain.gain.setValueCurveAtTime(curve, at + t0, duration);
-   oscillator.connect(gain); gain.connect(context.destination);
-   track(oscillator, gain);
-   oscillator.start(at + t0); oscillator.stop(at + t1);
+ // An unlabelled phrase uses the loaded instrument samples. Its pitches never depend
+ // on the upcoming target. Excluding the preceding labelled pitch avoids echoing it.
+ function resetTones(queueNote, at, {long = false, previous = null} = {}) {
+  const count = long ? 6 : 4;
+  const register = Array.from({length: 25}, (_, i) => 55 + i);
+  const used = new Set();
+  if (Number.isInteger(previous)) used.add(previous % 12);
+  let last = null;
+  for (let i = 0; i < count; i++) {
+   const unused = register.filter(p => !used.has(p % 12));
+   const separated = unused.filter(p => last === null || (Math.abs(p - last) >= 3 && Math.abs(p - last) <= 13));
+   const midi = choose(separated.length ? separated : unused);
+   const duration = .19 + Math.random() * .08;
+   const voice = queueNote(midi, at, duration, .46);
+   const source = voice.audioBufferSourceNode;
+   voices.add(source);
+   const oldEnd = source.onended;
+   source.onended = function(event) {
+    voices.delete(source);
+    if (oldEnd) oldEnd.call(this, event);
+   };
+   used.add(midi % 12);
+   last = midi;
+   at += duration;
+   if (i + 1 < count) at += .09 + Math.random() * .07;
   }
-  for (let k = 0; k < span; k++) {
-   let t = 0, x = (k + offset) % span;
-   while (t < seconds - 1e-3) {
-    const wrap = speed < 0 ? x / -speed : (span - x) / speed;
-    const t1 = Math.min(seconds, t + wrap);
-    segment(t, t1, x, x + speed * (t1 - t));
-    t = t1; x = speed < 0 ? span : 0;
-   }
-  }
-  return at + seconds;
+  return at;
  }
- function blip(context, start, duration, frequency, type) {
-  const oscillator = context.createOscillator(), gain = context.createGain();
-  const peak = type === 'sawtooth' ? .05 : .09, nodes = [gain];
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(peak, start + .008);
-  gain.gain.setValueAtTime(peak, start + Math.max(.01, duration - .025));
-  gain.gain.linearRampToValueAtTime(0, start + duration);
-  if (type === 'sawtooth' && context.createBiquadFilter) {
-   const filter = context.createBiquadFilter();
-   filter.type = 'lowpass'; filter.frequency.setValueAtTime(Math.min(4000, frequency * 4), start);
-   oscillator.connect(filter); filter.connect(gain); nodes.push(filter);
-  } else oscillator.connect(gain);
-  gain.connect(context.destination);
-  track(oscillator, ...nodes);
-  oscillator.start(start); oscillator.stop(start + duration);
- }
- // Pitch-memory reset before a new question. Unlabelled, non-tempered tones spread over
- // the practice register; about 40% fall 0.3-1.2 semitones from the previous note, where
- // an intervening tone disturbs its memory most (Deutsch 1970, 1972). A fast Shepard glide
- // then sweeps every chroma. It weakens, but cannot rule out, relative-pitch carry-over.
- function resetTones(context, at, {previous = null, low = 60, high = 84, seconds = 2.4} = {}) {
-  let lo = Math.max(110, hz(low) / 1.2), hi = Math.min(3000, hz(high) * 1.2);
-  if (!(hi > lo * 2)) {
-   const middle = Math.min(2000, Math.max(160, Math.sqrt(hz(low) * hz(high))));
-   lo = middle / Math.SQRT2; hi = middle * Math.SQRT2;
-  }
-  const known = Number.isInteger(previous);
-  const nearby = known && hz(previous) >= 90 && hz(previous) <= 3200;
-  // A tone matching the previous note (in any octave) would refresh its memory instead.
-  const echoes = f => {
-   if (!known) return false;
-   const cents = ((1200 * Math.log2(f / hz(previous))) % 1200 + 1200) % 1200;
-   return Math.min(cents, 1200 - cents) < 30;
-  };
-  const band = () => {
-   let f;
-   for (let i = 0; i < 12; i++) { f = lo * (hi / lo) ** Math.random(); if (!echoes(f)) break; }
-   return f;
-  };
-  const glide = Math.min(.9, seconds * .4), end = seconds - glide + .1;
-  for (const stream of [0, 1]) {
-   let t = stream ? .05 + Math.random() * .08 : 0;
-   while (t < end - .07) {
-    const duration = Math.min(.06 + Math.random() * .12, end - t);
-    const frequency = nearby && Math.random() < .4
-     ? hz(previous + (Math.random() < .5 ? -1 : 1) * (.3 + Math.random() * .9))
-     : band();
-    blip(context, at + t, duration, frequency, stream ? 'sawtooth' : 'triangle');
-    t += duration + .02 + Math.random() * .07;
-   }
-  }
-  shepardGlide(context, at + seconds - glide, glide, {octavesPerSecond: 1.3, direction: Math.random() < .5 ? -1 : 1, level: .06});
-  return at + seconds;
- }
- // A variable silence lets the reset fade and keeps the onset unpredictable.
- const resetGap = () => .7 + Math.random() * .5;
- // Earlier releases called the reset maskTone; the name stays for compatibility.
- function maskTone(context, at, duration = 2.4, previous = null, low, high) {
-  return resetTones(context, at, {previous, low, high, seconds: duration});
- }
+ // The silence after the final sample separates the question from the phrase.
+ const resetGap = () => .38 + Math.random() * .12;
  function cancelAudio() { for (const voice of voices) { try {voice.stop();} catch (_) {} } voices.clear(); }
- root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, sameNoteName, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, maskTone, resetTones, resetGap, shepardGlide, farPitch, cancelAudio, rememberLabel, recentLabel};
+ root.TrainingCore = {DELAYS, SESSION_RUNGS, choose, sameNoteName, matchesLearningSet, review, weight, recentMiss, confuse, queueRepair, takeRepair, write, storageError, lastQuestion, rememberQuestion, decodePreset, waitForAudio, neutralTone, resetTones, resetGap, farPitch, cancelAudio, rememberLabel, recentLabel};
 })(typeof window !== 'undefined' ? window : globalThis);

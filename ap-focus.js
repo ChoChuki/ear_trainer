@@ -3,8 +3,6 @@
     const M = APFocusModel, S = APPitchScience;
     const $ = id => document.getElementById('focus' + id);
     const modes = ['cold','learn','consolidate'];
-    // 2.8.3: columns of a 14-column mini keyboard; black keys sit between the white letters.
-    const KEY_COLUMN = [1,2,3,4,5,7,8,9,10,11,12,13];
     let host, sound, settings, session = null, trial = null, lastBlock = null;
     let phase = 'home', visible = false, initialized = false, screenToken = 0, audioToken = 0;
     let autoTimer, pendingWrites = Promise.resolve(), firstOnset = null, lastOnset = null;
@@ -72,7 +70,7 @@
         }
     }
     function updateSettings(changes) {
-        const next = {...settings, ...changes};
+        const next = {...settings, ...changes, allowRepeats:false};
         next.limit = M.answerWindow(next.limit);  // ms or null
         if (!M.validSettings(next,host.site) || !TrainingCore.write(kv('settings'), next)) return;
         settings = next;
@@ -99,14 +97,9 @@
                 Number.isInteger(level) && level >= 1 && level <= 12 ? S.learned(level) : [5];
             settings = M.defaults(known);
         }
-        // 2.8.6: the default window moved from 1.3 s to 2.5 s; an older default moves once, a typed value stays.
-        const before = JSON.stringify(settings);
         settings.limit = M.answerWindow(settings.limit);
-        if (settings.limitVersion !== 3) {
-            if (settings.limit === 1300 || settings.limit === 1333) settings.limit = 2500;
-            settings.limitVersion = 3;
-        }
-        if (JSON.stringify(settings) !== before) TrainingCore.write(kv('settings'), settings);
+        settings.allowRepeats = false;
+        if (JSON.stringify(settings) !== JSON.stringify(saved)) TrainingCore.write(kv('settings'), settings);
     }
     function progress() {
         return M.promotion([...trials.values()], [...sessions.values()], settings, host.site);
@@ -201,7 +194,7 @@
         }));
         const body = $('Stats'); body.replaceChildren();
         for (const pc of M.order) {
-            const pool = list.filter(r => r.pitch % 12 === pc && (M.exactTask(r) || M.isTarget(r)));
+            const pool = list.filter(r => r.pitch % 12 === pc && M.isTarget(r));
             const checks = pool.filter(M.isNaming), practice = pool.filter(r => r.kind !== 'cold');
             if (!settings.known.includes(pc) && !checks.length && !practice.length) continue;
             const format = a => a.filter(r => M.first(r) && M.correct(r)).length + '/' + a.length;
@@ -238,7 +231,6 @@
         $('Auto').checked = document.getElementById('autoNextCheck').checked;
         $('AutoText').textContent = host.text('autoNextText');
         $('Mask').checked = document.getElementById('apMaskCheck').checked;
-        $('Repeats').checked = settings.allowRepeats;
         if (document.activeElement !== $('Limit')) $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang);
         $('Limit').placeholder = tr('limitNone');
         $('Invite').hidden = settings.known.length < 2 || settings.share > 0;
@@ -266,7 +258,7 @@
             octaves:[...settings.octaves], effectiveRange:[session.pitches[0],session.pitches.at(-1)],
             relative:items.filter(r => r.result === 'relative').length,
             late:items.filter(r => r.result === 'timeout').length, limit:settings.limit,
-            limitMs:M.answerWindow(settings.limit,session.names.length), resetOn:$('Mask').checked,
+            limitMs:M.answerWindow(settings.limit), resetOn:$('Mask').checked,
             eligible:items.some(r => r.eligibleCold && M.attempted(r))};
     }
     function stopSound() {++audioToken; sound.stop(); clearTimeout(autoTimer); disarm();}
@@ -318,7 +310,7 @@
         const prev = TrainingCore.lastQuestion(host.site)?.target ?? null;
         const blind = session.mode === 'cold' && !session.rows.length && unprimed();
         const pitch = M.pickMidi(tone.pc,session.pitches,prev,session.known,lastExample,
-            {allowRepeats:settings.allowRepeats, blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
+            {blind, avoid:lastExample ?? TrainingCore.recentLabel(host.site)});
         trial = {protocol:M.protocol,sourceVersion:M.sourceVersion,source:host.site,
             id:session.id + '-' + (session.rows.length + 1),sessionId:session.id,ordinal:session.rows.length + 1,
             kind:session.mode,timbre:tone.instrument,level:session.known.length,known:[...session.known],learned:[...(session.learned || session.known)],pitch,
@@ -334,8 +326,10 @@
         if (!trial || !session || (replay && (phase !== 'answer' || session.mode === 'cold'))) return;
         clearTimeout(autoTimer);
         if (replay) {
+            if (deadline !== null && performance.now() > deadline) {submit('timeout', deadline); return;}
+            pickName = pickOctave = null;
             trial.replayed++; trial.result = 'assisted';
-            disarm();  // a replayed note is already assisted, so it is not timed
+            disarm();
             save('trials',trial);  // Keep a request for help even if the tab is closed before a response.
         }
         const row = trial;
@@ -347,8 +341,7 @@
         phase = 'loading'; render();
         const token = ++audioToken;
         try {
-            const reset = mask ? {long, previous:lastExample ?? row.previousPitch,
-                low:session.pitches[0], high:session.pitches.at(-1)} : null;
+            const reset = mask ? {long, previous:lastExample ?? row.previousPitch} : null;
             const clock = await sound.play(row.timbre,row.pitch,reset);
             if (token !== audioToken || row !== trial) return;
             const now = Date.now();
@@ -357,7 +350,7 @@
                 row.playedAt = Math.round(now + clock.when - performance.now());
                 row.day = S.day(new Date(row.playedAt));
                 row.timing = clock.method; row.resetSoundOn = mask;
-                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit,session.names.length);
+                row.reset = pendingReset; row.limitMs = M.answerWindow(settings.limit);
                 save('trials',row); // A reload before the response leaves an excluded trial.
             }
             lastOnset = clock.when;
@@ -379,7 +372,7 @@
             }
             S.markPractice(host.site);
             pendingReset = null; phase = 'answer'; render();
-            if (!replay && row.limitMs !== null) {deadline = firstOnset + row.limitMs; arm(row);}
+            if (row.limitMs !== null) {deadline = lastOnset + row.limitMs; arm(row);}
         } catch (_) {if (token === audioToken && row === trial) invalidate('audio-error');}
     }
     function submit(answer, when) {
@@ -389,7 +382,7 @@
         const guess = pair ? answer.pc : answer, octave = pair ? answer.octave : null;
         pickName = pickOctave = null;
         // Past the window the note counts as missed, whatever is chosen afterwards.
-        const late = guess === 'timeout' || (deadline !== null && !trial.replayed && when > deadline);
+        const late = guess === 'timeout' || (deadline !== null && when > deadline);
         stopSound();
         const inferred = !late && guess === 'relative';
         if (late) {
@@ -401,13 +394,13 @@
             trial.octaveCorrect = Number.isInteger(octave) && Number.isInteger(trial.guess) ? octave === M.octaveOf(trial.pitch) : null;
         }
         trial.submittedAt = Date.now();
-        if (trial.replayed) trial.assistedRtMs = Math.max(0,Math.round(when - lastOnset));
-        else if (guess !== 'timeout') trial.rtMs = Math.max(0,Math.round(when - firstOnset));
+        if (trial.replayed && !late) trial.assistedRtMs = Math.max(0,Math.round(when - lastOnset));
+        else if (!late) trial.rtMs = Math.max(0,Math.round(when - firstOnset));
         if (session.mode === 'learn') S.markLabel(host.site);
         if (!inferred && trial.timbre === host.site && session.mode === 'learn') {
             const pc = trial.pitch % 12;
             if (M.isTarget(trial)) APMemory.record(host.site,pc,trial.correct,Date.now(),!M.first(trial),false);
-            if (Number.isInteger(guess) && guess !== pc) APMemory.confuse(host.site,guess,pc);
+            if (!trial.correct && Number.isInteger(guess) && session.learned.includes(guess) && guess !== pc) APMemory.confuse(host.site,guess,pc);
         }
         TrainingTracker.activity('ap-answer');
         settle();
@@ -439,6 +432,7 @@
     function answerLabel(answer) {return answer === 'out' || answer === 'unsure' ? tr(answer) : Number.isInteger(answer) ? M.notes[answer] : '—';}
     function guessText(row) {
         const late = row.result === 'timeout', g = late ? row.lateGuess : row.guess, o = late ? row.lateOctave : row.guessOctave;
+        if (Number.isInteger(g) && !(row.learned ?? row.known).includes(g)) return tr('out') + ' (' + M.notes[g] + ')';
         return (g === 'relative' ? tr('relative') : answerLabel(g)) + (Number.isInteger(g) && Number.isInteger(o) ? String(o) : '');
     }
     function renderRound() {
@@ -463,41 +457,49 @@
         const tap = (b, take) => {
             let touched = null;
             b.type = 'button'; b.disabled = !open;
-            b.addEventListener('pointerdown', e => {touched = pressedAt = e.timeStamp;});
+            b.addEventListener('pointerdown', e => {touched = pressedAt = AnswerTimer.stamp(e);});
             b.addEventListener('pointercancel', () => {touched = pressedAt = null;});
             b.addEventListener('click', e => {
-                const at = e.detail && touched !== null ? touched : e.timeStamp;
+                const at = e.detail && touched !== null ? touched : AnswerTimer.stamp(e);
                 pressedAt = null;
                 take(Math.abs(at - performance.now()) < 60000 ? at : performance.now());
             });
             return b;
         };
         const pick = (kind, value, at) => {
-            if (phase !== 'answer') return;
+            if (phase !== 'answer' || at < lastOnset) return;
+            if (deadline !== null && at > deadline) {submit('timeout', deadline); return;}
             // 2.8.6: a name outside the learning set means "other" at once; only names in the set need an octave.
             if (kind === 'name' && !session.learned.includes(value)) {submit(value, at); return;}
             if (kind === 'name') pickName = value; else pickOctave = value;
             if (pickName !== null && pickOctave !== null) submit({pc:pickName, octave:pickOctave}, at);
-            else renderRound();
+            else {
+                const group = kind === 'name' ? keys : octaves;
+                for (const key of group.querySelectorAll('button')) {
+                    key.setAttribute('aria-pressed', String(Number(key.dataset.answer ?? key.dataset.octave) === value));
+                }
+            }
         };
         const group = (cls, label) => {
             const box = document.createElement('div'); box.className = cls;
             box.setAttribute('role','group'); if (label) box.setAttribute('aria-label', label); return box;
         };
         const keys = group('af-keys', tr('noteGroup')), octaves = group('af-octave-row', tr('octaveGroup')), extra = group('af-extra');
-        for (const pc of [1,3,6,8,10,0,2,4,5,7,9,11]) {
-            const black = [1,3,6,8,10].includes(pc), b = document.createElement('button');
+        for (const pc of M.keyOrder) {
+            const black = M.blackKeys.includes(pc), b = document.createElement('button');
             b.className = (black ? 'secondary af-black' : 'secondary') + (session.learned.includes(pc) ? ' af-set' : '');
             b.textContent = M.notes[pc]; b.dataset.answer = String(pc);
-            b.style.gridRow = black ? '1' : '2'; b.style.gridColumn = KEY_COLUMN[pc] + ' / span 2';
+            b.style.gridRow = black ? '1' : '2'; b.style.gridColumn = M.keyColumns[pc] + ' / span 2';
             b.setAttribute('aria-pressed', String(pickName === pc));
             keys.append(tap(b, at => pick('name', pc, at)));
         }
-        for (const o of session.octaves) {
+        for (const o of M.octaveChoices('piano')) {
             const b = document.createElement('button'); b.className = 'secondary';
             b.textContent = String(o); b.dataset.octave = String(o);
             b.setAttribute('aria-pressed', String(pickOctave === o));
-            octaves.append(tap(b, at => pick('octave', o, at)));
+            tap(b, at => pick('octave', o, at));
+            b.disabled = !open || !session.octaves.includes(o);
+            octaves.append(b);
         }
         for (const choice of ['out','unsure']) {
             const b = document.createElement('button'); b.className = 'secondary';
@@ -533,7 +535,7 @@
         else {
             const metrics = [tr('summary',{hits:c.hits,total:c.targets,alarms:c.alarms,outside:c.outside,aided:c.assisted})];
             if (lastBlock.responseMode === 'name') {
-                metrics.unshift(tr('named',{hits:lastBlock.rows.filter(r => M.first(r) && M.correct(r)).length,total:c.total}));
+                metrics.unshift(tr('named',{hits:c.hits,total:c.targets}));
             }
             $('Score').textContent = metrics.join(' · ');
         }
@@ -636,7 +638,7 @@
                 fresh.forEach(r => map.set(r.id,r));
             }
             if (token !== screenToken || phase !== 'home') return;
-            updateSettings({...M.defaults(), ...data.settings});
+            updateSettings({...M.defaults(), ...data.settings, allowRepeats:false});
             $('Notice').textContent = tr('importOk');
         } catch (_) {if (visible) $('Notice').textContent = tr('importBad');}
     }
@@ -650,7 +652,6 @@
         for (const [id,key] of [['Size','size'],['Share','share'],['Hit','hit'],['Fa','falseAlarm']]) {
             $(id).onchange = () => {updateSettings({[key]:Number($(id).value)}); $(id).value = settings[key];};
         }
-        $('Repeats').onchange = () => updateSettings({allowRepeats:$('Repeats').checked});
         $('Limit').onchange = () => {updateSettings({limit:AnswerTimer.parse($('Limit').value, settings.limit)});
             $('Limit').value = AnswerTimer.text(settings.limit, document.documentElement.lang); render();};
         $('Auto').onchange = () => {
@@ -696,5 +697,11 @@
         else stopSound();
         return pendingWrites;
     }
-    root.APFocus = {init,translate,leaveInstrument,busy:() => !!session};
+    function learningSet() {
+        const known = settings?.known ?? read(kv('settings'))?.known;
+        if (M.validSet(known)) return [...known];
+        const level = read('ap-course-v1-' + host.site)?.level;
+        return Number.isInteger(level) && level >= 1 && level <= 12 ? S.learned(level) : M.defaults().known;
+    }
+    root.APFocus = {init,translate,leaveInstrument,learningSet,busy:() => !!session};
 })(window);

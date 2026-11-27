@@ -1,7 +1,7 @@
 /* Copy shared by both independent apps. */
 const TRAINING_COPY = {
   "en": {
-    "apDescription": "Each note name is drawn independently of the previous question; successive notes are more than an octave apart when the range allows. Answers appear after the round.",
+    "apDescription": "Consecutive questions use different note names across all octaves. Answers appear after the round.",
     "intervalNoRepeat": "These settings cannot give a different target note name. Select more notes or widen the interval or pitch range.",
     "distinctRangeError": "Choose at least two different note names for consecutive questions.",
     "apLearnDesc": "Imagine each named note before listening. Recall follows the answer window below; due notes and mistakes receive more practice.",
@@ -36,7 +36,7 @@ const TRAINING_COPY = {
     "chance": "Chance baseline",
     "audioReload": "Reload audio",
     "loadingRecords": "Loading records…",
-    "apMaskText": "Interference burst before each question",
+    "apMaskText": "Play a short instrumental phrase between questions",
     "autoNextText": "Continue automatically after each answer",
     "mixed": "Mixed sounds",
     "apNewNote": "New",
@@ -61,7 +61,7 @@ const TRAINING_COPY = {
     "produceAgain": "First note again"
   },
   "zh-TW": {
-    "apDescription": "每題音名獨立抽選，與上一題無關；音域允許時，相鄰兩題相距一個八度以上。整輪結束後顯示答案。",
+    "apDescription": "相鄰題一律使用不同音名，跨八度也算。整輪結束後顯示答案。",
     "intervalNoRepeat": "目前設定無法換一個目標音名。請增加音名、放寬音程或擴大音域。",
     "distinctRangeError": "連續出題至少需要兩個不同音名。",
     "apLearnDesc": "先在腦中回想音名對應的聲音，再試聽。回憶依下方的作答時限；到期音與錯音會增加練習。",
@@ -96,7 +96,7 @@ const TRAINING_COPY = {
     "chance": "隨機猜測基準",
     "audioReload": "重新載入音訊",
     "loadingRecords": "正在讀取記錄…",
-    "apMaskText": "每題前播放干擾音",
+    "apMaskText": "題間播放無音名提示的樂器短句",
     "autoNextText": "作答後自動進入下一題",
     "mixed": "混合音色",
     "apNewNote": "新",
@@ -121,7 +121,7 @@ const TRAINING_COPY = {
     "produceAgain": "重聽第一個音"
   },
   "ja": {
-    "apDescription": "音名は前の問題と無関係に選ばれ、音域が許せば連続する音は1オクターブ以上離れます。正解は終了後に表示します。",
+    "apDescription": "八度が違っても、連続する問題には別の音名が出ます。答えは最後に表示します。",
     "intervalNoRepeat": "別の目標音名を選べません。音名を追加するか、音程または音域を広げてください。",
     "distinctRangeError": "出題には異なる音名が2つ以上必要です。",
     "apLearnDesc": "音名から音を思い浮かべてから試聴。想起には下の制限時間を適用。復習時期の音と間違えた音を多めに練習。",
@@ -156,7 +156,7 @@ const TRAINING_COPY = {
     "chance": "当てずっぽうの基準",
     "audioReload": "音声を再読み込み",
     "loadingRecords": "記録を読み込み中…",
-    "apMaskText": "各問題の前に妨害音を流す",
+    "apMaskText": "問題の間に楽器の短い音列を鳴らす",
     "autoNextText": "回答後、自動で次の問題へ進む",
     "mixed": "音色ミックス",
     "apNewNote": "新規",
@@ -181,7 +181,7 @@ const TRAINING_COPY = {
     "produceAgain": "1音目をもう一度"
   },
   "de": {
-    "apDescription": "Jeder Tonname wird unabhängig von der vorigen Aufgabe gewählt; wenn der Umfang es erlaubt, liegen aufeinanderfolgende Töne mehr als eine Oktave auseinander. Auflösung am Rundenende.",
+    "apDescription": "Aufeinanderfolgende Aufgaben haben auch über Oktaven hinweg verschiedene Tonnamen. Die Auflösung folgt am Ende.",
     "intervalNoRepeat": "Kein anderer Zieltonname möglich. Wähle mehr Töne, Intervalle oder einen größeren Tonumfang.",
     "distinctRangeError": "Wähle mindestens zwei verschiedene Tonnamen.",
     "apLearnDesc": "Den benannten Ton erst vorstellen, dann anhören. Es gilt das Zeitfenster unten; fällige und falsche Töne werden häufiger geübt.",
@@ -216,7 +216,7 @@ const TRAINING_COPY = {
     "chance": "Zufallsniveau",
     "audioReload": "Audio neu laden",
     "loadingRecords": "Aufzeichnungen werden geladen…",
-    "apMaskText": "Störtöne vor jeder Frage",
+    "apMaskText": "Zwischen den Aufgaben eine kurze Tonfolge spielen",
     "autoNextText": "Nach jeder Antwort automatisch weiter",
     "mixed": "Gemischte Klänge",
     "apNewNote": "Neu",
@@ -241,7 +241,7 @@ const TRAINING_COPY = {
     "produceAgain": "Ersten Ton wiederholen"
   },
   "it": {
-    "apDescription": "Ogni nome è estratto indipendentemente dalla domanda precedente; se l’estensione lo consente, note consecutive distano più di un’ottava. Soluzioni a fine turno.",
+    "apDescription": "Due domande consecutive hanno nomi di nota diversi, anche in ottave diverse. Le risposte appaiono alla fine.",
     "intervalNoRepeat": "Non è possibile scegliere un altro nome di nota. Aggiungi note oppure amplia gli intervalli o l’estensione.",
     "distinctRangeError": "Scegli almeno due nomi di nota diversi.",
     "apLearnDesc": "Immagina la nota prima di ascoltarla. Vale il limite di risposta qui sotto; più pratica per note da ripassare ed errori.",
@@ -276,7 +276,7 @@ const TRAINING_COPY = {
     "chance": "Livello casuale",
     "audioReload": "Ricarica audio",
     "loadingRecords": "Caricamento dati…",
-    "apMaskText": "Suoni di disturbo prima di ogni domanda",
+    "apMaskText": "Suona una breve sequenza strumentale tra le domande",
     "autoNextText": "Continua automaticamente dopo ogni risposta",
     "mixed": "Timbri misti",
     "apNewNote": "Nuova",
@@ -301,7 +301,7 @@ const TRAINING_COPY = {
     "produceAgain": "Riascolta la prima nota"
   },
   "el": {
-    "apDescription": "Κάθε όνομα επιλέγεται ανεξάρτητα από την προηγούμενη ερώτηση· όταν η έκταση το επιτρέπει, διαδοχικές νότες απέχουν πάνω από μία οκτάβα. Απαντήσεις στο τέλος.",
+    "apDescription": "Διαδοχικές ερωτήσεις έχουν διαφορετικά ονόματα φθόγγων σε όλες τις οκτάβες. Οι απαντήσεις εμφανίζονται στο τέλος.",
     "intervalNoRepeat": "Δεν υπάρχει άλλος στόχος με διαφορετικό όνομα. Πρόσθεσε νότες ή διεύρυνε τα διαστήματα ή την έκταση.",
     "distinctRangeError": "Επίλεξε τουλάχιστον δύο διαφορετικά ονόματα νοτών.",
     "apLearnDesc": "Φαντάσου τη νότα πριν την ακούσεις. Ισχύει το χρονικό όριο παρακάτω· περισσότερη εξάσκηση σε λάθη και προγραμματισμένες επαναλήψεις.",
@@ -336,7 +336,7 @@ const TRAINING_COPY = {
     "chance": "Επίπεδο τύχης",
     "audioReload": "Επαναφόρτωση ήχου",
     "loadingRecords": "Φόρτωση καταγραφών…",
-    "apMaskText": "Ήχοι παρεμβολής πριν από κάθε ερώτηση",
+    "apMaskText": "Σύντομη οργανική φράση ανάμεσα στις ερωτήσεις",
     "autoNextText": "Αυτόματη συνέχεια μετά από κάθε απάντηση",
     "mixed": "Μεικτά ηχοχρώματα",
     "apNewNote": "Νέα",

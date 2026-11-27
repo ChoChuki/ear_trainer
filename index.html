@@ -62,7 +62,6 @@
                     <label class="af-option"><span data-af="size"></span><select id="focusSize"><option>12</option><option>24</option><option>36</option><option>48</option><option>60</option></select></label>
                     <label class="af-option"><span id="focusAutoText"></span><input id="focusAuto" type="checkbox"></label>
                     
-                    <label class="af-option"><span data-af="repeats"></span><input id="focusRepeats" type="checkbox"></label>
                     <label class="af-option"><span data-af="mask"></span><input id="focusMask" type="checkbox"></label>
                     <label class="af-option"><span data-af="limitSeconds"></span><input id="focusLimit" class="af-seconds" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
                     <p class="af-muted" data-af="limitHelp"></p>
@@ -161,7 +160,11 @@
              after a round the result is read before anything else. -->
         <section class="ap-answer-panel" id="apAnswerPanel" hidden>
             <p id="apMessage" class="ap-message" role="status" aria-live="polite"></p>
-            <div id="apAnswers" class="ap-answer-buttons" aria-label="Absolute pitch answers"></div>
+            <div id="apAnswers" class="ap-answer-buttons af-two" aria-label="Absolute pitch answers">
+                <div id="apNameKeys" class="af-keys" role="group"></div>
+                <div id="apOctaveKeys" class="af-octave-row" role="group"></div>
+                <div id="apExtraKeys" class="af-extra"></div>
+            </div>
             <button id="apRepeatNote" type="button" class="secondary ap-repeat-note" hidden>Replay correct note</button>
             <div id="apReview" class="ap-review" hidden></div>
         </section>
@@ -199,6 +202,7 @@
                     <span id="modeLabel">Mode</span>
                     <select id="modeSelect">
                         <option value="single">Single note</option>
+                        <option value="free">Free practice</option>
                         <option value="interval">Two notes</option>
                         <option value="apFocus">Focused AP practice</option>
                         <option value="ap">Absolute pitch</option>
@@ -265,7 +269,7 @@
                             <label class="ap-opt"><input id="apHideColdCheck" type="checkbox"><span id="apHideColdText"></span></label>
                         </div>
                     </div>
-                    <label class="option-row" id="apMaskRow"><input id="apMaskCheck" type="checkbox" checked><span id="apMaskText">Short burst of random tones before each question</span></label>
+                    <label class="option-row" id="apMaskRow"><input id="apMaskCheck" type="checkbox" checked><span id="apMaskText">Play a short instrumental phrase before each question</span></label>
                     <p id="apDescription" class="ap-description">Consecutive targets have different note names. Answers appear after the round.</p>
                     <p id="apEffectiveRange" class="ap-description" aria-live="polite"></p>
                 </div>

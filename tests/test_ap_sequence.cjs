@@ -47,39 +47,18 @@ for (const c of runCases) {
     });
     const a = Array.from(S.makeSequence({...c,previousMidi:64,allowRepeats:true}));
     assert.equal(a.length,c.total);
-    const count = Array(12).fill(0);
-    let last = 64, same = 0, wide = 0;
+    let last = 64;
     for (const p of a) {
         assert(Number.isInteger(p) && p >= c.from && p <= c.to);
-        checkRegister(p, last, c.from, c.to);
-        if (p % 12 === last % 12) same++;
-        if (Math.abs(p - last) >= 13) wide++;
-        count[p % 12]++; last = p;
+        assert.notEqual(p % 12,last % 12,'old repeat setting must also exclude matching classes');
+        checkRegister(p,last,c.from,c.to);
+        last=p;
     }
-    // A repeated name occurs about as often as chance predicts: sum of squared shares.
-    const expected = count.reduce((sum, n) => sum + (n / a.length) ** 2, 0);
-    const observed = same / a.length;
-    assert(Math.abs(observed - expected) < .02, `same name after itself ${observed.toFixed(3)} vs chance ${expected.toFixed(3)}`);
-    console.log('PASS AP', `${c.from}-${c.to}`, `known=${c.known}`, `same-name ${observed.toFixed(3)} (chance ${expected.toFixed(3)})`,
-        `jumps>12: ${(wide / a.length * 100).toFixed(1)}%`);
 }
-
-// The previous answer predicts nothing: with one learned name, F follows F as often as it follows Other.
-const seq = Array.from(S.makeSequence({from:60,to:95,total:40000,known:[5],allowRepeats:true}));
-const after = {F:[0,0], O:[0,0]};
-for (let i = 1; i < seq.length; i++) {
-    const key = seq[i-1] % 12 === 5 ? 'F' : 'O';
-    after[key][0]++; if (seq[i] % 12 === 5) after[key][1]++;
+console.log('PASS 320,000 AP draws including legacy repeat settings, all cross-octave checks');
+for (const to of [71,95]) {
+    assert.deepEqual(Array.from(S.makeSequence({from:60,to,total:1,known:[5],previousMidi:65,forcedPC:5,allowRepeats:true})),[]);
 }
-const pF = after.F[1] / after.F[0], pO = after.O[1] / after.O[0];
-assert(Math.abs(pF - pO) < .03, `P(F|F)=${pF.toFixed(3)} P(F|Other)=${pO.toFixed(3)}`);
-assert(Math.abs(pF - .5) < .03, 'one learned name and Other share the sequence evenly');
-console.log('PASS independent names: P(F|F)=' + pF.toFixed(3) + ' P(F|Other)=' + pO.toFixed(3));
-
-// Forced reviews keep their name even when it repeats the previous one; only the octave moves.
-assert.deepEqual(Array.from(S.makeSequence({from:60,to:95,total:1,known:[5,4],previousMidi:65,forcedPC:5,allowRepeats:true})),[89]);
-assert.deepEqual(Array.from(S.makeSequence({from:60,to:71,total:1,known:[5],previousMidi:65,forcedPC:5,allowRepeats:true})),[65], 'one octave: the only F');
-assert.deepEqual(Array.from(S.makeSequence({from:60,to:95,total:1,known:[5,4],previousMidi:65,forcedPC:5})),[],'defer a colliding repair in the default mode');
 let prior = 64;
 for (let i = 0; i < 6000; i++) {
     const forced = i % 2 === 0 ? 5 : 4;

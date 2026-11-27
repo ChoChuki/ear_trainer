@@ -3,6 +3,8 @@
     'use strict';
     const languages = ['en','zh-TW','ja','de','it','el'];
     const lines = {
+        drawNote: ["Draw one note", "抽一個音", "1音出題", "Einen Ton abfragen", "Estrai una nota", "Κλήρωση μιας νότας"],
+        freeMode: ["Free practice", "自由練習", "自由練習", "Freies Üben", "Esercizio libero", "Ελεύθερη εξάσκηση"],
         noteFilter: ['Notes','音名','音名','Töne','Note','Νότες'],
         selectAll: ['Select all','全選','すべて選択','Alle auswählen','Seleziona tutte','Επιλογή όλων'],
         focus: ['Focused AP practice','AP 集中訓練','AP 集中練習','Absolutes Gehör trainieren','Allenamento AP','Εξάσκηση απόλυτου τονικού ύψους'],
@@ -13,7 +15,7 @@
         learn: ['Active learning','主動學習','学習','Lernen','Apprendimento','Ενεργή μάθηση'],
         consolidate: ['Consolidate','鞏固練習','定着練習','Festigen','Consolidamento','Εμπέδωση'],
         firstVisit: ["You can record a first note before playing an example.","可以在聽示範前，先記錄第一次盲聽的結果。","見本を聞く前に、初回の1音を記録できます。","Vor dem ersten Hörbeispiel kannst du deinen ersten Ton bestimmen.","Puoi registrare la prima risposta prima di ascoltare gli esempi.","Μπορείς να καταγράψεις την πρώτη απάντηση πριν ακούσεις παράδειγμα."],
-        mask: ["Play interference sounds between questions","題目之間播放干擾音","問題の間に妨害音を入れる","Störklänge zwischen den Aufgaben abspielen","Riproduci suoni interferenti tra le domande","Παίξε ήχους παρεμβολής ανάμεσα στις ερωτήσεις"],
+        mask: ["Play a short instrumental phrase between questions", "題間播放無音名提示的樂器短句", "問題の間に楽器の短い音列を鳴らす", "Zwischen den Aufgaben eine kurze Tonfolge spielen", "Suona una breve sequenza strumentale tra le domande", "Σύντομη οργανική φράση ανάμεσα στις ερωτήσεις"],
         octaves: ['Practice octaves','練習八度','練習するオクターブ','Übungsoktaven','Ottave da esercitare','Οκτάβες εξάσκησης'],
         rangeHint: ['Choose octaves that cover every note in your learning set and at least two different note names.','所選八度須涵蓋學習音集的每個音，並至少能播放兩個不同音名。','学習中の音がすべて含まれ、異なる音名が2つ以上あるオクターブを選んでください。','Wähle Oktaven mit allen Lerntönen und mindestens zwei verschiedenen Notennamen.','Scegli ottave che comprendano tutte le note in studio e almeno due nomi diversi.','Επίλεξε οκτάβες με όλες τις νότες εκμάθησης και τουλάχιστον δύο διαφορετικά ονόματα.'],
         mixRange: ['Range for both instruments: {range}','兩種樂器共用的音域為 {range}','両方の楽器で使える音域は {range} です','Gemeinsamer Tonumfang beider Instrumente: {range}','Estensione comune ai due strumenti: {range}','Κοινή έκταση των δύο οργάνων: {range}'],
@@ -85,8 +87,8 @@
         timeUp: ['Time’s up · counted as a miss','時間到 · 記為答錯','時間切れ · 不正解として記録','Zeit abgelaufen · als Fehler gezählt','Tempo scaduto · contato come errore','Τέλος χρόνου · μετρά ως λάθος'],
         lateCount: ['too slow {n}','超時 {n} 題','時間切れ {n}問','zu langsam {n}','troppo tardi {n}','πολύ αργά {n}'],
         medianTime: ['median time {s}','反應時間中位數 {s}','反応時間の中央値 {s}','Median-Antwortzeit {s}','tempo mediano {s}','διάμεσος χρόνος {s}'],
-        resetting: ['Reset tones… the note follows','干擾音播放中，接著是題目音…','妨害音のあとに出題します…','Störklänge … dann folgt der Ton','Suoni di disturbo… poi la nota','Ήχοι παρεμβολής… ακολουθεί η νότα'],
-        clearing: ["Interference sound after a labelled note (20 s)…","音名提示後播放干擾音（20 秒）…","音名提示後の妨害音（20秒）…","Störklang nach einem benannten Ton (20 s) …","Suono interferente dopo una nota con nome (20 s)…","Ήχος παρεμβολής μετά από νότα με όνομα (20 δ.)…"],
+        resetting: ["Four intervening notes, then the test note…", "四個干擾音後，接著是題目音…", "4音のあとに出題します…", "Nach vier Zwischentönen folgt der Testton …", "Dopo quattro note ascolterai la nota da riconoscere…", "Μετά από τέσσερις νότες ακολουθεί η νότα της δοκιμής…"],
+        clearing: ["Six intervening notes, then the test note…", "六個干擾音後，接著是題目音…", "6音のあとに出題します…", "Nach sechs Zwischentönen folgt der Testton …", "Dopo sei note ascolterai la nota da riconoscere…", "Μετά από έξι νότες ακολουθεί η νότα της δοκιμής…"],
         jumpHint: ["In a narrow range, some consecutive notes must stay within an octave.","音域較窄時，部分相鄰題的音程會在一個八度以內。","音域が狭いと、連続する音の間隔が1オクターブ以内になることがあります。","Bei engem Tonumfang liegen manche aufeinanderfolgenden Töne innerhalb einer Oktave.","In un’estensione ridotta alcune note consecutive distano al massimo un’ottava.","Σε στενή έκταση μερικές διαδοχικές νότες απέχουν το πολύ μία οκτάβα."],
         learnExact: ["{n} notes · more practice with your chosen names · feedback after each answer","{n} 題 · 學習音集中的音較常出現 · 每題立即核對音名","{n}問・学習中の音を重点的に出題・毎回答え合わせ","{n} Töne · Schwerpunkt auf deinen Lerntönen · sofortige Rückmeldung","{n} note · priorità alle note in studio · riscontro immediato","{n} νότες · έμφαση στις επιλεγμένες · άμεση ανατροφοδότηση"],
         recognition: ["Count “Other” as correct for notes outside your set", "音集外的音選「其他音」也算答對", "学習中以外の音は「学習外の音」でも正解にする", "„Anderer Ton“ zählt bei Tönen außerhalb deiner Auswahl als richtig", "«Altra nota» vale come risposta giusta per le note fuori dal gruppo", "Το «Άλλη νότα» μετράει σωστό για νότες εκτός συνόλου"],

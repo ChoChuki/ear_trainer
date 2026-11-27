@@ -30,15 +30,15 @@ const ready = (page, selector) => page.waitForFunction(s => {
     // 1. Focused interval practice: a blind check answered at once, then a timeout in learning.
     await page.goto(base + '#iv');
     await page.waitForSelector('#ivModes button[data-mode="cold"]');
-    assert.match(await page.textContent('#ivRules'), /2\.5 s/);
-    assert.equal(await page.inputValue('#ivLimit'), '2.5');
+    assert.match(await page.textContent('#ivRules'), /1\.3 s/);
+    assert.equal(await page.inputValue('#ivLimit'), '1.3');
     assert.equal(await page.isVisible('#focusPanel'), false);
     console.log('iv home:', await page.textContent('#ivRules'), '|', await page.textContent('#ivDaily'));
     await page.click('#ivModes button[data-mode="cold"]');
     for (let i = 0; i < 12; i++) {
         await ready(page, '#ivAnswers button');
         if (i === 0) {
-            assert.equal(await page.locator('#ivAnswers button').count(), 13, '12 intervals and Not sure');
+            assert.equal(await page.locator('#ivAnswers button').count(), 14, '12 intervals, Other and Not sure');
             assert.equal(await page.isVisible('#ivTimer'), true);
             assert.equal(await page.isVisible('#ivReplay'), false, 'one listen in the blind check');
         }
@@ -55,7 +55,7 @@ const ready = (page, selector) => page.waitForFunction(s => {
         assert.notEqual(check[i].size, check[i - 1].size, 'adjacent intervals differ');
         assert.notEqual(check[i].target % 12, check[i - 1].target % 12, 'adjacent second notes differ in name');
     }
-    assert(check.every(r => r.result === 'answered' && Number.isFinite(r.rtMs) && r.limitMs === 2500 && r.direction === 'up' && r.target > r.reference));
+    assert(check.every(r => r.result === 'answered' && Number.isFinite(r.rtMs) && r.limitMs === 1300 && r.direction === 'up' && r.target > r.reference));
     console.log('iv sizes:', check.map(r => r.size).join(' '), '| rt', check.map(r => r.rtMs).join(' '));
     await page.click('#ivContinue button.primary');
     await ready(page, '#ivAnswers button');
@@ -86,7 +86,7 @@ const ready = (page, selector) => page.waitForFunction(s => {
     await page.goto(base + '?instrument=piano');
     await ready(page, '#playButton');
     console.log('single limits:', await page.inputValue('#answerLimitSelect'));
-    assert.equal(await page.inputValue('#answerLimitSelect'), '2.5');
+    assert.equal(await page.inputValue('#answerLimitSelect'), '1.3');
     assert.equal(await page.getAttribute('#answerLimitSelect', 'placeholder'), 'No limit');
     await page.click('#playButton');
     await page.waitForFunction(() => !document.getElementById('answerTimer').hidden && document.getElementById('answerTimer').parentElement.classList.contains('answer-card'), null, {timeout: 8000});
@@ -106,7 +106,7 @@ const ready = (page, selector) => page.waitForFunction(s => {
     await page.selectOption('#modeSelect', 'rpCourse');
     await page.waitForTimeout(300);
     const rpLimit = await page.inputValue('#answerLimitSelect');
-    console.log('rp limit:', rpLimit, '| answers', await page.evaluate(() => rpChoiceCount()));
+    console.log('rp limit:', rpLimit, '| answers', await page.evaluate(() => document.querySelectorAll('#rpAnswers button').length));
     await page.click('#playButton');
     await page.waitForFunction(() => { const b = document.querySelector('#rpAnswers button'); return b && !b.disabled; }, null, {timeout: 10000});
     assert.equal(await page.evaluate(() => document.getElementById('answerTimer').parentElement.id), 'rpPanel');
@@ -130,7 +130,9 @@ const ready = (page, selector) => page.waitForFunction(s => {
     console.log('ap timeout:', await page.textContent('#apMessage'));
     await page.waitForTimeout(300);
     data = await store(page, 'ap-training-data-piano');
-    assert(data.trials.some(r => r.result === 'timeout' && r.limitMs === 2500));
+    const assessment = data.trials.find(r => r.result === 'timeout' && r.limitMs === 1300);
+    assert(assessment);
+    assert.deepEqual(assessment.learned, [5], 'a fresh AP assessment uses the same F-only starting set as focused AP');
     await page.evaluate(() => stopTest());
 
     // 5. Focused AP: a labelled example never shares its name with the next question.

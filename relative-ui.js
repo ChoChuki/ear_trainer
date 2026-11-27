@@ -8,7 +8,7 @@
  const shell=()=>document.querySelector('.app-shell');
  let state, session=null, audioVersion=0, heardAt=0, replayCount=0, selectedAnswer=null, started=false, questionAudioReady=false, feedbackBusy=false, historyReady=false;
  // Production ("sing / play first"): idle | listen | wait | mic | reveal | rate | done
- let produceStage='idle', micStream=null, micListener=null, micOpening=false, micTimer=null;
+ let produceStage='idle', micStream=null, micListener=null, micOpening=false, micTimer=null, produceRT=null;
  const MIC_KEY='ear-produce-mic', PASS_CENTS=50;
  const isMode=()=>typeof testMode!=='undefined'&&testMode==='rpCourse';
  const lang=()=>typeof currentLanguage!=='undefined'?currentLanguage:'en';
@@ -53,8 +53,10 @@
   $('rpLevel').addEventListener('change',()=>{if((testActive||micOpening)&&isMode()){cancelRound();}state.level=Number($('rpLevel').value);state.levelChosen=true;C.save(AP_APP_ID,state);sampleButtons();render();});
   for (const id of ['rpActivity','rpDirection','rpTimbre']) $(id).addEventListener('change',()=>{if((testActive||micOpening)&&isMode())cancelRound();sampleButtons();render();});
   $('rpReplay').addEventListener('click',()=>{if(!current()||!isMode()||feedbackBusy||(session.activity==='test'&&!session.audioFailed))return;
+    if(!answered && !session.audioFailed && !questionAudioReady)return;
+    if(!answered && answerClock.late(performance.now())){expire(current());return;}
     if(isProduce()){if(answered||!['wait','mic'].includes(produceStage))return;stopListening();produceStage='listen';}
-    if(!answered){replayCount++;stopTimer();}
+    if(!answered){if(!session.audioFailed)replayCount++;stopTimer();}
     TrainingTracker.activity('question');
     questionPlayback(current(),true);render();
   });
@@ -131,11 +133,12 @@
  function makeOptions() {
   const box=$('rpAnswers');box.replaceChildren();
   const level=Number($('rpLevel').value),cfg=C.LEVELS[level];if(!cfg)return;
-  const options=cfg.directionOnly?['higher','same','lower']:C.availableDistances(minMidi,maxMidi,cfg.distances,relativePitchClasses);
+  const options=cfg.directionOnly?['higher','same','lower']:C.LEVELS[C.ALL_LEVEL].distances;
+  box.classList.toggle('all-distances',!cfg.directionOnly);
   for(const value of options){
    const b=document.createElement('button');b.type='button';b.className='secondary rp-choice';b.dataset.answer=String(value);
    b.textContent=typeof value==='number'?String(value):value==='higher'?'↑ '+tx('up'):value==='lower'?'↓ '+tx('down'):'＝ '+tx('same');
-   b.addEventListener('click',()=>answer(value));box.appendChild(b);
+   b.addEventListener('click',event=>answer(value,false,false,event));box.appendChild(b);
   }
  }
  function lastAnswered(){if(!session||!session.records.length)return null;return session.questions[session.records.length-1];}
@@ -206,9 +209,10 @@
   let at=audioContext.currentTime+.05;
   if(prelude!==null){tone(prelude,at,.5);at+=.68;}
   tone(ref,at,.58);tone(target,at+.8,.78);
-  const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
-  heardAt=performance.now()+1000*(at+.8-audioContext.currentTime+latency);
-  return TrainingCore.waitForAudio(audioContext,(untilOnset?at+.8:at+1.58)+latency,()=>serial===audioVersion&&isMode()&&!document.hidden);
+  const clock=APFocusModel.outputClock(audioContext,at+.8);
+  if(untilOnset)heardAt=clock.when;
+  const audibleAt=audioContext.currentTime+(clock.when-performance.now())/1000;
+  return TrainingCore.waitForAudio(audioContext,audibleAt+(untilOnset?0:.78),()=>serial===audioVersion&&isMode()&&!document.hidden);
  }
  async function playOne(midi,duration=.9){
   if(!ready)return false;
@@ -217,8 +221,9 @@
   player.cancelQueue(audioContext);TrainingCore.cancelAudio();
   const at=audioContext.currentTime+.05;
   tone(midi,at,duration);
-  const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
-  return TrainingCore.waitForAudio(audioContext,at+duration+latency,()=>serial===audioVersion&&isMode()&&!document.hidden);
+  const end=APFocusModel.outputClock(audioContext,at+duration);
+  const audibleEnd=audioContext.currentTime+(end.when-performance.now())/1000;
+  return TrainingCore.waitForAudio(audioContext,audibleEnd,()=>serial===audioVersion&&isMode()&&!document.hidden);
  }
  // 2.8.2: a question opens for answers at its second note; feedback pairs still play to the end.
  function playQuestion(q){return isProduce()?playOne(q.reference):playPair(q.reference,q.target,q.prelude,true);}
@@ -227,16 +232,23 @@
   // If playback fails, the user can retry without recording an incorrect trial.
   questionAudioReady=false;
   for(const b of $('rpAnswers').querySelectorAll('button'))b.disabled=true;
-  return playQuestion(q).then(played=>{
+  const playing=playQuestion(q), version=audioVersion;
+  return playing.then(played=>{
+   if(version!==audioVersion)return;
    if(!isMode()||!testActive||answered||current()!==q)return;
    if(!played)throw new Error('Audio paused');
    session.audioFailed=false;
    questionAudioReady=true;
    for(const b of $('rpAnswers').querySelectorAll('button'))b.disabled=false;
-   if(isProduce()){produceStage='wait';if(micStream)startListening(q);render();}
-   else if(!replay&&!replayCount)armTimer(q);
+   if(!replay&&!isProduce())TrainingCore.rememberQuestion(AP_APP_ID,q.reference,q.target);
+   if(isProduce()){
+    produceStage='wait';
+    if(micStream){questionAudioReady=false;startListening(q);}
+    else {heardAt=performance.now();armTimer(q);}
+    render();
+   }else armTimer(q);
   }).catch(()=>{
-   if(isMode()&&testActive&&!answered&&current()===q){
+   if(version===audioVersion&&isMode()&&testActive&&!answered&&current()===q){
     session.audioFailed=true;$('rpReplay').disabled=false;
     if(isProduce())produceStage='wait';
     $('rpMessage').textContent=tx('audioRetry');
@@ -244,14 +256,16 @@
    }
   });
  }
- // 2.8.2: the shared answer window starts at the second note and widens with the number of answers.
  let limitMs=null;
  function stopTimer(){if(typeof answerClock!=='undefined')answerClock.stop();}
+ function expire(q){
+  if(!isMode()||!session||!testActive||answered||current()!==q)return;
+  if(isProduce())recordProduce({correct:false,checkedBy:'timeout'});
+  else answer(null,isPosition(),true);
+ }
  function armTimer(q){
-  limitMs=null;
-  if(typeof startAnswerClock!=='function'||isProduce()||!session||answered)return;
-  const choices=isPosition()?Math.max(2,maxMidi-minMidi+1):$('rpAnswers').children.length;
-  limitMs=startAnswerClock(heardAt,choices,()=>{if(isMode()&&session&&testActive&&!answered&&current()===q)answer(null,isPosition(),true);});
+  if(!session||answered)return;
+  limitMs=startAnswerClock(heardAt,()=>expire(q));
  }
  function startNext(){
   if(!ready||!isMode())return;
@@ -292,7 +306,7 @@
   }
   audioVersion++;stopListening();
   currentReferenceMidi=q.reference;currentMidi=q.target;
-  TrainingCore.rememberQuestion(AP_APP_ID,q.reference,q.target);
+  produceRT=null;limitMs=null;
   testActive=true;answered=false;questionAudioReady=false;selectedAnswer=null;replayCount=0;questionSerial++;
   produceStage=isProduce()?'listen':'idle';
   player.cancelQueue(audioContext);resetKeyboardColors();
@@ -308,11 +322,12 @@
  }
  function activityPrompt(activity,level){return activity==='produce'?tx('produceTip'):C.LEVELS[level].directionOnly?tx('directionTip'):activity==='locate'?tx('locationTip'):activity==='melody'?tx('melodyTip'):tx('listen');}
  function answerPosition(midi){if(!isMode())return false;if(!testActive||answered)return true;if(!isPosition())return true;answer(midi,true);return true;}
- function answer(value,position=false,timeout=false){
+ function answer(value,position=false,timeout=false,event=null){
   if(!isMode()||!session||!testActive||answered||(!questionAudioReady&&!timeout)||isProduce())return;
   const q=current();if(!q)return;
   const pressed=typeof answerClock!=='undefined'?answerClock.pressed():null;
-  const at=pressed!==null&&Math.abs(pressed-performance.now())<60000?pressed:performance.now();
+  const at=event&&event.detail&&pressed!==null?pressed:AnswerTimer.stamp(event);
+  if(!timeout&&at<heardAt)return;
   // Past the window the pair counts as missed, whatever is chosen afterwards.
   const late=timeout||(typeof answerClock!=='undefined'&&answerClock.late(at));
   stopTimer();
@@ -341,7 +356,7 @@
    const mine=b.dataset.answer===String(selected),right=b.dataset.answer===String(isDirection?q.direction:q.distance);
    if(mine)b.classList.add(feedback?(correct?'rp-right':'rp-wrong'):'rp-picked');
    if(feedback&&right)b.classList.add('rp-right');}}
-  if(position){resetKeyboardColors();rpMarkPitch(q.reference,'reference');rpMarkPitch(q.target,'correct');if(!correct)rpMarkPitch(selected,'wrong');}
+  if(position){resetKeyboardColors();rpMarkPitch(q.reference,'reference');rpMarkPitch(q.target,'correct');if(Number.isInteger(selected)&&!correct)rpMarkPitch(selected,'wrong');}
   const slow=late?APFocusCopy.t(lang(),'tooSlow')+' · ':'';
   if(session.activity==='test'){
    $('rpMessage').textContent=`${session.records.length} / ${session.total}`+(late?' · '+APFocusCopy.t(lang(),'timeUp'):'');
@@ -373,21 +388,26 @@
    if(session!==owner||!micStream||!isProduce()||!testActive||answered||current()!==q||produceStage!=='wait')return;
    produceStage='mic';$('rpMessage').textContent=tx('produceListening');render();
    const listener=PitchDetect.listen(audioContext,micStream,{timeoutMs:7000});
-   micListener=listener;
+   micListener=listener;questionAudioReady=true;heardAt=performance.now();armTimer(q);render();
    listener.promise.then(hit=>{
     if(micListener===listener)micListener=null;
     if(session!==owner||!testActive||answered||current()!==q||produceStage!=='mic')return;
+    if(answerClock.late(performance.now())){expire(q);return;}
     if(!hit){produceStage='wait';$('rpMessage').textContent=tx('produceNoPitch');render();return;}
+    produceRT=Math.max(0,Math.round(performance.now()-heardAt));
     const cents=Math.round(PitchDetect.centsFromClass(hit.midi,q.target));
     recordProduce({correct:Math.abs(cents)<=PASS_CENTS,checkedBy:'mic',producedMidi:Math.round(hit.midi*100)/100,cents});
    });
   },250);
  }
- function reveal(){
+ function reveal(event){
   if(!isMode()||!isProduce()||!testActive||answered||!questionAudioReady||feedbackBusy)return;
   if(!['wait','mic'].includes(produceStage))return;
   const q=current();if(!q)return;
-  stopListening();TrainingTracker.activity('question');
+  const at=AnswerTimer.stamp(event);
+  if(at<heardAt)return;
+  if(answerClock.late(at)){expire(q);return;}
+  produceRT=Math.max(0,Math.round(at-heardAt));stopTimer();stopListening();TrainingTracker.activity('question');
   produceStage='reveal';feedbackBusy=true;$('rpMessage').textContent=describe(q);render();
   const owner=session;
   playPair(q.reference,q.target).catch(()=>{$('rpMessage').textContent=tx('audioRetry');}).finally(()=>{
@@ -400,10 +420,11 @@
   recordProduce({correct:matched,checkedBy:'self'});
  }
  function recordProduce({correct,checkedBy,producedMidi=null,cents=null}){
-  const q=current();if(!q)return;
+  const q=current();if(!q||answered)return;
+  stopTimer();stopListening();
   const item={protocol:C.PROTOCOL,sessionId:session.id,timbre:session.timbre,repair:false,id:`${AP_APP_ID}-rp-${Date.now()}-${session.records.length}`,time:Date.now(),day:today(),site:AP_APP_ID,
    level:session.level,activity:session.activity,direction:q.direction,reference:q.reference,target:q.target,distance:q.distance,
-   signed:q.signed,selected:null,selectedMidi:null,correct,replayed:replayCount,hints:0,rtMs:null,checkedBy,producedMidi,cents};
+   signed:q.signed,selected:null,selectedMidi:null,correct,replayed:replayCount,hints:0,rtMs:produceRT,result:checkedBy==='timeout'?'timeout':'answered',limitMs,checkedBy,producedMidi,cents};
   session.records.push(item);state.records.push(item);C.append(AP_APP_ID,'trials',item);C.save(AP_APP_ID,state);
   answered=true;produceStage='done';TrainingTracker.activity('answer');
   const last=session.records.length>=session.total;
@@ -417,7 +438,7 @@
     if(last)finish();else{render();if(correct)autoNext(500);}
    });
   }else{
-   $('rpMessage').textContent=`${correct?'✓':'✗'} ${tx('selfRated')} · ${describe(q)}`;
+   $('rpMessage').textContent=checkedBy==='timeout'?APFocusCopy.t(lang(),'timeUp')+' · '+describe(q):`${correct?'✓':'✗'} ${tx('selfRated')} · ${describe(q)}`;
    setStatus('raw',{text:$('rpMessage').textContent});
    if(last)finish();else{render();autoNext(350);}
   }
@@ -456,7 +477,7 @@
 
   const mistakes=session.records.filter(r=>!r.correct).slice(0,12);
   for(const m of mistakes){const p=document.createElement('p');
-   const picked=m.activity==='produce'?(m.checkedBy==='mic'?`${fmtNote(Math.round(m.producedMidi))} ${m.cents>0?'+':''}${m.cents}¢`:tx('selfRated')):m.selected===null?fmtNote(m.selectedMidi):m.selected;
+   const picked=m.result==='timeout'?APFocusCopy.t(lang(),'timeUp'):m.activity==='produce'?(m.checkedBy==='mic'?`${fmtNote(Math.round(m.producedMidi))} ${m.cents>0?'+':''}${m.cents}¢`:tx('selfRated')):m.selected===null?fmtNote(m.selectedMidi):m.selected;
    p.textContent=`${arrow(m.direction)} ${C.name(m.distance,lang())} · ${m.distance}: ${picked}`;result.appendChild(p);}
   const note=document.createElement('p');
   // 90 % follows the criterion used in adult pitch-naming studies; 60 % is a product heuristic.

@@ -22,12 +22,7 @@
         const last = Math.floor((to - 11) / 12) * 12 + 11;
         return first <= last ? {from:first,to:last} : null;
     }
-    function allowsRepeatedNames(id) {
-        try { return JSON.parse(localStorage.getItem('ap-focus-settings-' + id))?.allowRepeats === true; }
-        catch (_) { return false; }
-    }
-    // The user can opt into the unrestricted 2.8 sequence for AP practice.
-    function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null,allowRepeats=false,avoid=null}) {
+    function makeSequence({from,to,total,known=null,knownWeights=null,previousMidi=null,forcedPC=null,avoid=null}) {
         if (!Number.isInteger(from)||!Number.isInteger(to)||from<0||to>127||to<from||
             !Number.isInteger(total)||total<1) return [];
         const all=Array.from({length:to-from+1},(_,i)=>from+i);
@@ -57,9 +52,9 @@
         const result=[];
         let prior=previousMidi;
         for (let i=0;i<total;i++) {
-            let eligible = names.filter(pc => allowRepeats || !TrainingCore.sameNoteName(pc,prior));
+            let eligible = names.filter(pc => !TrainingCore.sameNoteName(pc,prior));
             // 2.8.2: a labelled note heard just before the first question counts as its previous note too.
-            if (i === 0 && !allowRepeats && Number.isInteger(avoid)) {
+            if (i === 0 && Number.isInteger(avoid)) {
                 const clear = eligible.filter(pc => !TrainingCore.sameNoteName(pc,avoid));
                 if (clear.length || forcedPC !== null) eligible = clear;
             }
@@ -201,11 +196,11 @@
     function metrics(rows) {
         const eligible = rows.filter((r) => r.result !== 'interrupted' && r.result !== 'audio-error');
         const successes = eligible.filter((r) => r.correct);
-        const chroma = eligible.filter((r) => typeof r.guess === 'number');
+        const chroma = eligible.filter((r) => typeof r.guess === 'number' && (!Array.isArray(r.learned) || (r.learned.includes(r.guess) && r.learned.includes(r.target % 12))));
         const times = successes.map((r) => r.rtMs).filter((t) => Number.isFinite(t));
         return {total: eligible.length, correct: successes.length, medianRt: median(times),
             meanError: chroma.length ? chroma.reduce((sum, r) => sum + chromaDistance(r.target % 12, r.guess), 0) / chroma.length : null};
     }
     root.APPitchScience = {ORDER, day, learned, makeSequence, effectiveRange, octaveBases, chromaDistance, loadCourse, saveCourse,
-        practiceToday, lastPracticeAt, markPractice, markLabel, lastLabelAt, clearLabel, rested, restMs, allowsRepeatedNames, putRows, flushWrites, allRows, median, metrics};
+        practiceToday, lastPracticeAt, markPractice, markLabel, lastLabelAt, clearLabel, rested, restMs, putRows, flushWrites, allRows, median, metrics};
 }(window));

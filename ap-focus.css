@@ -77,3 +77,15 @@
 .af-panel .af-keys button.af-set {box-shadow:inset 0 0 0 2px #0f6d8f;}
 .af-panel .af-keys button.af-black.af-set {box-shadow:inset 0 0 0 2px #8fd3ee;}
 .af-panel .af-two button[aria-pressed="true"] {box-shadow:0 0 0 3px #9fd0e4;}
+
+.af-octave-row {display:grid; grid-template-columns:repeat(9,minmax(0,1fr));}
+.af-octave-row button {min-width:0; padding-inline:2px;}
+@media (max-width:480px) {.af-octave-row {grid-template-columns:repeat(5,minmax(0,1fr));}}
+#ivAnswers button.af-set, #apAnswers button.af-set {box-shadow:inset 0 0 0 2px #0f6d8f;}
+
+#apAnswers.af-two {grid-template-columns:minmax(0,1fr);}
+#apAnswers .af-black {background:#33404a; color:white;}
+#apAnswers .af-black.af-set {box-shadow:inset 0 0 0 2px #8fd3ee;}
+#apAnswers button[aria-pressed="true"]:enabled {outline:3px solid #0076af; outline-offset:-3px;}
+#apAnswers .af-black.ap-right {background:#bbf7d0;color:#14351f;}
+#apAnswers .af-black.ap-wrong {background:#fecaca;color:#482020;}

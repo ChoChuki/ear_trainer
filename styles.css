@@ -381,3 +381,5 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .training-round.rp-position .rp-audio-controls button { flex:0 0 auto; min-height:36px; }
 .training-round.rp-position .answer-card { display:none; }
 .training-round .interval-replay-button { min-height:40px; min-width:48px; }
+
+.rp-answer-grid.all-distances {grid-template-columns:repeat(5,minmax(0,1fr));}

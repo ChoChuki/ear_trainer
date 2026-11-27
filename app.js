@@ -1,4 +1,4 @@
-const APP_VERSION = "2.8.6";
+const APP_VERSION = "2.8.7";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -186,6 +186,7 @@ let currentMidi = null;
 let answered = false;
 let testActive = false;
 let legacyAudioReady = false;
+let legacyPlayback = 0;
 let ready = false;
 let demoRunning = false;
 let demoCancelled = false;
@@ -283,6 +284,7 @@ function resolveInitialLanguage() {
 function t(key, args = {}) {
     if (key === "apFocus" || key === "apConsolidate")
         return APFocusCopy.t(currentLanguage, key === "apFocus" ? "focus" : "consolidate", args);
+    if (key === "freeMode" || key === "drawNote") return APFocusCopy.t(currentLanguage, key);
     if (key === "ivFocus") return IntervalFocusCopy.t(currentLanguage, "focus", args);
     if (instrumentMode === "violin") {
         if (key === "choose") key = "chooseViolin";
@@ -329,7 +331,7 @@ function setLanguage(language) {
         option.textContent = `${tonic} ${t(mode)}`;
     }
     for (const option of elements.modeSelect.options) {
-        option.textContent = option.value === "rpCourse"
+        option.textContent = option.value === "free" ? t("freeMode") : option.value === "rpCourse"
             ? RelativePitchCourse.T(currentLanguage,"course") : t(option.value);
     }
     elements.maxIntervalSelect.options[0].textContent = t("unlimited");
@@ -338,6 +340,10 @@ function setLanguage(language) {
     elements.apTimeSelect.options[2].textContent = t("apUnlimited");
     const otherButton = elements.apAnswers.querySelector('[data-pitch-class="out"]');
     if (otherButton) otherButton.textContent = t("apNoteOther");
+    const unsure = elements.apAnswers.querySelector('[data-pitch-class="unsure"]');
+    if (unsure) unsure.textContent = APFocusCopy.t(currentLanguage,"unsure");
+    document.getElementById("apNameKeys").setAttribute("aria-label", APFocusCopy.t(currentLanguage,"noteGroup"));
+    document.getElementById("apOctaveKeys").setAttribute("aria-label", APFocusCopy.t(currentLanguage,"octaveGroup"));
     for (const option of elements.directionSelect.options) {
         option.textContent = t(`direction${option.value.charAt(0).toUpperCase()}${option.value.slice(1)}`);
     }
@@ -951,22 +957,26 @@ async function playQuestion(replay = false) {
     if (!ready || currentMidi === null) return;
     APPitchScience.markPractice(AP_APP_ID);
     const serial=questionSerial,target=currentMidi,reference=currentReferenceMidi;
+    if (replay && !answered && answerClock.late(performance.now())) {answerTimeout(); return;}
+    const playback = ++legacyPlayback;
+    const active = () => playback === legacyPlayback && serial === questionSerial && testActive && !document.hidden;
     legacyAudioReady=false;
+    if (!answered) answerClock.stop();
     await ensureAudio();
-    if (serial!==questionSerial || !testActive) return;
-    player.cancelQueue(audioContext);TrainingCore.cancelAudio();
+    if (!active()) return;
+    player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     const start=audioContext.currentTime+.05;
     const pair=testMode==='interval' && reference!==null;
     if (pair) queueInstrumentNote(instrumentMode, reference, start, .6);
-    queueInstrumentNote(instrumentMode, target, start + (pair ? .8 : 0));
-    const latency=(audioContext.outputLatency||0)+(audioContext.baseLatency||0);
-    // 2.8.2: answers open when the target sounds, and the answer window starts there.
-    const onset=start+(pair?.8:0)+latency;
-    if (!await TrainingCore.waitForAudio(audioContext,onset,()=>serial===questionSerial&&testActive&&!document.hidden)) return;
+    const at = start + (pair ? .8 : 0);
+    queueInstrumentNote(instrumentMode, target, at);
+    if (answered || demoRunning) return;
+    const clock = APFocusModel.outputClock(audioContext, at);
+    const audibleAt = audioContext.currentTime + (clock.when - performance.now()) / 1000;
+    if (!await TrainingCore.waitForAudio(audioContext, audibleAt, active) || !active()) return;
     legacyAudioReady=true;
-    if (!answered && !replay && !questionAided && !demoRunning) {
-        startAnswerClock(performance.now()-1000*Math.max(0,audioContext.currentTime-onset),choiceCount(testMode),answerTimeout);
-    }
+    if (!replay) TrainingCore.rememberQuestion(AP_APP_ID, reference, target);
+    startAnswerClock(clock.when, answerTimeout);
 }
 
 async function playTone(midi) {
@@ -1001,7 +1011,7 @@ const AP_COLD_MIN_REST_MS = APPitchScience.restMs; // conservative product assum
 // Protocol 5: interference burst, neighbouring "Other" notes, spacing that needs
 // after-break evidence, selectable round length and sound, automatic continue.
 // Protocol 7: note names drawn independently of the previous question, successive notes
-// more than an octave apart where the range allows, 2.4 s pitch-memory reset.
+// more than an octave apart where the range allows, with optional sampled intervening tones.
 const AP_PROTOCOL = 8;
 // A new key turns the stronger reset on once for everyone; it can still be switched off.
 const AP_MASK_KEY = "ear-ap-mask-v2";
@@ -1011,10 +1021,9 @@ let apStudyOctave = null; // C of the octave played by the labelled study cards
 let apMessageBuild = null;
 let autoNextTimer = null;
 // 2.8.2: one answer window for single notes, two notes, the AP checks and the interval course,
-// as in focused AP practice: it starts at the estimated onset and widens with the choices on screen.
+// as in focused AP practice, from the estimated audible onset.
 const answerClock = AnswerTimer.createClock(document.getElementById("answerTimer"));
 let answerLimit = AnswerTimer.load();
-let questionAided = false;
 function placeAnswerTimer() {
     const bar = document.getElementById("answerTimer");
     const [parent, before] = isApMode() ? [elements.apAnswerPanel, elements.apAnswers]
@@ -1022,34 +1031,19 @@ function placeAnswerTimer() {
         : [document.querySelector(".answer-card"), null];
     if (bar.parentElement !== parent || bar.nextElementSibling !== before) parent.insertBefore(bar, before);
 }
-function startAnswerClock(onsetAt, choices, onExpire) {
+function startAnswerClock(onsetAt, onExpire) {
     answerClock.stop();
-    const ms = AnswerTimer.windowMs(answerLimit, choices);
+    const ms = AnswerTimer.windowMs(answerLimit);
     if (ms === null) return null;
     placeAnswerTimer();
     answerClock.start(onsetAt, ms, onExpire);
     return ms;
 }
-function rpChoiceCount() {
-    const level = Number(document.getElementById("rpLevel").value), cfg = RelativePitchCourse.LEVELS[level];
-    if (document.getElementById("rpActivity").value === "locate") return maxMidi - minMidi + 1;
-    if (!cfg) return 12;
-    return cfg.directionOnly ? 3 : Math.max(1, RelativePitchCourse.availableDistances(minMidi, maxMidi, cfg.distances, relativePitchClasses).length);
-}
-// Choices on screen: the keys of the range, the AP note names or the interval answers.
-function choiceCount(mode = testMode) {
-    if (mode === "single" || mode === "interval") return Math.max(2, maxMidi - minMidi + 1);
-    if (mode === "ap") return 12;
-    if (mode === "apLearn" || mode === "apCold") return APPitchScience.learned(apCourse.level).length;
-    if (mode === "rpCourse") return rpChoiceCount();
-    return 12;
-}
 function renderAnswerLimit() {
     const select = document.getElementById("answerLimitSelect");
     if (!select) return;
     const mode = elements.modeSelect.value;
-    const timed = ["single", "interval", "ap", "apLearn", "apCold", "rpCourse"].includes(mode) &&
-        !(mode === "rpCourse" && document.getElementById("rpActivity").value === "produce");
+    const timed = ["free", "single", "interval", "ap", "apLearn", "apCold", "rpCourse"].includes(mode);
     document.getElementById("answerLimitRow").hidden = !timed;
     document.getElementById("answerLimitHelp").hidden = !timed;
     if (document.activeElement !== select) select.value = AnswerTimer.text(answerLimit, currentLanguage);
@@ -1063,6 +1057,7 @@ function answerTimeout() {
     answerClock.stop();
     TrainingTracker.activity("answer");
     answered = true;
+    if (testMode === "free" && !demoRunning) testActive = false;
     questionSerial += 1;
     updatePlayButton();
     updateStaffReplayAccess();
@@ -1096,9 +1091,10 @@ function apEligiblePitches(from = minMidi, to = maxMidi) {
     return Array.from({length: range.to - range.from + 1}, (_, i) => range.from + i);
 }
 function apCorrect(record, session = apSession) {
-    if (record.result === "interrupted" || record.result === "audio-error") return false;
-    if (record.guess === "out") return session?.known && !session.known.includes(record.pitch % 12);
-    return record.guess === record.pitch % 12;
+    if (record.result !== "answered") return false;
+    const learned = record.learned ?? session?.learned ?? session?.known;
+    return learned ? TrainingCore.matchesLearningSet(record.pitch % 12, record.guess, learned, 0, 11)
+        : record.guess === record.pitch % 12;
 }
 function apMetricFor(session) {
     return APPitchScience.metrics(session.records.map((r) => ({...r, correct: apCorrect(r, session), target: r.pitch})));
@@ -1112,12 +1108,12 @@ const AP_RANGE_COPY = {
     "zh-TW": "AP 實際出題音域"
 };
 const AP_MEMORY_COPY = {
-    en: ["1 · Listen and remember", "Tap each labelled note as often as needed. Then press Play for untimed recall; mistakes return sooner.", "Due now", "Next review", "Replay correct note"],
-    de: ["1 · Anhören und merken", "Beschriftete Töne mehrfach hören. Danach ohne Zeitlimit erinnern; Fehler werden früher wiederholt.", "Jetzt wiederholen", "Nächste Wiederholung", "Richtigen Ton anhören"],
-    ja: ["1 · 聴いて覚える", "音名を見ながら何度でも試聴。Playで時間制限なしの想起練習へ。間違えた音を早めに復習。", "復習する", "次の復習", "正しい音をもう一度"],
-    it: ["1 · Ascolta e memorizza", "Riascolta le note etichettate. Poi richiamale senza limite; ripassa presto gli errori.", "Ripasso ora", "Prossimo ripasso", "Riascolta nota corretta"],
-    el: ["1 · Άκουσε και θυμήσου", "Άκουσε επανειλημμένα τις νότες με ετικέτα και μετά εξασκήσου χωρίς χρονικό όριο.", "Επανάληψη τώρα", "Επόμενη επανάληψη", "Άκουσε ξανά τη σωστή νότα"],
-    "zh-TW": ["1 · 先聽再記", "先反覆聆聽有名稱的音，再按 Play 進行不限時回憶；錯音會安排較早複習。", "現在應複習", "下次複習", "重聽正確音"]
+    en: ["1 · Listen and remember", "Tap each labelled note as often as needed. Then press Play to practise recall; mistakes return sooner.", "Due now", "Next review", "Replay correct note"],
+    de: ["1 · Anhören und merken", "Beschriftete Töne mehrfach hören. Danach aus dem Gedächtnis antworten; Fehler werden früher wiederholt.", "Jetzt wiederholen", "Nächste Wiederholung", "Richtigen Ton anhören"],
+    ja: ["1 · 聴いて覚える", "音名を見ながら何度でも試聴。Playで聞き取り練習へ。間違えた音を早めに復習。", "復習する", "次の復習", "正しい音をもう一度"],
+    it: ["1 · Ascolta e memorizza", "Riascolta le note etichettate. Poi prova a riconoscerle; ripassa presto gli errori.", "Ripasso ora", "Prossimo ripasso", "Riascolta nota corretta"],
+    el: ["1 · Άκουσε και θυμήσου", "Άκουσε επανειλημμένα τις νότες με ετικέτα και μετά εξασκήσου στην αναγνώριση.", "Επανάληψη τώρα", "Επόμενη επανάληψη", "Άκουσε ξανά τη σωστή νότα"],
+    "zh-TW": ["1 · 先聽再記", "先反覆聆聽有名稱的音，再按 Play 開始限時辨音；錯音會安排較早複習。", "現在應複習", "下次複習", "重聽正確音"]
 };
 function apMemoryText(which) {
     const copy = AP_MEMORY_COPY[currentLanguage] || AP_MEMORY_COPY.en;
@@ -1130,7 +1126,7 @@ function setApMessage(build) {
     if (box) box.textContent = build ? build() : "";
 }
 function apGuessLabel(guess) {
-    return guess === null ? t("apEmpty") : guess === "out" ? t("apNoteOther") : AP_PITCH_LABELS[guess];
+    return guess === null ? t("apEmpty") : guess === "out" ? t("apNoteOther") : guess === "unsure" ? APFocusCopy.t(currentLanguage,"unsure") : AP_PITCH_LABELS[guess];
 }
 function apStudyBases() {
     const bases = APPitchScience.octaveBases(Number(elements.startNote.value), Number(elements.endNote.value));
@@ -1236,19 +1232,29 @@ function refreshApCourseUI() {
     document.getElementById("apMaskText").textContent = t("apMaskText");
     renderApMemory();
 }
+function updateClassicKeys() {
+    const readyForAnswer = ready && isApMode() && !demoRunning && testActive && !answered && apAudioReady;
+    const range = apSession?.effectiveRange;
+    for (const button of elements.apAnswers.querySelectorAll("button")) {
+        const octave = button.dataset.octave, pc = Number(button.dataset.pitchClass);
+        button.classList.toggle("af-set", Number.isInteger(pc) && !!apSession?.learned?.includes(pc));
+        if (octave !== undefined) {
+            const o = Number(octave);
+            button.disabled = !readyForAnswer || !range || o < APFocusModel.octaveOf(range[0]) || o > APFocusModel.octaveOf(range[1]);
+            button.setAttribute("aria-pressed",String(o === apSession?.pickOctave));
+        } else {
+            button.disabled = !readyForAnswer;
+            if (Number.isInteger(pc)) button.setAttribute("aria-pressed",String(pc === apSession?.pickName));
+        }
+    }
+}
 function updateApView() {
     const isAp = isApMode() && !demoRunning;
     const running = Boolean(apSession && !apSession.finished);
     document.querySelector(".app-shell").classList.toggle("ap-mode", isAp);
     document.querySelector(".app-shell").classList.toggle("ap-complete", Boolean(isAp && apSession?.finished));
     elements.apAnswerPanel.hidden = !isAp || !apSession;
-    elements.apAnswers.querySelectorAll("button").forEach((button) => {
-        const answer = button.dataset.pitchClass === "out" ? "out" : Number(button.dataset.pitchClass);
-        const allowed = testMode === "ap" ? answer !== "out" : (apSession && (answer === "out"
-            ? apSession.known && apSession.known.length < 12 : apSession.known?.includes(answer)));
-        button.hidden = isAp && !allowed;
-        button.disabled = !ready || !testActive || answered || !apAudioReady || !isAp || !allowed;
-    });
+    updateClassicKeys();
     document.getElementById("apLevelSelect").disabled = running;
     if (ready) {
         elements.nextButton.disabled = isAp && (!testActive || !answered || apSession?.finished || apFeedbackPlaying);
@@ -1266,12 +1272,18 @@ function updateApView() {
 function markApButtons(record) {
     // Learning shows right and wrong; checks only confirm which button was taken.
     const feedback = apSession.kind === "learn" && (record.result === "answered" || record.result === "timeout");
-    const target = apSession.known && !apSession.known.includes(record.pitch % 12) ? "out" : String(record.pitch % 12);
+    const target = apSession.learned && !apSession.learned.includes(record.pitch % 12) ? "out" : String(record.pitch % 12);
     elements.apAnswers.querySelectorAll("button").forEach((button) => {
         const value = button.dataset.pitchClass;
         button.classList.remove("ap-picked", "ap-right", "ap-wrong");
+        if (button.dataset.octave !== undefined) {
+            const o = Number(button.dataset.octave);
+            if (o === record.guessOctave) button.classList.add(feedback ? (record.octaveCorrect ? "ap-right" : "ap-wrong") : "ap-picked");
+            if (feedback && Number.isInteger(record.guessOctave) && o === APFocusModel.octaveOf(record.pitch)) button.classList.add("ap-right");
+            return;
+        }
         if (record.guess !== null && value === String(record.guess)) {
-            button.classList.add(feedback ? (value === target ? "ap-right" : "ap-wrong") : "ap-picked");
+            button.classList.add(feedback ? (apCorrect(record) ? "ap-right" : "ap-wrong") : "ap-picked");
         }
         if (feedback && value === target) button.classList.add("ap-right");
     });
@@ -1295,15 +1307,10 @@ function renderApResults() {
     const aided=apSession.records.filter(r=>r.repair||r.replayed);
     detail.textContent+=` · ${t('assisted')}: ${aided.filter(r=>apCorrect(r)).length}/${aided.length}`;
     const counts=document.createElement('p');
-    const known=apSession.known||Array.from({length:12},(_,i)=>i);
-    if(apSession.kind!=='learn'){
-        const chance=document.createElement('p');
-        chance.textContent=`${t('chance')}: ${(100/(known.length+(known.length<12?1:0))).toFixed(1)}%`;
-        results.appendChild(chance);
-    }
+    const known=apSession.learned || apSession.known || Array.from({length:12},(_,i)=>i);
     counts.textContent=t('coverage')+': '+known.map(pc=>`${AP_PITCH_LABELS[pc]}=${apSession.records.filter(r=>r.pitch%12===pc).length}`).join(' · ');
     results.appendChild(counts);
-    if(apSession.known&&apSession.known.length<12){
+    if(known.length<12){
         const named=apSession.records.filter(r=>known.includes(r.pitch%12));
         const other=apSession.records.filter(r=>!known.includes(r.pitch%12));
         const split=document.createElement('p');split.textContent=`${t('apKnownScore')}: ${named.filter(r=>apCorrect(r)).length}/${named.length} · ${t('apOtherScore')}: ${other.filter(r=>apCorrect(r)).length}/${other.length}`;results.appendChild(split);
@@ -1337,8 +1344,9 @@ function renderApResults() {
         const item = document.createElement("li");
         const correct = apCorrect(result);
         const label = result.guess === null ? t("apResultMiss") : t(correct ? "apResultCorrect" : "apResultWrong");
-        const picked = result.guess === null ? t("apEmpty")
-            : result.guess === "out" ? t("apNoteOther") : AP_PITCH_LABELS[result.guess];
+        let picked = apGuessLabel(result.guess);
+        if (Number.isInteger(result.guessOctave)) picked += result.guessOctave;
+        else if (Number.isInteger(result.guess) && result.learned && !result.learned.includes(result.guess)) picked = t("apNoteOther") + " (" + picked + ")";
         item.textContent = `${label} \xb7 ${t("apTarget")}: ${noteName(result.pitch)} \xb7 ${t("apPicked")}: ${picked}`;
         list.appendChild(item);
     }
@@ -1392,10 +1400,10 @@ function updateApMemory(record) {
         if (apSession.kind === "learn") TrainingCore.queueRepair(apSession.repairs, guessed, apSession.records.length);
     }
 }
-function recordApAnswer(guess = null, result = null, inputEvent = null) {
+function recordApAnswer(guess = null, result = null, inputEvent = null, octave = null) {
     if (!isApMode() || !apSession || apSession.finished || !testActive || answered) return;
-    if (result === null && (!apAudioReady || performance.now() < apSoundStart)) return;
-    const responseTime = inputEvent?.timeStamp ?? performance.now();
+    const responseTime = AnswerTimer.stamp(inputEvent);
+    if (result === null && (!apAudioReady || responseTime < apSoundStart)) return;
     // 2.8.2: past the answer window the note counts as missed, whatever is chosen afterwards.
     const lateGuess = result === null && guess !== null && answerClock.late(responseTime) ? guess : null;
     if (lateGuess !== null) guess = null;
@@ -1408,14 +1416,14 @@ function recordApAnswer(guess = null, result = null, inputEvent = null) {
     const scored = status === "answered" || status === "timeout";
     const record = {protocol:AP_PROTOCOL, timbre:apSession.trialTimbre || apSession.timbre, repair:!!apSession.currentRepair, replayed:apSession.replayed||0, id: `${apSession.id}-${apSession.records.length + 1}`, sessionId: apSession.id,
         kind: apSession.kind, level: apSession.level, day: apSession.day,
-        ordinal: apSession.records.length + 1, pitch, guess, result: status, rtMs, limitMs: apSession.limitMs, lateGuess,
-        playedAt: now - (Number.isFinite(rtMs) ? rtMs : 0), submittedAt: now,
+        ordinal: apSession.records.length + 1, learned:[...apSession.learned], pitch, guess, guessOctave:octave, octaveCorrect:Number.isInteger(octave) ? octave === APFocusModel.octaveOf(pitch) : null, result: status, rtMs, limitMs: apSession.limitMs, lateGuess,
+        playedAt: apSoundStart === null ? null : Math.round(now + apSoundStart - performance.now()), submittedAt: now,
         audibleLatencyEstimateMs: apAudioLatencyMs, source: AP_APP_ID,
         previousPitch: apSession.records.length ? apSession.records[apSession.records.length - 1].pitch : null,
-        eligibleCold: apSession.eligible, afterBreak: apSession.afterBreak, resetSoundOn: !!apSession.masked,
+        eligibleCold: apSession.eligible, afterBreak: apSession.afterBreak, resetSoundOn: !!apSession.actualReset, reset:apSession.actualReset,
         pointerTimeStamp: inputEvent?.timeStamp ?? null,
         pointerX: inputEvent?.clientX ?? null, pointerY: inputEvent?.clientY ?? null,
-        buttonIndex: guess === "out" ? 12 : guess,
+        buttonIndex: guess === "out" ? 12 : guess === "unsure" ? 13 : guess,
         baseLatencyRaw: audioContext.baseLatency ?? null,
         outputLatencyRaw: audioContext.outputLatency ?? null,
         sampleRate: audioContext.sampleRate ?? null,
@@ -1490,26 +1498,32 @@ async function playApPitch(midi, serial, withMask = true) {
     player.cancelQueue(audioContext); TrainingCore.cancelAudio();
     const scheduledAt = audioContext.currentTime + 0.05;
     // The pitch-memory reset precedes each new question, never a replay of the same note.
-    const range = apSession.effectiveRange || [minMidi, maxMidi];
-    const startAt = withMask && apSession.masked
-        ? TrainingCore.resetTones(audioContext, scheduledAt, {previous: apSession.previousTarget,
-            low: range[0], high: range[1]}) + TrainingCore.resetGap() : scheduledAt;
+    const queueMaskNote = (pitch, when, length, volume) =>
+        queueInstrumentNote(instrumentMode, pitch, when, length, volume);
+    if (withMask) {
+        const first = apSession.records.length === 0;
+        const coldStart = first && (apSession.gapSincePracticeMs === null || apSession.afterBreak);
+        const labelAt = APPitchScience.lastLabelAt();
+        const long = first && apSession.kind !== "learn" && labelAt > 0 && Date.now() - labelAt < 5 * 60000;
+        apSession.actualReset = apSession.masked && !coldStart ? (long ? "long" : "short") : null;
+    }
+    const startAt = withMask && apSession.actualReset
+        ? TrainingCore.resetTones(queueMaskNote, scheduledAt, {previous: TrainingCore.recentLabel(AP_APP_ID) ?? apSession.previousTarget, long: apSession.actualReset === "long"}) + TrainingCore.resetGap()
+        : scheduledAt;
     if (apSession.trialTimbre === "neutral") TrainingCore.neutralTone(audioContext, startAt, midi, PLAY_DURATION);
     else queueInstrumentNote(instrumentMode, midi, startAt);
-    // Browser APIs cannot observe the exact acoustic onset of a Bluetooth headset;
-    // this is a scheduling + output-latency estimate, recorded explicitly as such.
-    apAudioLatencyMs = 50 + 1000 * ((audioContext.outputLatency || 0) + (audioContext.baseLatency || 0));
-    apSoundStart = performance.now() + 1000 * (startAt - scheduledAt) + apAudioLatencyMs;
+    const clock = APFocusModel.outputClock(audioContext, startAt);
+    apSoundStart = clock.when;
+    apAudioLatencyMs = Math.max(0, clock.when - performance.now() - 1000 * (startAt - audioContext.currentTime));
     const active = () => serial === questionSerial && testActive && !document.hidden;
-    const atOnset = await TrainingCore.waitForAudio(audioContext, startAt + apAudioLatencyMs/1000, active);
+    const atOnset = await TrainingCore.waitForAudio(audioContext, startAt + apAudioLatencyMs / 1000, active);
     if (atOnset) {
-        TrainingCore.rememberQuestion(AP_APP_ID, null, midi);
+        if (withMask) TrainingCore.rememberQuestion(AP_APP_ID, null, midi);
         APPitchScience.markPractice(AP_APP_ID);
-        // 2.8.2: answers open at the estimated onset and the window counts from there;
-        // a replayed note is already assisted, so it is not timed.
+        // Each permitted playback gets the same window; its replay count stays in the record.
         if (!answered) {
             apAudioReady = true;
-            if (apSession.limitMs !== null && !apSession.replayed) {
+            if (apSession.limitMs !== null) {
                 placeAnswerTimer();
                 answerClock.start(apSoundStart, apSession.limitMs, () => recordApAnswer(null, "timeout"));
             }
@@ -1528,10 +1542,10 @@ function startApQuestion() {
     if (!apSession || apSession.finished) {
         const kind = testMode === "apLearn" ? "learn" : testMode === "apCold" ? "cold" : "assessment";
         const known = kind === "assessment" ? null : APPitchScience.learned(apCourse.level);
+        const learned = known ?? APFocus.learningSet();
         const total = kind === "cold" ? 20 : Number(elements.apTrialsSelect.value);
         // All three kinds use the selected range; nothing rewrites From/To.
-        const allowRepeats = APPitchScience.allowsRepeatedNames(AP_APP_ID);
-        const plan = APPitchScience.makeSequence({from: minMidi, to: maxMidi, total, known, allowRepeats,
+        const plan = APPitchScience.makeSequence({from: minMidi, to: maxMidi, total, known,
             avoid: TrainingCore.recentLabel(AP_APP_ID),
             previousMidi: TrainingCore.lastQuestion(AP_APP_ID)?.target,
             knownWeights: kind === "learn" ? Object.fromEntries(
@@ -1545,10 +1559,10 @@ function startApQuestion() {
         apHideColdAnswers = kind === "cold" && document.getElementById("apHideColdCheck").checked;
         const range = APPitchScience.effectiveRange(minMidi, maxMidi);
         apSession = {id: `${AP_APP_ID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            kind, total, plan, records: [], known, allowRepeats, protocol:AP_PROTOCOL, repairs:[],
+            kind, total, plan, records: [], known, learned, protocol:AP_PROTOCOL, repairs:[],
             timbre: document.getElementById("apTimbre").value,
             masked: document.getElementById("apMaskCheck").checked,
-            limitMs: AnswerTimer.windowMs(answerLimit, known ? known.length : 12),
+            limitMs: AnswerTimer.windowMs(answerLimit),
             finished: false, eligible, afterBreak, interrupted: false, hiddenCount: 0,
             gapSincePracticeMs,
             outputDevice: document.getElementById("apColdDevice").value,
@@ -1562,6 +1576,7 @@ function startApQuestion() {
     if (apFeedbackPlaying) return;
     clearApTimer(); clearApFeedback();
     apSession.currentRepair = false;
+    apSession.pickName = apSession.pickOctave = null;
     apSession.replayed = 0;
     apSession.trialTimbre = apSession.timbre === "mixed"
         ? TrainingCore.choose(["instrument", "neutral"]) : apSession.timbre;
@@ -1569,7 +1584,7 @@ function startApQuestion() {
         const repair = TrainingCore.takeRepair(apSession.repairs, apSession.records.length);
         const weights = Object.fromEntries(APMemory.due(AP_APP_ID, apSession.known).map(x=>[x.pc,TrainingCore.weight(x)]));
         const normalOptions={from:minMidi,to:maxMidi,total:1,known:apSession.known,
-            allowRepeats:apSession.allowRepeats,knownWeights:weights,previousMidi:TrainingCore.lastQuestion(AP_APP_ID)?.target,avoid:TrainingCore.recentLabel(AP_APP_ID)};
+            knownWeights:weights,previousMidi:TrainingCore.lastQuestion(AP_APP_ID)?.target,avoid:TrainingCore.recentLabel(AP_APP_ID)};
         let next;
         if (repair !== null) {
             next=APPitchScience.makeSequence({...normalOptions,forcedPC:repair})[0];
@@ -1583,7 +1598,7 @@ function startApQuestion() {
     const previous = TrainingCore.lastQuestion(AP_APP_ID)?.target;
     // Recheck the last target at playback; a queued repair or another mode may have changed it.
     if (apSession.plan[ordinal] !== undefined) {
-        const draw = {from:minMidi,to:maxMidi,total:1,known:apSession.known,previousMidi:previous,allowRepeats:apSession.allowRepeats,avoid:TrainingCore.recentLabel(AP_APP_ID)};
+        const draw = {from:minMidi,to:maxMidi,total:1,known:apSession.known,previousMidi:previous,avoid:TrainingCore.recentLabel(AP_APP_ID)};
         const planned = APPitchScience.makeSequence({...draw,forcedPC:apSession.plan[ordinal] % 12});
         apSession.plan[ordinal] = planned[0] ?? APPitchScience.makeSequence(draw)[0];
     }
@@ -1632,22 +1647,47 @@ function rememberToggle(id, key) {
     });
 }
 function createApAnswerButtons() {
-    for (let pitch = 0; pitch <= 12; pitch++) {
+    const keys = document.getElementById("apNameKeys"), digits = document.getElementById("apOctaveKeys");
+    const extra = document.getElementById("apExtraKeys");
+    function add(group, kind, value, text) {
         const button = document.createElement("button");
-        button.type = "button"; button.className = "secondary ap-note-button";
-        const answer = pitch === 12 ? "out" : pitch;
-        button.textContent = pitch === 12 ? t("apNoteOther") : AP_PITCH_LABELS[pitch];
-        button.dataset.pitchClass = String(answer);
-        button.disabled = true;
-        button.addEventListener("pointerdown", unlessDemo((event) => {
-            if (event.pointerType === "touch" || event.pointerType === "mouse" || event.pointerType === "pen") {
-                event.preventDefault();
-                recordApAnswer(answer, null, event);
-            }
+        button.type = "button"; button.className = "secondary ap-note-button"; button.disabled = true;
+        button.textContent = text; button.dataset[kind] = String(value);
+        // Touch commits on contact. A keyboard or assistive-technology click follows the same path.
+        button.addEventListener("pointerdown", unlessDemo(event => {
+            if (!event.isPrimary || event.button !== 0) return;
+            event.preventDefault(); pickClassic(kind,value,event);
         }));
-        button.addEventListener("click", unlessDemo((event) => recordApAnswer(answer, null, event)));
-        elements.apAnswers.appendChild(button);
+        button.addEventListener("click", unlessDemo(event => {
+            if (!event.detail) pickClassic(kind,value,event);
+        }));
+        group.appendChild(button);
+        return button;
     }
+    for (const pc of APFocusModel.keyOrder) {
+        const black = APFocusModel.blackKeys.includes(pc);
+        const key = add(keys, "pitchClass", pc, APFocusModel.notes[pc]);
+        key.classList.toggle("af-black", black);
+        key.style.gridRow = black ? "1" : "2";
+        key.style.gridColumn = APFocusModel.keyColumns[pc] + " / span 2";
+    }
+    for (const octave of APFocusModel.octaveChoices("piano")) add(digits, "octave", octave, String(octave));
+    add(extra, "pitchClass", "out", t("apNoteOther"));
+    add(extra, "pitchClass", "unsure", APFocusCopy.t(currentLanguage,"unsure"));
+}
+function pickClassic(kind, value, event) {
+    if (!testActive || answered || !apAudioReady || !apSession) return;
+    const at = AnswerTimer.stamp(event);
+    if (at < apSoundStart) return;
+    if (answerClock.late(at)) {recordApAnswer(null,"timeout",event); return;}
+    if (kind === "pitchClass" && !apSession.learned.includes(value)) {
+        recordApAnswer(value,null,event); return;
+    }
+    if (kind === "pitchClass") apSession.pickName = value;
+    else apSession.pickOctave = value;
+    if (apSession.pickName !== null && apSession.pickOctave !== null) {
+        recordApAnswer(apSession.pickName,null,event,apSession.pickOctave);
+    } else updateClassicKeys();
 }
 async function exportApCSV() {
     const rows = await APPitchScience.allRows(AP_APP_ID, "trials");
@@ -1655,7 +1695,7 @@ async function exportApCSV() {
         "pointerX", "pointerY", "buttonIndex", "baseLatencyRaw", "outputLatencyRaw",
         "sampleRate", "outputDevice", "hiddenCount", "gapSincePracticeMs", "coldSourceRange",
         "known", "sampleId", "sourceVersion", "qualityStatus", "firstOfDay", "assistedRtMs", "timing",
-        "limitMs", "lateGuess", "reset", "jump"];
+        "limitMs", "lateGuess", "reset", "jump", "learned", "guessOctave", "octaveCorrect"];
     const csv = [fields.join(","), ...rows.map((row) => fields.map((name) => {
         const v = row[name] === undefined || row[name] === null ? "" : String(row[name]);
         return `"${v.replaceAll('"', '""')}"`;
@@ -1688,7 +1728,7 @@ function updatePlayButton() {
     elements.nextButton.disabled = !ready || !testActive || !answered;
     document.querySelector(".app-shell").classList.toggle("board-test",
         testActive && (testMode === "interval" || (testMode === "rpCourse" && document.getElementById("rpActivity").value === "locate")));
-    elements.playButton.textContent = t(testActive ? "stop" : "play");
+    elements.playButton.textContent = t(testActive ? "stop" : testMode === "free" ? "drawNote" : "play");
     elements.playButton.classList.toggle("danger", testActive);
     elements.playButton.classList.toggle("primary", !testActive);
 }
@@ -1699,7 +1739,7 @@ function updateIntervalPickerVisibility() {
     elements.intervalPicker.hidden = !visible;
     elements.apPicker.hidden = !["ap", "apLearn", "apCold"].includes(elements.modeSelect.value);
     // Sound is chosen in every AP mode, round length for learning and assessment,
-    // a response limit for the assessment only (a cold check is always 20 untimed questions).
+    // the classic menu uses the shared numeric answer-limit input.
     document.getElementById("apAssessmentOptions").hidden = !isApMode(elements.modeSelect.value);
     document.getElementById("apTrialsPicker").hidden = elements.modeSelect.value === "apCold";
     document.getElementById("apTimePicker").hidden = true; // 2.8.2: the shared answer window replaces it
@@ -1738,7 +1778,7 @@ function pickIntervalQuestion() {
 
 function newQuestion() {
     if (!ready || (testActive && !answered)) return;
-    answerClock.stop(); questionAided = false;
+    answerClock.stop();
     TrainingTracker.activity("question");
     if (isApMode()) { startApQuestion(); return; }
     if (testMode === "rpCourse") { RPUI.startNext(); return; }
@@ -1775,7 +1815,6 @@ function newQuestion() {
         currentReferenceMidi = null;
     }
 
-    TrainingCore.rememberQuestion(AP_APP_ID, currentReferenceMidi, target);
     testActive = true;
     answered = false;
     legacyAudioReady = false;
@@ -1868,11 +1907,11 @@ function freePlay(midi, pointerId) {
 
 function answer(selectedMidi) {
     if (!demoRunning && (!testActive || answered || !legacyAudioReady)) return;
-    // 2.8.2: past the window the note counts as missed, whatever is chosen afterwards.
     if (!demoRunning && answerClock.late(performance.now())) { answerTimeout(); return; }
     answerClock.stop();
     TrainingTracker.activity("answer");
     answered = true;
+    if (testMode === "free" && !demoRunning) testActive = false;
     questionSerial += 1;
     updatePlayButton();
     updateStaffReplayAccess();
@@ -1910,7 +1949,7 @@ function answer(selectedMidi) {
         playTone(currentMidi);
     }
     // A miss stays on screen until Next; a hit moves on after its feedback sound.
-    if (correctAnswer) scheduleAutoNext(testMode === "interval" ? 2000 : 1100);
+    if (testMode !== "free" && correctAnswer) scheduleAutoNext(testMode === "interval" ? 2000 : 1100);
 }
 
 function pressKey(midi, pointerId) {
@@ -1922,8 +1961,7 @@ function pressKey(midi, pointerId) {
 
     if (testActive && currentMidi !== null && !answered) {
         if (testMode === "interval" && midi === currentReferenceMidi) {
-            // A marked reference key is a replay control, not a valid answer; a replayed pair is not timed.
-            questionAided = true; answerClock.stop();
+            // A marked reference key is a replay control, not a valid answer; the pair remains a replay.
             playQuestion(true).catch(() => setStatus("audioRetry"));
         } else {
             answer(midi);
@@ -2284,7 +2322,6 @@ elements.nextButton.addEventListener("click", unlessDemo(newQuestion));
 elements.intervalReplayButton.addEventListener("click", unlessDemo(() => {
     if (testActive && testMode === "interval") {
         TrainingTracker.activity("question");
-        if (!answered) { questionAided = true; answerClock.stop(); }
         playQuestion(true);
     }
 }));
@@ -2331,7 +2368,7 @@ document.getElementById("answerLimitSelect").addEventListener("change", (event) 
 for (const id of ["rpLevel", "rpActivity"]) document.getElementById(id).addEventListener("change", renderAnswerLimit);
 // The touch that starts an interval answer decides it, even if the click lands after the deadline.
 document.addEventListener("pointerdown", (event) => {
-    if (event.target instanceof Element && event.target.closest(".rp-choice")) answerClock.press(event.timeStamp);
+    if (event.target instanceof Element && event.target.closest(".rp-choice")) answerClock.press(AnswerTimer.stamp(event));
 }, true);
 document.addEventListener("pointercancel", () => answerClock.release(), true);
 document.getElementById("apExportButton").addEventListener("click", exportApCSV);
@@ -2340,6 +2377,8 @@ document.getElementById("apRepeatNote").addEventListener("click", unlessDemo(() 
     TrainingTracker.activity("ap-learning");
     if (answered) playTone(currentMidi).catch(() => setStatus("audioRetry"));
     else if (apAudioReady) {
+        if (answerClock.late(performance.now())) {recordApAnswer(null, "timeout"); return;}
+        apSession.pickName = apSession.pickOctave = null;
         apSession.replayed=(apSession.replayed||0)+1;apAudioReady=false;answerClock.stop();updateApView();
         playApPitch(currentMidi,questionSerial,false).catch(()=>setStatus("audioRetry"));
     }

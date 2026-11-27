@@ -27,7 +27,7 @@
     }
     function defaults(known = [7]) {
         return {known: [...known], octaves: [4, 5], direction: 'up', size: 24, hit: 75, falseAlarm: 25,
-            limit: 2500, allowRepeats: false, responseMode: 'name'};
+            limit: 1300, allowRepeats: false, responseMode: 'name'};
     }
     function octaveChoices(instrument) {
         const [low, high] = limits[instrument] || limits.piano;
@@ -60,7 +60,7 @@
         // 2.8.4: the typed window in ms; null, 0 or 'off' is no limit, older named choices read as the default.
         if (limit === null || limit === 'off' || limit === 0) return null;
         if (Number.isFinite(limit) && limit > 0) return Math.round(Math.min(60000, Math.max(100, limit)));
-        return 2500;
+        return 1300;
     }
     const windowOf = s => s.limitMs === null || Number.isFinite(s.limitMs) ? s.limitMs : answerWindow(s.limit);
     const sameWindow = (a, b) => a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 50);
@@ -138,6 +138,7 @@
             }
             if (!pairs.length) continue;
             const moved = prev ? pairs.filter(q => !sameName(q.target, prev.target)) : pairs;
+            if (prev && !moved.length && order.length > 1) continue;
             const fresh = prev ? moved.filter(q => !sameName(q.reference, prev.target) && !sameName(q.reference, prev.reference)) : moved;
             const pick = choose(fresh.length ? fresh : moved.length ? moved : pairs);
             return {...pick, size, direction: dir};
@@ -161,7 +162,7 @@
             q = clean(d);
             if (q) return q;
         }
-        return pickPair(planned, pitches, direction, previous);
+        return null;
     }
     const scored = row => row.result === 'answered' || row.result === 'assisted';
     const attempted = row => scored(row) || row.result === 'timeout';
@@ -173,8 +174,7 @@
     // and count as right; only a number from the set is a false alarm. "Not sure" is neither.
     const setOf = row => Array.isArray(row.learned) ? row.learned : row.known;
     const isTarget = row => setOf(row).includes(row.size);
-    const asOther = (row, guess) => guess === 'out' || (Number.isInteger(guess) && !setOf(row).includes(guess));
-    const correct = row => row.result === 'answered' && (isTarget(row) ? row.guess === row.size : asOther(row, row.guess));
+    const correct = row => row.result === 'answered' && TrainingCore.matchesLearningSet(row.size, row.guess, setOf(row), 1, 12);
     function counts(rows) {
         const usable = rows.filter(attempted);
         const targets = usable.filter(isTarget);
