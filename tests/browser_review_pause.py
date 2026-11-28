@@ -21,7 +21,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.8'
+    assert page.text_content('#appVersion')=='3.0.9'
     page.evaluate('''()=>{window.queued=[];const queue=queueInstrumentNote;queueInstrumentNote=(sound,midi,at,duration=PLAY_DURATION,volume=.75)=>{queued.push({ordinal:trial?.ordinal,phase,midi,at,duration,volume});return queue(sound,midi,at,duration,volume);};UnifiedModel.drawAP=()=>65;UnifiedModel.drawRP=()=>({reference:60,target:67,size:7,direction:'higher'});}''')
     def tap(s):page.locator(s).first.tap()
     def answer():page.wait_for_function("phase==='answer'",timeout=18000)

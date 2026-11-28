@@ -26,7 +26,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.8'
+    assert page.text_content('#appVersion')=='3.0.9'
     page.locator('#displaySelect').select_option('instrument')
     page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab')
     low,high=page.evaluate('[low,high]')
@@ -38,7 +38,7 @@ with sync_playwright() as p:
         const choices=[67,65,67,65];UnifiedModel.drawAP=()=>choices.shift()??65;
     }""")
     assert page.locator('#otherHint').is_visible()
-    assert page.locator('#keyboardCard').is_visible()
+    assert page.locator('#keyboardCard').is_hidden()
     def start():
         page.locator('#playButton').tap();page.wait_for_function("phase==='countdown'")
         assert page.locator('#keyboard [data-midi]:not(:disabled)').count()==0
@@ -59,16 +59,17 @@ with sync_playwright() as p:
     other();assert page.evaluate("!trial.correct&&trial.target===65&&session.total===2")
     page.locator(f'#keyboard [data-midi="{low}"]').first.tap();page.wait_for_function(f'queued.at(-1).midi==={low}&&session.reviewPaused')
     page.wait_for_timeout(1400);assert page.evaluate("phase==='done'&&session.total===2&&session.correct===1")
-    page.locator('#playButton').tap();assert page.locator('#keyboardCard').is_visible() and page.locator('#sessionSummary').is_visible()
+    page.locator('#playButton').tap();assert page.locator('#answerArea').is_hidden() and page.locator('#sessionSummary').is_visible()
+    page.locator('#modeSelect').select_option('free');assert page.locator('#keyboardCard').is_visible()
     assert page.locator('#keyboard [data-midi]:disabled').count()==0
     page.locator(f'#keyboard [data-midi="{low}"]').first.evaluate('(b)=>b.click()');page.wait_for_function(f'freeVoices.includes({low})')
     page.wait_for_function('activePointers.size===0 && activeVoices.size===0')
-    page.locator('#displaySelect').select_option('buttons');start();other();assert page.evaluate('trial.correct&&session.total===1');page.locator('#playButton').tap()
+    page.locator('#modeSelect').select_option('single');page.locator('#displaySelect').select_option('buttons');start();other();assert page.evaluate('trial.correct&&session.total===1');page.locator('#playButton').tap()
     page.locator('#displaySelect').select_option('instrument');page.locator('#blindCheck').check()
     page.locator('#commonSettings details summary').tap();page.locator('#autoNextCheck').uncheck()
     start();other();assert page.locator('#keyboard [data-midi]:not(:disabled)').count()==0
     assert page.locator('#keyboard .correct').count()==0 and page.locator('#replayButton').is_hidden()
-    page.locator('#playButton').tap();assert page.locator('#keyboard [data-midi]:disabled').count()==0
+    page.locator('#playButton').tap();assert page.locator('#answerArea').is_hidden()
     assert not errors,errors
-    print('PASS',entry,instrument,'Other in both displays, correct and incorrect AP review, all pitches, pause auto-next, no rescoring, stopped free play, blind isolation',flush=True)
+    print('PASS',entry,instrument,'Other in both displays, correct and incorrect AP review, all pitches, pause auto-next, no rescoring, Stop hides answer area; explicit Free Play, blind isolation',flush=True)
     browser.close()

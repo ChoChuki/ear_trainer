@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.8";
+const APP_VERSION = "3.0.9";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -387,17 +387,16 @@ function hasOutside(pitches,known){return pitches.some(m=>!known.includes(m%12))
 // until the session is stopped.
 function reviewAllowed(){return testActive&&!!session&&!session.blind&&phase==='done';}
 function boardReview(){return reviewAllowed()&&session.display==='instrument';}
-function stoppedButtonReview(){return !testActive&&mode!=='free'&&display()==='buttons'&&summarySession?.mode===mode&&summarySession.display==='buttons'&&summarySession.rows.length>0;}
-function buttonReview(){return (reviewAllowed()&&session.display==='buttons')||stoppedButtonReview();}
-function reviewRow(){return testActive?trial:summarySession?.rows.at(-1);}
+function buttonReview(){return reviewAllowed()&&session.display==='buttons';}
+function reviewRow(){return testActive?trial:null;}
 function auditionSound(){
- const row=reviewRow(),review=testActive?session:summarySession;
+ const row=reviewRow(),review=testActive?session:null;
  if(mode!=='free'&&review?.mode===mode&&review.timbre===cfg.timbre&&['piano','violin'].includes(row?.timbre))return row.timbre;
  return U.drawTimbre(cfg.timbre);
 }
-function idleBoardPlay(){return !testActive&&(mode==='free'||display()==='instrument');}
+function idleBoardPlay(){return !testActive&&mode==='free';}
 function boardPitchEnabled(midi){if(!testActive||!session||boardReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
-function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=!ready||(testActive&&(!enabled||(phase!=='answer'&&!boardReview())));}}
+function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=!ready||(testActive?(session.display!=='instrument'||!enabled||(phase!=='answer'&&!boardReview())):!idleBoardPlay());}}
 function toggleChoice(key,value,allowed){if(testActive)return;const current=cfg[key];if(current.includes(value)&&current.length===1)return;releaseAllKeys();cancelAudio();clearPreviewMark();cfg[key]=(current.includes(value)?current.filter(n=>n!==value):[...current,value]).filter(n=>allowed.includes(n)).sort((a,b)=>a-b);saveConfig();renderSettings();}
 function renderSettings(){
  $('modeSelect').value=mode;$('displayRow').hidden=mode==='free';$('displaySelect').value=display();$('apSettings').hidden=mode!=='single';$('rpSettings').hidden=mode!=='interval';$('commonSettings').hidden=mode==='free';$('maskRow').hidden=mode!=='single';
@@ -419,7 +418,10 @@ function render(){
  $('settingsCard').hidden=testActive;$('playButton').hidden=!testActive&&mode==='free';$('playButton').textContent=tr(testActive?'stop':'start');$('playButton').classList.toggle('danger',testActive);$('playButton').classList.toggle('primary',!testActive);if(testActive)$('playButton').disabled=false;
  $('nextButton').hidden=!testActive||!['done','error'].includes(phase);$('nextButton').textContent=tr('next');
  $('replayButton').hidden=!testActive||!!session?.blind||!['answer','done','error'].includes(phase);$('replayButton').textContent=tr('replay');
- $('keyboardCard').hidden=testActive?session.display!=='instrument':!idleBoardPlay();$('answerCard').hidden=!testActive&&mode!=='free';$('buttonBoard').hidden=testActive?session.display!=='buttons':!stoppedButtonReview();
+ // A completed question is still part of a running session. Stop, in contrast,
+ // returns to settings: summarySession is for results only, never an answer surface.
+ $('answerArea').hidden=!testActive&&mode!=='free';
+ $('keyboardCard').hidden=testActive?session.display!=='instrument':!idleBoardPlay();$('answerCard').hidden=!testActive&&mode!=='free';$('buttonBoard').hidden=!testActive||session.display!=='buttons';
  $('extraAnswers').hidden=!testActive||session.mode!=='single';$('relativeButton').hidden=!session?.blind;
  for(const e of $('extraAnswers').querySelectorAll('button'))e.disabled=phase!=='answer';
  // Other is an explicit AP answer, not an uncertainty or skip action.
@@ -637,7 +639,7 @@ function replay(){if(!testActive||session?.blind||!trial)return;
  else if(phase==='error'){playTrial(false);}
  else if(phase==='done'){cancelAudio();clearPreviewMark();const token=generation;try{const at=audioContext.currentTime+.04;if(session.mode==='interval'){queueInstrumentNote(trial.timbre,trial.reference,at,.6);queueInstrumentNote(trial.timbre,trial.target,at+.8);}else queueInstrumentNote(trial.timbre,trial.target,at);S.markLabel(instrumentMode);TrainingCore.rememberLabel(trial.target);TrainingTracker.activity('answer');if(session.auto&&!session.reviewPaused)nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done'&&!session.reviewPaused)newQuestion();},session.mode==='interval'?1800:1100);}catch(_){msg(tr('audioError'),'bad');}}
 }
-function stop(interrupted=false){if(!testActive)return;cancelAudio();releaseAllKeys();if(trial&&phase==='answer'){trial.result='interrupted';trial.submittedAt=Date.now();saveRow(session.mode==='single'?'ap':'iv','trials',trial);}saveSession(!interrupted,interrupted);TrainingTracker.pause();const done=session;testActive=false;phase='idle';session=null;trial=null;summarySession=done;clearFeedback();render();if(done.total)showSummary(done);status(interrupted?'interrupted':'ready');if($('statistics').open)refreshHistory();}
+function stop(interrupted=false){if(!testActive)return;cancelAudio();releaseAllKeys();if(trial&&phase==='answer'){trial.result='interrupted';trial.submittedAt=Date.now();saveRow(session.mode==='single'?'ap':'iv','trials',trial);}saveSession(!interrupted,interrupted);TrainingTracker.pause();const done=session;testActive=false;phase='idle';session=null;trial=null;summarySession=done;clearFeedback();for(const key of ['apNameKeys','apOctaveKeys','intervalAnswers'])$(key).replaceChildren();render();if(done.total)showSummary(done);status(interrupted?'interrupted':'ready');if($('statistics').open)refreshHistory();}
 function percent(n,d){return d?`${n}/${d} (${Math.round(100*n/d)}%)`:'—';}
 function line(parent,text){const p=document.createElement('p');p.textContent=text;parent.append(p);}
 function scoreLines(parent,rows,isAP){const attempts=rows.filter(r=>['answered','timeout','relative','assisted'].includes(r.result));if(!attempts.length){line(parent,tr('noHistory'));return;}

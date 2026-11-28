@@ -1,4 +1,10 @@
-# Ear Trainer 3.0.8 · 统一训练版
+# Ear Trainer 3.0.9 · 统一训练版
+
+## 3.0.9 修复
+
+- 修复停止训练后 Start practice 下方仍然显示答题键盘的问题。One Note / Two Notes 的设置页不再显示任何答题键盘（音名、八度、半音数字、琴键或指板），无论是否存在上一轮成绩。Stop 后清除旧答题按钮，保留成绩、历史及 One Note 手动 Preview。真正的 Free Play 仍显示完整乐器。
+- 每题回答完成、尚未停止整轮训练时，普通练习的自由试听、重播、答错暂停、Next 及整体布局全部保持不变。此前版本关于 Stop 后保留答题区的说明由本版本取代。
+- 普通版、单文件版和 PWA 缓存同步更新。
 
 ## 3.0.8 修复
 
@@ -88,13 +94,13 @@
 - `node tests/test_sound_routing.cjs` 验证新的音色路由、题目音色保持、试听音域和异步取消逻辑；此测试使用音频/时钟替身，不替代真实浏览器或听感验证。
 - `python tests/browser_sound_options.py index.html violin`（或 `piano`、`single-file/index.html`）验证音色选择、学习音试听、重播/反馈/答后试听、Free Play、设置记忆及实际采样路由。默认使用 `/usr/bin/chromium`，可用 `EAR_TRAINER_CHROMIUM` 指定浏览器程序。
 - `python tests/browser_unified.py index.html piano`（或 `violin`；单文件改用 `single-file/index.html`）为新版 Chromium 浏览器交互测试，需要 Playwright 与 Chromium。测试采用内存加载和模拟存储来源，不能代替实机/PWA 升级验证。
-- `python tests/browser_interval_review.py index.html violin` 验证双音无开场倒计时、评分后自由试听、暂停/恢复自动下一题、停止后自由演奏及 AP 倒计时保留。
+- `python tests/browser_interval_review.py index.html violin` 验证双音无开场倒计时、评分后自由试听、暂停/恢复自动下一题、Stop 隐藏答题区、Free Play 自由演奏及 AP 倒计时保留。
 - `python tests/browser_interval_feedback.py index.html violin` 验证上一版双音重播与参考音同步。
-- `python tests/browser_button_review.py index.html piano`（或 `violin`、`single-file/index.html`）验证两种模式的按钮试听、正确/错误/超时、自动下一题暂停、盲测隔离和停止后试听；`node tests/test_button_review.cjs` 验证全部可用音域的试听音高及音程映射。
+- `python tests/browser_button_review.py index.html piano`（或 `violin`、`single-file/index.html`）验证两种模式的按钮试听、正确/错误/超时、自动下一题暂停、盲测隔离和停止后隐藏答题区；`node tests/test_button_review.cjs` 验证全部可用音域的试听音高及音程映射。
 - 包含其他旧版回归测试，主要用于验证复用模块及历史算法；旧页面交互测试针对历史界面，不再是新版 UI 测试。
 
 听觉训练效果以本人实际练习、跨日测试为准，模拟仅验证程序逻辑。音源授权见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
 ### 本次验证范围
 
-3.0.8 仅修正整个训练操作区的纵向排列。浏览器采用内存加载，实际手机播放、触感、训练效果和 PWA 更新仍需在使用设备上确认。
+3.0.9 仅修正答题区在非训练状态的显示和操作条件。新增 `python tests/browser_answer_lifecycle.py index.html violin`（也可用 `piano` 或 `single-file/index.html`），四组均通过，覆盖两种训练模式、两种作答方式、开始前、每题后试听、Stop 后隐藏、提前停止、手动 Preview 和 Free Play。统一模型及音色路由测试通过；全部历史回归测试未完成。浏览器采用内存加载，实际手机播放、触感、训练效果和 PWA 更新仍需在使用设备上确认。

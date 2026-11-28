@@ -26,7 +26,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.8'
+    assert page.text_content('#appVersion')=='3.0.9'
     page.locator('#modeSelect').select_option('interval')
     page.locator('#displaySelect').select_option('instrument')
     low,high=page.evaluate('[low,high]')
@@ -72,13 +72,14 @@ with sync_playwright() as p:
     page.locator(f'#keyboard [data-midi="{wrong}"]').first.tap();page.wait_for_function("phase==='done'&&!trial.correct")
     page.locator(f'#keyboard [data-midi="{low}"]').first.tap();page.wait_for_function(f'queued.at(-1).midi==={low}&&session.reviewPaused')
     assert page.evaluate('session.total===2 && session.correct===1 && trial.replayed===0')
-    page.locator('#playButton').tap();assert page.locator('#keyboardCard').is_visible() and page.locator('#sessionSummary').is_visible()
+    page.locator('#playButton').tap();assert page.locator('#answerArea').is_hidden() and page.locator('#sessionSummary').is_visible()
+    page.locator('#modeSelect').select_option('free');assert page.locator('#keyboardCard').is_visible()
     assert page.locator('#keyboard [data-midi]:disabled').count()==0
     page.locator(f'#keyboard [data-midi="{low}"]').first.evaluate('(b)=>b.click()')
     page.wait_for_function(f'freeVoices.includes({low})')
     page.wait_for_function('activePointers.size===0 && activeVoices.size===0')
     assert page.evaluate('!testActive && phase==="idle"')
-    page.locator('#displaySelect').select_option('buttons')
+    page.locator('#modeSelect').select_option('interval');page.locator('#displaySelect').select_option('buttons')
     assert page.locator('#keyboardCard').is_hidden()
     page.locator('#playButton').tap();page.wait_for_function("phase==='answer'")
     assert not page.evaluate("messages.some(m=>m.phase==='countdown')")
@@ -87,5 +88,5 @@ with sync_playwright() as p:
     page.wait_for_function("phase==='countdown'");assert not page.locator('#answerTimer').is_visible()
     page.locator('#playButton').tap()
     assert not errors,errors
-    print('PASS',entry,instrument,'immediate RP start, post-answer all-key audition, no rescoring, paused auto-next/replay, manual next, stopped free play, AP countdown retained',flush=True)
+    print('PASS',entry,instrument,'immediate RP start, post-answer all-key audition, no rescoring, paused auto-next/replay, manual next, Stop hides answer area; explicit Free Play, AP countdown retained',flush=True)
     browser.close()

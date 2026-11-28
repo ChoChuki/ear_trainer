@@ -26,7 +26,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.8'
+    assert page.text_content('#appVersion')=='3.0.9'
     page.locator('#displaySelect').select_option('buttons')
     page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab')
     page.locator('#commonSettings details summary').tap();page.locator('#maskCheck').uncheck()
@@ -57,13 +57,13 @@ with sync_playwright() as p:
     tap('#nextButton');answer();assert page.locator('#apOctaveKeys [data-octave="3"]').is_disabled()
     tap('#apNameKeys [data-pc="5"]');tap('#apOctaveKeys [data-octave="4"]');done();assert page.evaluate('!trial.correct&&session.total===2')
     preview('#apNameKeys [data-pc="0"]',[60]);assert page.locator('#apNameKeys [data-pc="5"].wrong').count()==1
-    tap('#playButton');assert page.locator('#buttonBoard').is_visible();preview('#apNameKeys [data-pc="9"]',[69]);assert page.evaluate('summarySession.total===2')
+    tap('#playButton');assert page.locator('#answerArea').is_hidden() and page.locator('#buttonBoard').is_hidden();assert page.evaluate('summarySession.total===2')
     page.locator('#answerLimitSelect').fill('0.5');page.locator('#answerLimitSelect').press('Tab');tap('#playButton');answer();done();assert page.evaluate("trial.result==='timeout'")
     preview('#apNameKeys [data-pc="2"]',[62]);tap('#playButton')
     page.locator('#blindCheck').check();page.locator('#autoNextCheck').uncheck();page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab');tap('#playButton');answer();tap('#otherButton');done()
     assert page.locator('#buttonBoard button:not(:disabled)').count()==0
     assert page.locator('#buttonBoard .correct').count()==0
-    tap('#playButton');preview('#apNameKeys [data-pc="2"]',[62])
+    tap('#playButton');assert page.locator('#answerArea').is_hidden()
     page.locator('#modeSelect').select_option('interval');page.locator('#displaySelect').select_option('buttons');page.locator('#autoNextCheck').check()
     page.locator('#minIntervalSelect').select_option('5');page.locator('#maxIntervalSelect').select_option('7')
     page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab')
@@ -73,8 +73,8 @@ with sync_playwright() as p:
     assert page.locator('#intervalAnswers [data-interval="5"].correct').count()==1
     page.wait_for_timeout(2200);assert page.evaluate("phase==='done'&&session.reviewPaused&&session.total===1&&session.correct===1&&trial.replayed===0")
     tap('#nextButton');answer();tap('#intervalAnswers [data-interval="6"]');done();assert page.evaluate('!trial.correct&&session.total===2')
-    preview('#intervalAnswers [data-interval="7"]',[hi-7,hi]);tap('#playButton');preview('#intervalAnswers [data-interval="5"]',[hi-5,hi])
+    preview('#intervalAnswers [data-interval="7"]',[hi-7,hi]);tap('#playButton');assert page.locator('#answerArea').is_hidden()
     assert page.evaluate('summarySession.total===2&&summarySession.correct===1')
     assert not errors,errors
-    print('PASS',entry,instrument,'AP name/octave, wrong/timeout, RP interval previews, boundary transposition, auto-next pause, no rescoring, stopped preview, blind isolation',flush=True)
+    print('PASS',entry,instrument,'AP name/octave, wrong/timeout, RP interval previews, boundary transposition, auto-next pause, no rescoring, hidden after Stop, blind isolation',flush=True)
     browser.close()

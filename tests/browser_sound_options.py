@@ -68,7 +68,7 @@ with sync_playwright() as playwright:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.set_content(document(INSTRUMENT), wait_until="domcontentloaded")
     page.wait_for_function("ready", timeout=20000)
-    assert page.text_content("#appVersion") == "3.0.8"
+    assert page.text_content("#appVersion") == "3.0.9"
     assert page.locator("#soundSelect option").evaluate_all("options=>options.map(o=>o.value)") == ["piano", "violin", "mixed"]
     assert page.locator("#soundSelect").input_value() == INSTRUMENT
     page.evaluate("""() => {
@@ -129,6 +129,7 @@ with sync_playwright() as playwright:
     def stop():
         tap("#playButton")
         assert page.evaluate("!testActive&&phase==='idle'")
+        assert page.locator('#answerArea').is_hidden()
 
     def ap_correct():
         pitch = page.evaluate("trial.target")
@@ -256,8 +257,8 @@ with sync_playwright() as playwright:
     stop()
     select_sound(INSTRUMENT)
     clear()
-    tap('#apNameKeys [data-pc="0"]')
-    expect_notes([60], INSTRUMENT)
+    tap('#selectionPreviewKeys [data-preview-midi="65"]')
+    expect_notes([65], INSTRUMENT)
 
     # Mixed AP is chosen per question and retained on replay/review.
     select_sound("mixed")
@@ -324,15 +325,10 @@ with sync_playwright() as playwright:
     done()
     expect_notes([60, 67], "violin")
     stop()
-    clear()
-    tap('#intervalAnswers [data-interval="5"]')
-    expect_notes([60, 65], "violin")
+    assert page.locator('#intervalAnswers').is_hidden()
     select_sound("piano")
-    clear()
-    tap('#intervalAnswers [data-interval="5"]')
-    expect_notes([60, 65], "piano")
 
-    # Instrument answers and stopped board audition route through the same choice.
+    # Instrument answers and explicit Free Play route through the same choice.
     page.locator("#displaySelect").select_option("instrument")
     select_sound(OTHER)
     clear()
@@ -347,6 +343,7 @@ with sync_playwright() as playwright:
     expect_notes([60], OTHER)
     assert page.evaluate("session.total===1&&trial.correct")
     stop()
+    page.locator('#modeSelect').select_option('free')
     clear()
     page.locator('#keyboard [data-midi="60"]').first.tap()
     expect_notes([60], OTHER)

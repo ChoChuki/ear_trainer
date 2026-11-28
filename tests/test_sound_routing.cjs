@@ -150,7 +150,7 @@ function expectSound(ctx,notes,sound){assert.deepEqual(plain(ctx.queued),notes.m
  }
 
  // The shared preview path (used by both answer surfaces) never rescores and
- // uses the stored timbre. Stopped review honors a newly chosen fixed sound.
+ // uses the stored timbre. Idle settings never inherit a finished trial sound.
  {
   const ctx=fixture();setRP(ctx);let marked=0;
   await ctx.previewNotes([60,65],()=>marked++,()=>true);
@@ -158,7 +158,7 @@ function expectSound(ctx,notes,sound){assert.deepEqual(plain(ctx.queued),notes.m
   assert.equal(ctx.session.reviewPaused,true);
   ctx.summarySession={mode:'interval',timbre:'mixed',rows:[{timbre:'piano'}]};
   ctx.testActive=false;ctx.session=null;ctx.trial=null;
-  assert.equal(ctx.auditionSound(),'piano');ctx.cfg.timbre='violin';
+  ctx.U.drawTimbre=()=> 'violin';assert.equal(ctx.auditionSound(),'violin');ctx.cfg.timbre='violin';
   assert.equal(ctx.auditionSound(),'violin');
  }
 
@@ -213,5 +213,5 @@ function expectSound(ctx,notes,sound){assert.deepEqual(plain(ctx.queued),notes.m
   ctx.cancelAudio();gate.resolve();await task;
   assert.equal(ctx.queued.length,0);assert.equal(marked,0);assert.equal(ctx.selectionPreview,null);
  }
- console.log('PASS production controller sound routing: per-question timbre, sample identity, AP masks, replay/feedback/review, stopped override, stale free-play load, playable selected notes, async preview cancellation');
+ console.log('PASS production controller sound routing: per-question timbre, sample identity, AP masks, replay/feedback/review, idle sound isolation, stale free-play load, playable selected notes, async preview cancellation');
 })().catch(error=>{console.error(error);process.exitCode=1;});
