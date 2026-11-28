@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.4";
+const APP_VERSION = "3.0.6";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -298,10 +298,12 @@ function drawKeyboard() {
     }
 }
 
-async function ensureAudio() {
-    if (audioContext.state !== "running") {
-        await audioContext.resume();
-    }
+function loadSelectedSound(timbre) {
+    return Promise.all((timbre === 'mixed' ? ['piano', 'violin'] : [timbre]).map(sound => loadInstrumentPreset(sound)));
+}
+async function ensureAudio(timbre = cfg.timbre) {
+    // Resume in the input gesture, then wait for every required sample to decode.
+    await Promise.all([audioContext.state !== 'running' ? audioContext.resume() : Promise.resolve(), loadSelectedSound(timbre)]);
     if (audioContext.state !== "running") throw new Error("Audio unavailable");
 }
 
@@ -313,11 +315,11 @@ function releaseAllKeys() {
 
 const masterGain = audioContext.createGain();
 masterGain.connect(audioContext.destination);
-const pendingVoices = new Set();
+const pendingVoices = new Map();
 
-function playFreeVoice(midi) {
+function playFreeVoice(midi, timbre) {
     releaseVoice(midi);
-    const envelope = player.queueWaveTable(audioContext, masterGain, selectedPreset(), 0, midi, 8, 0.76);
+    const envelope = player.queueWaveTable(audioContext, masterGain, selectedPreset(timbre), 0, midi, 8, 0.76);
     if (envelope) activeVoices.set(midi, envelope);
 }
 
@@ -349,11 +351,13 @@ const get=(k,d=null)=>{try{return localStorage.getItem(k)??d;}catch(_){return d;
 const write=(k,v)=>TrainingCore.write(k,v);
 const id=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const cfgKey='ear-unified-settings-v1-'+instrumentMode;
+const timbreKey='ear-unified-timbre-v1';
 const [low,high]=U.limits[instrumentMode];
 const allOctaves=U.range(U.octave(low),U.octave(high));
 const legacy=read('ap-focus-settings-'+instrumentMode,{}), saved=read(cfgKey,{});
+const savedTimbre=read(timbreKey,saved.timbre);
 function validChoice(a,allowed,def){const out=Array.isArray(a)?[...new Set(a.filter(n=>allowed.includes(n)))]:[];return out.length?out:[...def];}
-let cfg={known:validChoice(saved.known??legacy.known,U.range(0,11),[5]),octaves:validChoice(saved.octaves??legacy.octaves,allOctaves,[4,5].filter(o=>allOctaves.includes(o))),
+let cfg={timbre:['piano','violin','mixed'].includes(savedTimbre)?savedTimbre:instrumentMode,known:validChoice(saved.known??legacy.known,U.range(0,11),[5]),octaves:validChoice(saved.octaves??legacy.octaves,allOctaves,[4,5].filter(o=>allOctaves.includes(o))),
  blind:saved.blind===true, apDisplay:['instrument','buttons'].includes(saved.apDisplay)?saved.apDisplay:'buttons',rpDisplay:['instrument','buttons'].includes(saved.rpDisplay)?saved.rpDisplay:'buttons',
  apLimit:AnswerTimer.normalize(saved.apLimit===undefined?(legacy.limit===undefined?AnswerTimer.load():legacy.limit):saved.apLimit),rpLimit:AnswerTimer.normalize(saved.rpLimit===undefined?AnswerTimer.load():saved.rpLimit),
  min:Number.isInteger(saved.min)?Math.max(1,Math.min(high-low,saved.min)):1,max:saved.max===null?null:Number.isInteger(saved.max)?Math.max(1,Math.min(high-low,saved.max)):Math.min(12,high-low),
@@ -361,6 +365,7 @@ let cfg={known:validChoice(saved.known??legacy.known,U.range(0,11),[5]),octaves:
 let mode=location.hash==='#ap'?'single':location.hash==='#iv'?'interval':['single','interval','free'].includes(pageOptions.get('mode'))?pageOptions.get('mode'):'single';
 let rpLo=low,rpHi=high, ready=false, phase='idle', session=null, trial=null, generation=0, nextTimer=null, pickName=null,pickOctave=null,pickNameAt=null,onset=null,deadline=null;
 let pendingSound=null, currentLanguage='en', historyGeneration=0, summarySession=null, importBusy=false, reviewPitch=null;
+let soundLoadGeneration=0, selectionPreview=null;
 const answerClock=AnswerTimer.createClock($('answerTimer'));
 const journalPrefix='ear-unified-pending-v1:';
 let writeQueue=Promise.resolve();
@@ -385,12 +390,18 @@ function boardReview(){return reviewAllowed()&&session.display==='instrument';}
 function stoppedButtonReview(){return !testActive&&mode!=='free'&&display()==='buttons'&&summarySession?.mode===mode&&summarySession.display==='buttons'&&summarySession.rows.length>0;}
 function buttonReview(){return (reviewAllowed()&&session.display==='buttons')||stoppedButtonReview();}
 function reviewRow(){return testActive?trial:summarySession?.rows.at(-1);}
+function auditionSound(){
+ const row=reviewRow(),review=testActive?session:summarySession;
+ if(mode!=='free'&&review?.mode===mode&&review.timbre===cfg.timbre&&['piano','violin'].includes(row?.timbre))return row.timbre;
+ return U.drawTimbre(cfg.timbre);
+}
 function idleBoardPlay(){return !testActive&&(mode==='free'||display()==='instrument');}
 function boardPitchEnabled(midi){if(!testActive||!session||boardReview())return true;return session.mode==='single'?session.pitches.includes(midi):midi>=session.lo&&midi<=session.hi;}
-function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=testActive&&(!enabled||(phase!=='answer'&&!boardReview()));}}
-function toggleChoice(key,value,allowed){if(testActive)return;const current=cfg[key];if(current.includes(value)&&current.length===1)return;cfg[key]=(current.includes(value)?current.filter(n=>n!==value):[...current,value]).filter(n=>allowed.includes(n)).sort((a,b)=>a-b);saveConfig();renderSettings();}
+function updateBoardRange(){for(const b of elements.keyboard.querySelectorAll('[data-midi]')){const enabled=boardPitchEnabled(Number(b.dataset.midi));b.classList.toggle('out-of-range',!enabled);b.disabled=!ready||(testActive&&(!enabled||(phase!=='answer'&&!boardReview())));}}
+function toggleChoice(key,value,allowed){if(testActive)return;const current=cfg[key];if(current.includes(value)&&current.length===1)return;releaseAllKeys();cancelAudio();clearPreviewMark();cfg[key]=(current.includes(value)?current.filter(n=>n!==value):[...current,value]).filter(n=>allowed.includes(n)).sort((a,b)=>a-b);saveConfig();renderSettings();}
 function renderSettings(){
  $('modeSelect').value=mode;$('displayRow').hidden=mode==='free';$('displaySelect').value=display();$('apSettings').hidden=mode!=='single';$('rpSettings').hidden=mode!=='interval';$('commonSettings').hidden=mode==='free';$('maskRow').hidden=mode!=='single';
+ $('soundSelect').value=cfg.timbre;$('soundHint').hidden=cfg.timbre!=='mixed';$('soundHint').textContent=tr(mode==='free'?'mixedFreeHint':'mixedHint');
  $('learningNotes').replaceChildren(...U.names.map((n,pc)=>{const b=button(n,()=>toggleChoice('known',pc,U.range(0,11)));b.dataset.pc=pc;b.setAttribute('aria-pressed',String(cfg.known.includes(pc)));return b;}));
  $('otherHint').hidden=!hasOutside(currentPool(),cfg.known);
  $('octaves').replaceChildren(...U.range(0,8).map(o=>{const b=button(String(o),()=>toggleChoice('octaves',o,allOctaves));b.dataset.octave=o;b.disabled=!allOctaves.includes(o);b.setAttribute('aria-pressed',String(cfg.octaves.includes(o)));return b;}));
@@ -420,9 +431,10 @@ function render(){
  $('sessionScore').textContent=testActive?session.blind?`${tr('questions')} ${session.total}`:`${tr('score')} ${session.correct}/${session.total}`:'';
  if(!testActive){$('answerTimer').hidden=true;if(mode==='free')msg(tr('freeHint'));}
  for(const b of $('buttonBoard').querySelectorAll('button')){
-  b.disabled=buttonReview()?b.dataset.octave!==undefined&&!allOctaves.includes(Number(b.dataset.octave)):!testActive||phase!=='answer'||b.dataset.available==='false';
+  b.disabled=!ready||(buttonReview()?b.dataset.octave!==undefined&&!allOctaves.includes(Number(b.dataset.octave)):!testActive||phase!=='answer'||b.dataset.available==='false');
  }
  updateBoardRange();
+ renderSelectionPreview();
 }
 function buildAnswers(){
  $('apNameKeys').replaceChildren();$('apOctaveKeys').replaceChildren();$('intervalAnswers').replaceChildren();
@@ -435,18 +447,67 @@ function buildAnswers(){
 }
 function clearFeedback(){resetKeyboardColors();reviewPitch=null;clearPreviewMark();for(const b of $('buttonBoard').querySelectorAll('button'))b.classList.remove('picked','correct','wrong');}
 function markReference(){if(session?.mode==='interval'&&session.display==='instrument'&&trial)markPitch(trial.reference,'reference');}
-function cancelAudio(){generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingSound=null;}
+function cancelAudio(){generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingVoices.clear();pendingSound=null;clearSelectionPreview();}
 function renderHeldNotes(){const notes=[...new Set(activePointers.values())];resetKeyboardColors();for(const p of notes)markPitch(p,'active');if(!testActive&&mode==='free')msg(notes.length?notes.map(label).join('  '):tr('freeHint'));}
-function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;TrainingTracker.activity('free-play');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);activePointers.set(pointerId,midi);if(!activeVoices.has(midi)&&!pendingVoices.has(midi)){pendingVoices.add(midi);ensureAudio().then(()=>{pendingVoices.delete(midi);if(idleBoardPlay()&&[...activePointers.values()].includes(midi)&&!activeVoices.has(midi))playFreeVoice(midi);}).catch(()=>{pendingVoices.delete(midi);status('audioError');});}renderHeldNotes();}
+function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;if(selectionPreview)cancelAudio();TrainingTracker.activity('free-play');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);activePointers.set(pointerId,midi);
+ if(!activeVoices.has(midi)&&!pendingVoices.has(midi)){
+  const pending={token:generation,timbre:auditionSound()};pendingVoices.set(midi,pending);
+  ensureAudio(pending.timbre).then(()=>{
+   if(pendingVoices.get(midi)!==pending)return;pendingVoices.delete(midi);
+   if(generation===pending.token&&!document.hidden&&idleBoardPlay()&&[...activePointers.values()].includes(midi)&&!activeVoices.has(midi))playFreeVoice(midi,pending.timbre);
+  }).catch(()=>{if(pendingVoices.get(midi)===pending){pendingVoices.delete(midi);status('audioError');}});
+ }renderHeldNotes();
+}
+function selectedPreviewPitches(){return currentPool().filter(m=>cfg.known.includes(m%12));}
+function renderSelectionPreview(){
+ const available=selectedPreviewPitches().length>0;
+ const b=$('previewSelectionButton');b.textContent=tr(selectionPreview?'stopPreview':'previewSelected');b.setAttribute('aria-pressed',String(!!selectionPreview));
+ b.disabled=testActive||(!selectionPreview&&(!ready||!available));
+ if(!selectionPreview)$('selectionPreviewLabel').textContent=available?'':tr('previewEmpty');
+}
+function clearSelectionPreview(){
+ selectionPreview=null;
+ for(const b of document.querySelectorAll('#learningNotes .audition,#octaves .audition'))b.classList.remove('audition');
+ renderSelectionPreview();
+}
+async function previewSelection(){
+ if(selectionPreview){cancelAudio();return;}
+ if(testActive||mode!=='single'||!ready)return;
+ const notes=selectedPreviewPitches(),timbreMode=cfg.timbre;if(!notes.length)return;
+ releaseAllKeys();cancelAudio();clearPreviewMark();const token=generation;selectionPreview={token};renderSelectionPreview();$('selectionPreviewLabel').textContent=tr('loading');
+ const allowed=()=>generation===token&&selectionPreview?.token===token&&!testActive&&mode==='single'&&!document.hidden&&audioContext.state==='running';
+ try{
+  await ensureAudio(timbreMode);if(!allowed())return;
+  for(const midi of notes){
+   if(!allowed())return;
+   const timbre=U.drawTimbre(timbreMode),at=audioContext.currentTime+.04;
+   const voice=queueInstrumentNote(timbre,midi,at),clock=APFocusModel.outputClock(audioContext,voice.when??at);
+   if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(clock.when-performance.now())/1000,allowed)||!allowed())return;
+   for(const b of document.querySelectorAll('#learningNotes .audition,#octaves .audition'))b.classList.remove('audition');
+   $('learningNotes').querySelector(`[data-pc="${midi%12}"]`)?.classList.add('audition');$('octaves').querySelector(`[data-octave="${U.octave(midi)}"]`)?.classList.add('audition');
+   $('selectionPreviewLabel').textContent=label(midi)+' · '+tr(timbre);
+   S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
+   if(!await TrainingCore.waitForAudio(audioContext,(voice.when??at)+PLAY_DURATION+.2,allowed))return;
+  }
+ }catch(_){if(generation===token)status('audioError');}
+ finally{if(selectionPreview?.token===token)clearSelectionPreview();}
+}
+async function prepareSelectedAudio(){
+ const token=++soundLoadGeneration,timbre=cfg.timbre;ready=false;status('loading');$('audioReload').hidden=true;validate();render();
+ try{
+  await loadSelectedSound(timbre);if(token!==soundLoadGeneration)return;
+  ready=true;status('ready');validate();render();
+ }catch(_){if(token===soundLoadGeneration){status('audioError');$('audioReload').hidden=false;render();}}
+}
 function clearPreviewMark(){for(const b of elements.keyboard.querySelectorAll('.active'))b.classList.remove('active');for(const b of $('buttonBoard').querySelectorAll('.audition'))b.classList.remove('audition');$('previewLabel').hidden=true;$('previewLabel').textContent='';}
 // A single review audio path for both answer interfaces. It never submits
 // an answer, and cannot leak feedback during an active blind test.
 function pauseReview(){if(reviewAllowed()){session.reviewPaused=true;clearTimeout(nextTimer);nextTimer=null;}}
 async function previewNotes(notes,mark,allowed){if(!ready||!allowed()||!notes.length)return;
- pauseReview();cancelAudio();clearPreviewMark();const token=generation;
- try{await ensureAudio();if(generation!==token||document.hidden||!allowed())return;
+ pauseReview();cancelAudio();clearPreviewMark();const token=generation,timbre=auditionSound();
+ try{await ensureAudio(timbre);if(generation!==token||document.hidden||!allowed())return;
   const at=audioContext.currentTime+.02;
-  notes.forEach((m,i)=>queueInstrumentNote(instrumentMode,m,at+i*.8,notes.length>1&&i===0?.6:PLAY_DURATION));
+  notes.forEach((m,i)=>queueInstrumentNote(timbre,m,at+i*.8,notes.length>1&&i===0?.6:PLAY_DURATION));
   mark();S.markLabel(instrumentMode);TrainingCore.rememberLabel(notes.at(-1));TrainingTracker.activity('free-play');
   setTimeout(()=>{if(generation===token)clearPreviewMark();},((notes.length-1)*.8+PLAY_DURATION)*1000+60);
  }catch(_){if(generation===token)status('audioError');}
@@ -484,35 +545,35 @@ async function recoverJournals(){
   }
  }
 }
-function saveSession(done=false,interrupted=false){if(!session||!session.total)return;const a=session;saveRow(a.mode==='single'?'ap':'iv','sessions',{id:a.id,protocol:a.mode==='single'?9:1,sourceVersion:APFocusModel.sourceVersion,source:instrumentMode,unified:1,kind:a.blind?'cold':'learn',started:a.started,day:S.day(new Date(a.started)),finished:Date.now(),completed:done,interrupted,attempted:a.total,total:a.total,correct:a.correct,planned:null,known:[...a.known],octaves:a.octaves??[],limitMs:a.limit,timbre:instrumentMode,responseMode:'set',answerInterface:a.display,direction:a.direction,range:a.mode==='interval'?[a.lo,a.hi]:[a.pitches[0],a.pitches.at(-1)]});}
+function saveSession(done=false,interrupted=false){if(!session||!session.total)return;const a=session;saveRow(a.mode==='single'?'ap':'iv','sessions',{id:a.id,protocol:a.mode==='single'?9:1,sourceVersion:APFocusModel.sourceVersion,source:instrumentMode,unified:1,kind:a.blind?'cold':'learn',started:a.started,day:S.day(new Date(a.started)),finished:Date.now(),completed:done,interrupted,attempted:a.total,total:a.total,correct:a.correct,planned:null,known:[...a.known],octaves:a.octaves??[],limitMs:a.limit,timbre:a.timbre,responseMode:'set',answerInterface:a.display,direction:a.direction,range:a.mode==='interval'?[a.lo,a.hi]:[a.pitches[0],a.pitches.at(-1)]});}
 function canContinue(token){return testActive&&generation===token&&!document.hidden&&audioContext.state==='running';}
 const delay=ms=>new Promise(r=>setTimeout(r,Math.max(0,ms)));
 async function start(){if(!ready||testActive||mode==='free'||!validate())return;
  releaseAllKeys();cancelAudio();$('sessionSummary').hidden=true;summarySession=null;
- const pitches=currentPool();session={id:instrumentMode+(mode==='single'?'-focus-':'-iv-')+id(),mode,display:display(),blind:mode==='single'&&cfg.blind,started:Date.now(),known:mode==='single'?[...cfg.known]:U.range(cfg.min,Math.min(cfg.max??rpHi-rpLo,rpHi-rpLo)),octaves:[...cfg.octaves],pitches,lo:rpLo,hi:rpHi,min:cfg.min,max:cfg.max,direction:cfg.direction,limit:limit(),mask:cfg.mask,auto:cfg.auto,rows:[],recent:[],total:0,correct:0,ordinal:0};
+ const pitches=currentPool();session={id:instrumentMode+(mode==='single'?'-focus-':'-iv-')+id(),mode,display:display(),timbre:cfg.timbre,blind:mode==='single'&&cfg.blind,started:Date.now(),known:mode==='single'?[...cfg.known]:U.range(cfg.min,Math.min(cfg.max??rpHi-rpLo,rpHi-rpLo)),octaves:[...cfg.octaves],pitches,lo:rpLo,hi:rpHi,min:cfg.min,max:cfg.max,direction:cfg.direction,limit:limit(),mask:cfg.mask,auto:cfg.auto,rows:[],recent:[],total:0,correct:0,ordinal:0};
  trial=null;testActive=true;phase=session.mode==='single'?'countdown':'starting';msg(session.mode==='single'?tr('prepare')+' · 3':tr('listen'));clearFeedback();buildAnswers();render();updateBoardRange();
  const token=++generation;
- try{await ensureAudio();if(session?.mode==='single'){for(let i=3;i>=1;i--){if(!canContinue(token))return;msg(tr('prepare')+' · '+i);await delay(1000);}}if(canContinue(token))newQuestion();}catch(_){audioFailure(token);}
+ try{await ensureAudio(session.timbre);if(session?.mode==='single'){for(let i=3;i>=1;i--){if(!canContinue(token))return;msg(tr('prepare')+' · '+i);await delay(1000);}}if(canContinue(token))newQuestion();}catch(_){audioFailure(token);}
 }
 function newQuestion(){if(!testActive||!session||!['countdown','starting','done','error'].includes(phase))return;cancelAudio();session.reviewPaused=false;clearFeedback();pickName=pickOctave=pickNameAt=null;
  const previous=TrainingCore.lastQuestion(instrumentMode);let q;
  if(session.mode==='single'){const pitch=U.drawAP(session.pitches,session.known,previous?.target,session.recent,session.blind,TrainingCore.recentLabel(instrumentMode));if(pitch!==null)q={pitch,target:pitch,reference:null};}
  else {const pair=U.drawRP(U.rpGroups(session.lo,session.hi,session.min,session.max,session.direction,previous),previous);if(pair)q=pair;}
  if(!q){trial=null;phase='error';msg(tr(session.mode==='single'?'rangeError':'pairError'),'bad');render();return;}
- const a=session,ordinal=++a.ordinal;trial={...q,id:a.id+'-'+ordinal,sessionId:a.id,ordinal,protocol:a.mode==='single'?9:1,sourceVersion:APFocusModel.sourceVersion,source:instrumentMode,timbre:instrumentMode,unified:1,kind:a.blind?'cold':'learn',known:[...a.known],learned:[...a.known],responseMode:'set',answerInterface:a.display,poolSize:a.mode==='single'?new Set(a.pitches.map(p=>p%12)).size:undefined,day:S.day(),previousPitch:previous?.target??null,guess:null,correct:false,octaveCorrect:null,guessOctave:null,replayed:0,rtMs:null,nameRtMs:null,assistedRtMs:null,playedAt:null,submittedAt:null,limitMs:a.limit,result:'interrupted',eligibleCold:false,firstRecorded:false,resetNoteCount:0};
- if(a.mode==='single')trial.sampleId=APFocusModel.sampleId(instrumentMode,q.pitch);
+ const a=session,ordinal=++a.ordinal;trial={...q,id:a.id+'-'+ordinal,sessionId:a.id,ordinal,protocol:a.mode==='single'?9:1,sourceVersion:APFocusModel.sourceVersion,source:instrumentMode,timbre:U.drawTimbre(a.timbre),timbreMode:a.timbre,unified:1,kind:a.blind?'cold':'learn',known:[...a.known],learned:[...a.known],responseMode:'set',answerInterface:a.display,poolSize:a.mode==='single'?new Set(a.pitches.map(p=>p%12)).size:undefined,day:S.day(),previousPitch:previous?.target??null,guess:null,correct:false,octaveCorrect:null,guessOctave:null,replayed:0,rtMs:null,nameRtMs:null,assistedRtMs:null,playedAt:null,submittedAt:null,limitMs:a.limit,result:'interrupted',eligibleCold:false,firstRecorded:false,resetNoteCount:0};
+ if(a.mode==='single')trial.sampleId=APFocusModel.sampleId(trial.timbre,q.pitch);
  else trial.direction=q.direction==='higher'?'up':'down';
  playTrial(false);
 }
 function audioFailure(token){if(token!==generation||!testActive)return;cancelAudio();phase='error';msg(tr('audioError'),'bad');render();}
 async function playTrial(replaying){if(!session||!trial||!testActive)return;cancelAudio();const token=generation,row=trial,a=session;phase='loading';pickName=pickOctave=pickNameAt=null;clearFeedback();render();
- try{await ensureAudio();if(!canContinue(token))return;
+ try{await ensureAudio(row.timbre);if(!canContinue(token))return;
   const last=S.lastPracticeAt(instrumentMode),rest=last===null||S.rested(last),mask=a.mode==='single'&&!replaying&&a.mask&&(a.ordinal>1||!rest);
   let at=audioContext.currentTime+.05;const firstNoteAt=at;
-  if(mask){const n=6+Math.floor(Math.random()*3);row.resetNoteCount=n;row.resetSoundOn=true;msg(tr('interference'));at=TrainingCore.resetTones((m,t,d,v)=>queueInstrumentNote(instrumentMode,m,t,d,v),at,{previous:row.previousPitch,count:n})+TrainingCore.resetGap();}
+  if(mask){const n=6+Math.floor(Math.random()*3);row.resetNoteCount=n;row.resetSoundOn=true;msg(tr('interference'));at=TrainingCore.resetTones((m,t,d,v)=>queueInstrumentNote(U.drawTimbre(a.timbre),m,t,d,v),at,{previous:row.previousPitch,count:n,duration:PLAY_DURATION})+TrainingCore.resetGap();}
   else msg(tr('listen'));
-  if(a.mode==='interval'){queueInstrumentNote(instrumentMode,row.reference,at,.6);at+=.8;}
-  const voice=queueInstrumentNote(instrumentMode,row.target,at);const clock=APFocusModel.outputClock(audioContext,voice.when??at);
+  if(a.mode==='interval'){queueInstrumentNote(row.timbre,row.reference,at,.6);at+=.8;}
+  const voice=queueInstrumentNote(row.timbre,row.target,at);const clock=APFocusModel.outputClock(audioContext,voice.when??at);
   if(!replaying){row.playedAt=Math.round(Date.now()+clock.when-performance.now());row.timing=clock.method;row.gapSincePracticeMs=last===null?null:Math.max(0,row.playedAt-last);row.eligibleCold=a.blind&&a.ordinal===1&&!mask&&S.rested(last,row.playedAt);row.firstRecorded=a.blind&&a.ordinal===1&&!mask&&last===null;row.firstOfDay=a.blind&&a.ordinal===1&&(last===null||S.day(new Date(last))!==row.day);}
   TrainingTracker.activity(a.mode==='single'?'ap-learning':'question');
   // First audible sound (including interference) ends the rest period even if stopped before the target.
@@ -543,27 +604,30 @@ function submit(guess,octave=null,selectedMidi=null,now=performance.now()){if(!t
  if(!late&&!relative){if(a.mode==='single')Object.assign(row,U.gradeAP(row.target,guess,octave,a.known));else row.correct=selectedMidi!==null?selectedMidi===row.target:guess===row.size;}
  if(!late){const rt=Math.max(0,Math.round(now-onset));if(row.replayed)row.assistedRtMs=rt;else row.rtMs=rt;}
  row.submittedAt=Date.now();cancelAudio();phase='done';a.total++;if(row.correct)a.correct++;a.rows.push({...row});saveRow(a.mode==='single'?'ap':'iv','trials',row);saveSession();TrainingTracker.activity('answer');
- let nextDelay=a.blind?420:row.correct&&row.octaveCorrect!==false?750:a.mode==='interval'?1850:1250;
+ // A miss (including a wrong octave or timeout) requires explicit Next.
+ // Blind tests pause after every answer, so the pause cannot reveal correctness.
+ a.reviewPaused=a.blind||!row.correct||row.octaveCorrect===false;
+ let nextDelay=750;
  if(a.blind){msg(tr('recorded'));}else{msg(feedbackText(row,a),row.correct&&row.octaveCorrect!==false?'good':'bad');paintFeedback(row,a);S.markLabel(instrumentMode);TrainingCore.rememberLabel(row.target);
   // Restore the original Two Notes reinforcement: a correct answer also
   // replays the whole interval, with the same spacing as the question.
   // Preserve the existing correction playback for misses and all AP behavior.
   if(a.mode==='interval'||!row.correct||row.octaveCorrect===false){try{const at=audioContext.currentTime+.03;
    if(a.mode==='interval'&&row.correct){
-    queueInstrumentNote(instrumentMode,row.reference,at,.6);
-    const voice=queueInstrumentNote(instrumentMode,row.target,at+.8,PLAY_DURATION);
+    queueInstrumentNote(row.timbre,row.reference,at,.6);
+    const voice=queueInstrumentNote(row.timbre,row.target,at+.8,PLAY_DURATION);
     // Allow the full feedback phrase to reach the output before auto-next.
     const end=APFocusModel.outputClock(audioContext,(voice.when??at+.8)+PLAY_DURATION);
     nextDelay=Math.max(2000,end.when-performance.now()+250);
-   }else if(a.mode==='interval'){queueInstrumentNote(instrumentMode,row.reference,at,.55);queueInstrumentNote(instrumentMode,row.target,at+.7,.6);}else queueInstrumentNote(instrumentMode,row.target,at,.7);
+   }else if(a.mode==='interval'){queueInstrumentNote(row.timbre,row.reference,at,.55);queueInstrumentNote(row.timbre,row.target,at+.7,.6);}else queueInstrumentNote(row.timbre,row.target,at,.7);
   }catch(_){}}
  }
- render();if(a.auto){const token=generation;nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done')newQuestion();},nextDelay);}
+ render();if(a.auto&&!a.reviewPaused){const token=generation;nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done'&&!a.reviewPaused)newQuestion();},nextDelay);}
 }
 function replay(){if(!testActive||session?.blind||!trial)return;
  if(phase==='answer'){if(deadline!==null&&performance.now()>deadline){submit('timeout');return;}trial.replayed++;playTrial(true);}
  else if(phase==='error'){playTrial(false);}
- else if(phase==='done'){cancelAudio();clearPreviewMark();const token=generation;try{const at=audioContext.currentTime+.04;if(session.mode==='interval'){queueInstrumentNote(instrumentMode,trial.reference,at,.6);queueInstrumentNote(instrumentMode,trial.target,at+.8);}else queueInstrumentNote(instrumentMode,trial.target,at);S.markLabel(instrumentMode);TrainingCore.rememberLabel(trial.target);TrainingTracker.activity('answer');if(session.auto&&!session.reviewPaused)nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done')newQuestion();},session.mode==='interval'?1800:1100);}catch(_){msg(tr('audioError'),'bad');}}
+ else if(phase==='done'){cancelAudio();clearPreviewMark();const token=generation;try{const at=audioContext.currentTime+.04;if(session.mode==='interval'){queueInstrumentNote(trial.timbre,trial.reference,at,.6);queueInstrumentNote(trial.timbre,trial.target,at+.8);}else queueInstrumentNote(trial.timbre,trial.target,at);S.markLabel(instrumentMode);TrainingCore.rememberLabel(trial.target);TrainingTracker.activity('answer');if(session.auto&&!session.reviewPaused)nextTimer=setTimeout(()=>{if(canContinue(token)&&phase==='done'&&!session.reviewPaused)newQuestion();},session.mode==='interval'?1800:1100);}catch(_){msg(tr('audioError'),'bad');}}
 }
 function stop(interrupted=false){if(!testActive)return;cancelAudio();releaseAllKeys();if(trial&&phase==='answer'){trial.result='interrupted';trial.submittedAt=Date.now();saveRow(session.mode==='single'?'ap':'iv','trials',trial);}saveSession(!interrupted,interrupted);TrainingTracker.pause();const done=session;testActive=false;phase='idle';session=null;trial=null;summarySession=done;clearFeedback();render();if(done.total)showSummary(done);status(interrupted?'interrupted':'ready');if($('statistics').open)refreshHistory();}
 function percent(n,d){return d?`${n}/${d} (${Math.round(100*n/d)}%)`:'—';}
@@ -587,20 +651,23 @@ function setup(){
  currentLanguage=language();$('appVersion').textContent=APP_VERSION;$('instrumentSelect').value=instrumentMode;$('languageSelect').value=currentLanguage;
  for(let p=low;p<=high;p++){option($('startNote'),p,label(p));option($('endNote'),p,label(p));}option($('maxIntervalSelect'),'unlimited',tr('unlimited'));for(let d=1;d<=high-low;d++){option($('minIntervalSelect'),d,d);option($('maxIntervalSelect'),d,d);}
  $('modeSelect').onchange=e=>changeMode(e.target.value);$('displaySelect').onchange=e=>{releaseAllKeys();cancelAudio();clearPreviewMark();cfg[mode==='single'?'apDisplay':'rpDisplay']=e.target.value;saveConfig();renderSettings();};
+ $('soundSelect').onchange=e=>{if(testActive){e.target.value=cfg.timbre;return;}releaseAllKeys();cancelAudio();clearPreviewMark();cfg.timbre=['piano','violin','mixed'].includes(e.target.value)?e.target.value:instrumentMode;write(timbreKey,cfg.timbre);saveConfig();renderSettings();prepareSelectedAudio();};
+ $('previewSelectionButton').onclick=previewSelection;
  $('blindCheck').onchange=e=>{cfg.blind=e.target.checked;saveConfig();};$('autoNextCheck').onchange=e=>{cfg.auto=e.target.checked;saveConfig();};$('maskCheck').onchange=e=>{cfg.mask=e.target.checked;saveConfig();};$('answerLimitSelect').onchange=e=>{const k=mode==='single'?'apLimit':'rpLimit';cfg[k]=AnswerTimer.parse(e.target.value,cfg[k]);e.target.value=AnswerTimer.text(cfg[k],currentLanguage);saveConfig();};
  $('minIntervalSelect').onchange=e=>{cfg.min=Number(e.target.value);if(cfg.max!==null&&cfg.max<cfg.min)cfg.max=cfg.min;saveConfig();renderSettings();};$('maxIntervalSelect').onchange=e=>{cfg.max=e.target.value==='unlimited'?null:Number(e.target.value);if(cfg.max!==null&&cfg.min>cfg.max)cfg.min=cfg.max;saveConfig();renderSettings();};$('directionSelect').onchange=e=>{cfg.direction=e.target.value;saveConfig();renderSettings();};
  $('startNote').onchange=e=>{rpLo=Number(e.target.value);if(rpLo>=rpHi)rpHi=Math.min(high,rpLo+1);if(rpLo>=rpHi)rpLo=rpHi-1;renderSettings();};$('endNote').onchange=e=>{rpHi=Number(e.target.value);if(rpHi<=rpLo)rpLo=Math.max(low,rpHi-1);if(rpHi<=rpLo)rpHi=rpLo+1;renderSettings();};
  $('playButton').onclick=()=>testActive?stop():start();$('nextButton').onclick=()=>newQuestion();$('replayButton').onclick=replay;$('otherButton').onclick=e=>submit('out',null,null,answerStamp(e));$('unsureButton').onclick=e=>submit('unsure',null,null,answerStamp(e));$('relativeButton').onclick=e=>submit('relative',null,null,answerStamp(e));
  for(const box of [$('buttonBoard'),$('extraAnswers')]){box.addEventListener('pointerdown',e=>{if(!e.target.closest('button:not(:disabled)'))return;if(phase==='answer')answerClock.press(AnswerTimer.stamp(e));else if(box===$('buttonBoard')&&buttonReview())pauseReview();},true);box.addEventListener('pointercancel',()=>answerClock.release(),true);box.addEventListener('click',()=>answerClock.release());}
  $('statistics').ontoggle=()=>{if($('statistics').open)refreshHistory();};$('exportButton').onclick=()=>exportHistory().catch(TrainingCore.storageError);$('importButton').onclick=()=>$('importFile').click();$('importFile').onchange=e=>importHistory(e.target.files[0]);
- $('languageSelect').onchange=e=>{if(testActive)return;currentLanguage=e.target.value;try{localStorage.setItem('earTrainerLanguage',currentLanguage);}catch(_){}translate();};
+ $('languageSelect').onchange=e=>{if(testActive)return;releaseAllKeys();cancelAudio();clearPreviewMark();currentLanguage=e.target.value;try{localStorage.setItem('earTrainerLanguage',currentLanguage);}catch(_){}translate();};
  $('instrumentSelect').onchange=async e=>{if(testActive||importBusy){e.target.value=instrumentMode;return;}releaseAllKeys();cancelAudio();TrainingTracker.pause();shell.inert=true;await writeQueue;await S.flushWrites();const url=new URL(location.href);url.hash='';if(e.target.value==='piano')url.searchParams.set('instrument','piano');else url.searchParams.delete('instrument');url.searchParams.set('mode',mode);location.replace(url.href);};
  $('audioReload').onclick=()=>location.reload();window.addEventListener('training-storage-error',()=>{$('storageWarning').hidden=false;$('storageWarning').textContent=tr('storageWarning');});
- document.addEventListener('visibilitychange',()=>{if(document.hidden){stop(true);releaseAllKeys();}});window.addEventListener('blur',()=>{stop(true);releaseAllKeys();});window.addEventListener('pagehide',()=>{stop(true);releaseAllKeys();});window.addEventListener('pageshow',()=>{shell.inert=false;});
+ const suspendAudio=()=>{stop(true);releaseAllKeys();cancelAudio();clearPreviewMark();};
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendAudio();});window.addEventListener('blur',suspendAudio);window.addEventListener('pagehide',suspendAudio);window.addEventListener('pageshow',()=>{shell.inert=false;});
  if(location.hash==='#ap'||location.hash==='#iv'||location.hash==='#tools')try{history.replaceState(null,'',location.pathname+location.search);}catch(_){}
  drawKeyboard();translate();if(instrumentMode==='violin'&&window.ResizeObserver)new ResizeObserver(()=>{if(elements.keyboardScroller.clientWidth&&elements.keyboardScroller.clientWidth!==violinDrawnWidth){releaseAllKeys();drawKeyboard();updateBoardRange();if(testActive&&phase==='done'&&!session.blind)paintFeedback(trial,session);else markReference();}}).observe(elements.keyboardScroller);
  recoverJournals().then(()=>{if($('statistics').open)refreshHistory();}).catch(TrainingCore.storageError);
- loadInstrumentPreset().then(()=>{ready=true;status('ready');validate();render();}).catch(()=>{status('audioError');$('audioReload').hidden=false;});
+ prepareSelectedAudio();
  if('serviceWorker' in navigator&&location.protocol!=='file:'&&!document.documentElement.dataset.single){let reloading=false;const offer=r=>{if(!r.waiting||!navigator.serviceWorker.controller)return;$('updateButton').hidden=false;$('updateButton').onclick=()=>{if(testActive||importBusy||!r.waiting)return;reloading=true;r.waiting.postMessage({type:'SKIP_WAITING'});};};navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloading)location.reload();});navigator.serviceWorker.register('./service-worker.js').then(r=>{offer(r);r.addEventListener('updatefound',()=>r.installing?.addEventListener('statechange',()=>offer(r)));}).catch(()=>{});}
 }
 setup();

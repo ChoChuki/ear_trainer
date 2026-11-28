@@ -26,7 +26,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.4'
+    assert page.text_content('#appVersion')=='3.0.6'
     page.locator('#modeSelect').select_option('interval')
     page.locator('#displaySelect').select_option('instrument')
     page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab')

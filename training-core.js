@@ -158,7 +158,7 @@
  }
  // An unlabelled phrase uses the loaded instrument samples. Its pitches never depend
  // on the upcoming target. Excluding the preceding labelled pitch avoids echoing it.
- function resetTones(queueNote, at, {long = false, previous = null, count:requestedCount} = {}) {
+ function resetTones(queueNote, at, {long = false, previous = null, count:requestedCount, duration:noteDuration = .7} = {}) {
   const count = Number.isInteger(requestedCount) && requestedCount >= 4 && requestedCount <= 8 ? requestedCount : long ? 6 : 4;
   const register = Array.from({length: 25}, (_, i) => 55 + i);
   const used = new Set();
@@ -168,7 +168,8 @@
    const unused = register.filter(p => !used.has(p % 12));
    const separated = unused.filter(p => last === null || (Math.abs(p - last) >= 3 && Math.abs(p - last) <= 13));
    const midi = choose(separated.length ? separated : unused);
-   const duration = .19 + Math.random() * .08;
+   // Use the same note length as the target; the caller passes its actual duration.
+   const duration = Number.isFinite(noteDuration) && noteDuration > 0 ? noteDuration : .7;
    const voice = queueNote(midi, at, duration, .46);
    const source = voice.audioBufferSourceNode;
    voices.add(source);

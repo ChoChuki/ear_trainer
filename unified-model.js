@@ -6,6 +6,8 @@ const limits={piano:[21,108],violin:[55,88]};
 const range=(lo,hi)=>Array.from({length:Math.max(0,hi-lo+1)},(_,i)=>lo+i);
 const names=APFocusModel.notes;
 const choose=TrainingCore.choose;
+// A mixed question keeps one sampled timbre for its entire lifetime.
+function drawTimbre(mode,rng=Math.random){return mode==='mixed'?(rng()<.5?'piano':'violin'):mode;}
 function pitches(instrument,octaves){const [lo,hi]=limits[instrument];return range(lo,hi).filter(p=>octaves.includes(octave(p)));}
 function apPoolValid(pool,known){const pcs=new Set(pool.map(p=>p%12));return pcs.size>=2&&known.length>0&&known.every(pc=>pcs.has(pc));}
 function drawAP(pool,known,previous,recent=[],blind=false,label=null){
@@ -54,5 +56,5 @@ function rpReviewPair(reference,target,distance,lo,hi){
  const r=Math.max(lo+Math.max(0,-signed),Math.min(hi-Math.max(0,signed),reference));
  return [r,r+signed];
 }
-root.UnifiedModel={octave,limits,range,names,pitches,apPoolValid,drawAP,rpGroups,rpPoolValid,drawRP,gradeAP,apReviewPitch,rpReviewPair};
+root.UnifiedModel={octave,limits,range,names,pitches,apPoolValid,drawAP,rpGroups,rpPoolValid,drawRP,gradeAP,apReviewPitch,rpReviewPair,drawTimbre};
 })(typeof window==='undefined'?globalThis:window);

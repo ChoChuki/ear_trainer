@@ -50,10 +50,13 @@
             <div class="settings-grid">
                 <label><span data-i="mode"></span><select id="modeSelect"><option value="single" data-i="one"></option><option value="interval" data-i="two"></option><option value="free" data-i="free"></option></select></label>
                 <label id="displayRow"><span data-i="answerWith"></span><select id="displaySelect"><option value="buttons" data-i="buttons"></option><option value="instrument" data-i="instrument"></option></select></label>
+                <label class="wide"><span data-i="sound"></span><select id="soundSelect" aria-describedby="soundHint"><option value="piano" data-i="piano"></option><option value="violin" data-i="violin"></option><option value="mixed" data-i="mixed"></option></select></label>
             </div>
+            <p id="soundHint" class="mini" data-i="mixedHint" hidden></p>
             <div id="apSettings">
                 <fieldset><legend data-i="learningNotes"></legend><div id="learningNotes" class="note-grid"></div><p id="otherHint" class="mini" data-i="otherHint" hidden></p></fieldset>
                 <fieldset><legend data-i="octaves"></legend><div id="octaves" class="octave-grid"></div></fieldset>
+                <div class="selection-preview"><button id="previewSelectionButton" type="button" class="secondary" data-i="previewSelected" aria-describedby="selectionPreviewLabel" disabled></button><span id="selectionPreviewLabel" class="mini" role="status" aria-live="polite"></span></div>
                 <label class="option-row"><input type="checkbox" id="blindCheck"><span data-i="blind"></span></label>
             </div>
             <div id="rpSettings" hidden>
@@ -86,6 +89,7 @@
             <div id="answerText" role="status" aria-live="polite"></div>
             <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
         </section>
+        <div id="answerArea">
         <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" type="button" class="secondary other-answer" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
         <section id="buttonBoard" class="button-board" hidden>
             <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
@@ -96,6 +100,7 @@
         <section class="keyboard-card" id="keyboardCard" hidden>
             <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
         </section>
+        </div>
         <section id="sessionSummary" class="settings-card" hidden><h2 data-i="results"></h2><div id="summaryBody"></div><details id="reviewDetails" hidden><summary data-i="review"></summary><ol id="reviewList"></ol></details></section>
         <details id="statistics" class="settings-card history-card">
             <summary data-i="statistics"></summary><div id="historyBody"></div>

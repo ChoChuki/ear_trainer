@@ -467,4 +467,19 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 
 /* Audition highlight leaves original grading colors intact. */
 #buttonBoard button.audition{outline:2px solid #2563eb;outline-offset:-3px}
+#learningNotes button.audition,#octaves button.audition{outline:2px solid #2563eb;outline-offset:-3px}
+.selection-preview{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:6px 0}
+.selection-preview button{min-height:40px}
+.selection-preview .mini{margin:0}
 #previewLabel{text-align:center;margin:4px 0 0}
+
+/* 3.0.6: bring the answer surfaces within thumb reach without changing key
+   size or requiring viewport-fixed overlays. Tall boards may still scroll. */
+.app-shell.training-round {display:flex;flex-direction:column;min-height:100vh;min-height:100svh;}
+.training-round #answerCard {margin-top:0;}
+.training-round #answerArea {display:flex;flex-direction:column;flex:0 0 auto;margin-top:auto;min-width:0;}
+.training-round #answerArea .extra-answers {margin:0 0 5px;}
+.training-round #answerArea .button-board {margin:0;}
+/* Keep the answer grid stationary when a post-answer audition label appears. */
+.training-round #previewLabel {min-height:18px;line-height:18px;}
+.training-round #previewLabel[hidden] {display:block!important;visibility:hidden;}

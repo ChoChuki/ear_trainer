@@ -20,7 +20,7 @@ for (const long of [false,true]) {
         for(const [i,v] of phrase.entries()){
             assert(Number.isInteger(v.midi) && v.midi>=55 && v.midi<=79);
             assert.notEqual(v.midi%12,previous%12);
-            assert(v.duration>=.19 && v.duration<=.27 && v.volume>0 && v.volume<.75);
+            assert(v.duration===.7 && v.volume>0 && v.volume<.75);
             if(i)assert(v.at>=phrase[i-1].at+phrase[i-1].duration+.0899);
         }
         assert.equal(end,phrase.at(-1).at+phrase.at(-1).duration);
@@ -41,3 +41,11 @@ assert.equal(T.farPitch([], 60), undefined);
 assert([60,72].includes(T.farPitch([60,72], null)));
 console.log('PASS register choice');
 
+
+// Explicit duration follows a caller's target length rather than a fixed short mask.
+for (const duration of [.4,.7,1.1]) {
+    const lengths=[];
+    T.resetTones((_midi,_at,length)=>{lengths.push(length);return {audioBufferSourceNode:{stop(){}}};},0,{duration,count:8});
+    assert.deepEqual(lengths,Array(8).fill(duration));
+    T.cancelAudio();
+}
