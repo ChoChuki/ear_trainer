@@ -27,7 +27,7 @@ function fixture(instrument='violin'){
   document:{hidden:false,querySelectorAll:()=>[]},$:()=>element,
   cfg:{timbre:'mixed',known:[5],octaves:[4,5]},mode:'single',phase:'done',ready:true,testActive:true,
   generation:0,nextTimer:null,pickName:null,pickOctave:null,pickNameAt:null,onset:0,deadline:null,
-  pendingSound:null,selectionPreview:null,summarySession:null,reviewPitch:null,
+  pendingSound:null,selectionPreview:null,summarySession:null,reviewSelection:{},
   pendingVoices:new Map(),activePointers:new Map(),activeVoices:new Map(),
   audioContext:{state:'running',currentTime:10},player:{cancelQueue:noop},
   answerClock:{stop:noop,start:noop},TrainingTracker:{activity:noop},

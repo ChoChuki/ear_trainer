@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.9";
+const APP_VERSION = "3.0.10";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -364,7 +364,7 @@ let cfg={timbre:['piano','violin','mixed'].includes(savedTimbre)?savedTimbre:ins
  direction:['both','higher','lower'].includes(saved.direction)?saved.direction:'both',auto:saved.auto===undefined?get('ear-auto-next','1')==='1':!!saved.auto,mask:saved.mask===undefined?get('ear-ap-mask-v2','1')==='1':!!saved.mask};
 let mode=location.hash==='#ap'?'single':location.hash==='#iv'?'interval':['single','interval','free'].includes(pageOptions.get('mode'))?pageOptions.get('mode'):'single';
 let rpLo=low,rpHi=high, ready=false, phase='idle', session=null, trial=null, generation=0, nextTimer=null, pickName=null,pickOctave=null,pickNameAt=null,onset=null,deadline=null;
-let pendingSound=null, currentLanguage='en', historyGeneration=0, summarySession=null, importBusy=false, reviewPitch=null;
+let pendingSound=null, currentLanguage='en', historyGeneration=0, summarySession=null, importBusy=false, reviewSelection={};
 let soundLoadGeneration=0, selectionPreview=null;
 const answerClock=AnswerTimer.createClock($('answerTimer'));
 const journalPrefix='ear-unified-pending-v1:';
@@ -447,9 +447,9 @@ function buildAnswers(){
   for(const d of [...new Set(U.rpGroups(session.lo,session.hi,session.min,session.max,session.direction).map(g=>g.distance))]){const b=button(String(d),e=>buttonReview()?previewRP(d):submit(d,null,null,answerStamp(e)));b.dataset.interval=d;$('intervalAnswers').append(b);}
  }
 }
-function clearFeedback(){resetKeyboardColors();reviewPitch=null;clearPreviewMark();for(const b of $('buttonBoard').querySelectorAll('button'))b.classList.remove('picked','correct','wrong');}
+function clearFeedback(){resetKeyboardColors();reviewSelection={};clearPreviewMark();for(const b of $('buttonBoard').querySelectorAll('button'))b.classList.remove('picked','correct','wrong');}
 function markReference(){if(session?.mode==='interval'&&session.display==='instrument'&&trial)markPitch(trial.reference,'reference');}
-function cancelAudio(){generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingVoices.clear();pendingSound=null;clearSelectionPreview();}
+function cancelAudio(){reviewSelection={};generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingVoices.clear();pendingSound=null;clearSelectionPreview();}
 function renderHeldNotes(){const notes=[...new Set(activePointers.values())];resetKeyboardColors();for(const p of notes)markPitch(p,'active');if(!testActive&&mode==='free')msg(notes.length?notes.map(label).join('  '):tr('freeHint'));}
 function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;if(selectionPreview)cancelAudio();TrainingTracker.activity('free-play');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);activePointers.set(pointerId,midi);
  if(!activeVoices.has(midi)&&!pendingVoices.has(midi)){
@@ -524,9 +524,24 @@ async function previewNotes(notes,mark,allowed){if(!ready||!allowed()||!notes.le
 }
 function previewBoardPitch(midi){return previewNotes([midi],()=>markPitch(midi,'active'),boardReview);}
 function previewButtonMark(keys,notes){for(const k of keys)k?.classList.add('audition');$('previewLabel').textContent=notes.map(label).join(' → ');$('previewLabel').hidden=false;}
-function previewAP(kind,value){if(!buttonReview()||mode!=='single')return;
- const pitch=U.apReviewPitch(reviewPitch??reviewRow()?.target??60,kind,value,low,high);if(pitch===null)return;
- reviewPitch=pitch;return previewNotes([pitch],()=>previewButtonMark([$('apNameKeys').querySelector(`[data-pc="${pitch%12}"]`),$('apOctaveKeys').querySelector(`[data-octave="${U.octave(pitch)}"]`)], [pitch]),buttonReview);
+function previewAP(kind,value){if(!ready||!buttonReview()||mode!=='single')return;
+ // A review pitch requires two explicit choices, never the target's or the
+ // previous audition's missing component. A new click cancels older audio.
+ const chosen={...reviewSelection,[kind]:value};
+ pauseReview();cancelAudio();clearPreviewMark();
+ const nameKey=Number.isInteger(chosen.name)?$('apNameKeys').querySelector(`[data-pc="${chosen.name}"]`):null;
+ const octaveKey=Number.isInteger(chosen.octave)?$('apOctaveKeys').querySelector(`[data-octave="${chosen.octave}"]`):null;
+ if(!Number.isInteger(chosen.name)||!Number.isInteger(chosen.octave)){
+  reviewSelection=chosen;
+  nameKey?.classList.add('audition');octaveKey?.classList.add('audition');
+  $('previewLabel').textContent=(nameKey?U.names[chosen.name]:'…')+(octaveKey?chosen.octave:'…');$('previewLabel').hidden=false;
+  return;
+ }
+ // Consume the pair even when it is outside the instrument range. Never
+ // substitute another pitch or carry a component into the next audition.
+ const pitch=U.apReviewPitch(chosen.name,chosen.octave,low,high);
+ if(pitch===null){$('previewLabel').textContent=U.names[chosen.name]+chosen.octave+' · '+tr('reviewOutOfRange');$('previewLabel').hidden=false;return;}
+ return previewNotes([pitch],()=>previewButtonMark([nameKey,octaveKey],[pitch]),buttonReview);
 }
 function previewRP(distance){if(!buttonReview()||mode!=='interval')return;
  const row=reviewRow();if(!row)return;const notes=U.rpReviewPair(row.reference,row.target,distance,low,high);if(!notes)return;

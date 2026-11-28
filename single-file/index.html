@@ -4018,10 +4018,10 @@ function drawRP(groups,previous){if(!groups.length)return null;const old=previou
 function gradeAP(target,guess,guessOctave,known){const correct=TrainingCore.matchesLearningSet(target%12,guess,known,0,11);
  return {correct,octaveCorrect:known.includes(target%12)&&guess===target%12&&Number.isInteger(guessOctave)?guessOctave===octave(target):null};}
 // Review is independent of the question pool: choose real pitches only.
-function apReviewPitch(current,kind,value,lo,hi){
- const desired=kind==='name'?12*(octave(current)+1)+value:12*(value+1)+current%12;
- const candidates=range(lo,hi).filter(m=>kind==='name'?m%12===value:octave(m)===value);
- return candidates.reduce((best,m)=>best===null||Math.abs(m-desired)<Math.abs(best-desired)?m:best,null);
+function apReviewPitch(pc,o,lo,hi){
+ if(!Number.isInteger(pc)||pc<0||pc>11||!Number.isInteger(o)||o<0||o>8)return null;
+ const pitch=12*(o+1)+pc;
+ return pitch>=lo&&pitch<=hi?pitch:null;
 }
 function rpReviewPair(reference,target,distance,lo,hi){
  if(!Number.isInteger(distance)||distance<1||distance>hi-lo)return null;
@@ -4042,6 +4042,7 @@ const UNIFIED_COPY={
  mixedHint:['Random sound per question. Both notes and replays keep the same sound.','每題隨機選擇音色；同題的兩個音及重播沿用相同音色。','問題ごとに音色をランダム選択。同じ問題の二音と再生は同じ音色です。','Zufälliger Klang pro Frage. Beide Töne und Wiederholungen behalten denselben Klang.','Suono casuale per domanda. Le due note e i riascolti mantengono lo stesso suono.','Τυχαίος ήχος ανά ερώτηση. Οι δύο νότες και οι επαναλήψεις έχουν τον ίδιο ήχο.'],
  mixedFreeHint:['Random piano or violin sound for each note you play.','每次按音，隨機使用鋼琴或小提琴音色。','弾く音ごとにピアノかバイオリンをランダム選択。','Jeder gespielte Ton erhält zufällig Klavier- oder Violinklang.','Ogni nota suonata usa casualmente pianoforte o violino.','Κάθε νότα παίζεται τυχαία με πιάνο ή βιολί.'],
  previewSelected:['Preview selected notes','試聽所選音','選択した音を試聴','Gewählte Töne anhören','Ascolta le note selezionate','Άκου τις επιλεγμένες νότες'],
+ reviewOutOfRange:['Outside instrument range','超出樂器音域','楽器の音域外','Außerhalb des Tonumfangs','Fuori dall’estensione','Εκτός έκτασης οργάνου'],
  previewEmpty:['No selected notes in these octaves.','所選八度中沒有可試聽的學習音。','このオクターブ内に選択した音はありません。','Keine gewählten Töne in diesen Oktaven.','Nessuna nota selezionata in queste ottave.','Δεν υπάρχουν επιλεγμένες νότες σε αυτές τις οκτάβες.'],
  otherHint:['Other means any note outside the selected learning notes. No need to identify its name or octave.','其他音：不屬於所選學習音名的任何音，無須辨認音名或八度。','学習外：選択した学習音名以外の音。音名やオクターブの特定は不要です。','Anderer Ton: jeder Ton außerhalb der gewählten Lerntöne. Tonname und Oktave sind nicht nötig.','Altra nota: qualsiasi nota fuori da quelle selezionate. Non occorre identificarne nome o ottava.','Άλλη νότα: κάθε νότα εκτός των επιλεγμένων. Δεν χρειάζεται όνομα ή οκτάβα.'],
  otherUnavailable:['All playable note names are in the learning set.','所有可出題的音名均屬於學習音集。','出題可能な音名はすべて学習対象です。','Alle spielbaren Tonnamen sind Lerntöne.','Tutte le note disponibili sono nel gruppo di apprendimento.','Όλες οι διαθέσιμες νότες είναι στο σύνολο εκμάθησης.'],
@@ -4629,7 +4630,7 @@ var _tone_0400_JCLive_sf2_file={
 	]
 };
 
-const APP_VERSION = "3.0.9";
+const APP_VERSION = "3.0.10";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -4995,7 +4996,7 @@ let cfg={timbre:['piano','violin','mixed'].includes(savedTimbre)?savedTimbre:ins
  direction:['both','higher','lower'].includes(saved.direction)?saved.direction:'both',auto:saved.auto===undefined?get('ear-auto-next','1')==='1':!!saved.auto,mask:saved.mask===undefined?get('ear-ap-mask-v2','1')==='1':!!saved.mask};
 let mode=location.hash==='#ap'?'single':location.hash==='#iv'?'interval':['single','interval','free'].includes(pageOptions.get('mode'))?pageOptions.get('mode'):'single';
 let rpLo=low,rpHi=high, ready=false, phase='idle', session=null, trial=null, generation=0, nextTimer=null, pickName=null,pickOctave=null,pickNameAt=null,onset=null,deadline=null;
-let pendingSound=null, currentLanguage='en', historyGeneration=0, summarySession=null, importBusy=false, reviewPitch=null;
+let pendingSound=null, currentLanguage='en', historyGeneration=0, summarySession=null, importBusy=false, reviewSelection={};
 let soundLoadGeneration=0, selectionPreview=null;
 const answerClock=AnswerTimer.createClock($('answerTimer'));
 const journalPrefix='ear-unified-pending-v1:';
@@ -5078,9 +5079,9 @@ function buildAnswers(){
   for(const d of [...new Set(U.rpGroups(session.lo,session.hi,session.min,session.max,session.direction).map(g=>g.distance))]){const b=button(String(d),e=>buttonReview()?previewRP(d):submit(d,null,null,answerStamp(e)));b.dataset.interval=d;$('intervalAnswers').append(b);}
  }
 }
-function clearFeedback(){resetKeyboardColors();reviewPitch=null;clearPreviewMark();for(const b of $('buttonBoard').querySelectorAll('button'))b.classList.remove('picked','correct','wrong');}
+function clearFeedback(){resetKeyboardColors();reviewSelection={};clearPreviewMark();for(const b of $('buttonBoard').querySelectorAll('button'))b.classList.remove('picked','correct','wrong');}
 function markReference(){if(session?.mode==='interval'&&session.display==='instrument'&&trial)markPitch(trial.reference,'reference');}
-function cancelAudio(){generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingVoices.clear();pendingSound=null;clearSelectionPreview();}
+function cancelAudio(){reviewSelection={};generation++;clearTimeout(nextTimer);nextTimer=null;answerClock.stop();deadline=null;onset=null;TrainingCore.cancelAudio();player?.cancelQueue(audioContext);pendingVoices.clear();pendingSound=null;clearSelectionPreview();}
 function renderHeldNotes(){const notes=[...new Set(activePointers.values())];resetKeyboardColors();for(const p of notes)markPitch(p,'active');if(!testActive&&mode==='free')msg(notes.length?notes.map(label).join('  '):tr('freeHint'));}
 function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;if(selectionPreview)cancelAudio();TrainingTracker.activity('free-play');S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);activePointers.set(pointerId,midi);
  if(!activeVoices.has(midi)&&!pendingVoices.has(midi)){
@@ -5155,9 +5156,24 @@ async function previewNotes(notes,mark,allowed){if(!ready||!allowed()||!notes.le
 }
 function previewBoardPitch(midi){return previewNotes([midi],()=>markPitch(midi,'active'),boardReview);}
 function previewButtonMark(keys,notes){for(const k of keys)k?.classList.add('audition');$('previewLabel').textContent=notes.map(label).join(' → ');$('previewLabel').hidden=false;}
-function previewAP(kind,value){if(!buttonReview()||mode!=='single')return;
- const pitch=U.apReviewPitch(reviewPitch??reviewRow()?.target??60,kind,value,low,high);if(pitch===null)return;
- reviewPitch=pitch;return previewNotes([pitch],()=>previewButtonMark([$('apNameKeys').querySelector(`[data-pc="${pitch%12}"]`),$('apOctaveKeys').querySelector(`[data-octave="${U.octave(pitch)}"]`)], [pitch]),buttonReview);
+function previewAP(kind,value){if(!ready||!buttonReview()||mode!=='single')return;
+ // A review pitch requires two explicit choices, never the target's or the
+ // previous audition's missing component. A new click cancels older audio.
+ const chosen={...reviewSelection,[kind]:value};
+ pauseReview();cancelAudio();clearPreviewMark();
+ const nameKey=Number.isInteger(chosen.name)?$('apNameKeys').querySelector(`[data-pc="${chosen.name}"]`):null;
+ const octaveKey=Number.isInteger(chosen.octave)?$('apOctaveKeys').querySelector(`[data-octave="${chosen.octave}"]`):null;
+ if(!Number.isInteger(chosen.name)||!Number.isInteger(chosen.octave)){
+  reviewSelection=chosen;
+  nameKey?.classList.add('audition');octaveKey?.classList.add('audition');
+  $('previewLabel').textContent=(nameKey?U.names[chosen.name]:'…')+(octaveKey?chosen.octave:'…');$('previewLabel').hidden=false;
+  return;
+ }
+ // Consume the pair even when it is outside the instrument range. Never
+ // substitute another pitch or carry a component into the next audition.
+ const pitch=U.apReviewPitch(chosen.name,chosen.octave,low,high);
+ if(pitch===null){$('previewLabel').textContent=U.names[chosen.name]+chosen.octave+' · '+tr('reviewOutOfRange');$('previewLabel').hidden=false;return;}
+ return previewNotes([pitch],()=>previewButtonMark([nameKey,octaveKey],[pitch]),buttonReview);
 }
 function previewRP(distance){if(!buttonReview()||mode!=='interval')return;
  const row=reviewRow();if(!row)return;const notes=U.rpReviewPair(row.reference,row.target,distance,low,high);if(!notes)return;

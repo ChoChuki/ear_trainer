@@ -21,7 +21,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.9'
+    assert page.text_content('#appVersion')=='3.0.10'
     page.evaluate('''()=>{window.queued=[];const queue=queueInstrumentNote;queueInstrumentNote=(sound,midi,at,duration=PLAY_DURATION,volume=.75)=>{queued.push({ordinal:trial?.ordinal,phase,midi,at,duration,volume});return queue(sound,midi,at,duration,volume);};UnifiedModel.drawAP=()=>65;UnifiedModel.drawRP=()=>({reference:60,target:67,size:7,direction:'higher'});}''')
     def tap(s):page.locator(s).first.tap()
     def answer():page.wait_for_function("phase==='answer'",timeout=18000)
@@ -52,7 +52,7 @@ with sync_playwright() as p:
     start();together('#buttonBoard')
     y=coord('#apNameKeys [data-pc="5"]');tap('#otherButton');paused();assert page.evaluate('!trial.correct');still_paused(1500)
     tap('#replayButton');still_paused(1300)
-    tap('#apNameKeys [data-pc="4"]');page.wait_for_function("queued.at(-1).midi===64")
+    tap('#apNameKeys [data-pc="4"]');tap('#apOctaveKeys [data-octave="4"]');page.wait_for_function("queued.at(-1).midi===64")
     assert abs(coord('#apNameKeys [data-pc="5"]')-y)<2
     page.evaluate('queued=[]');next_question()
     notes=page.evaluate("queued.filter(n=>n.phase==='loading')")

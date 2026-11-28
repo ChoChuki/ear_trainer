@@ -20,7 +20,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.9'
+    assert page.text_content('#appVersion')=='3.0.10'
     page.evaluate("""()=>{UnifiedModel.drawAP=()=>65;UnifiedModel.drawRP=()=>({reference:60,target:67,size:7,direction:'higher'});cfg.known=[4,5];cfg.octaves=[4,5];cfg.mask=false;cfg.auto=false;cfg.apLimit=null;cfg.rpLimit=null;renderSettings();}""")
     def tap(s):page.locator(s).first.tap()
     def idle():
@@ -52,7 +52,9 @@ with sync_playwright() as p:
             assert page.evaluate('!trial.correct&&session.reviewPaused&&session.total===1')
             page.evaluate('played=[]')
             if display=='instrument':tap('#keyboard [data-midi="64"]');expected=[64]
-            elif mode=='single':tap('#apNameKeys [data-pc="4"]');expected=[64]
+            elif mode=='single':
+                tap('#apNameKeys [data-pc="4"]');assert page.evaluate('played.length===0')
+                tap('#apOctaveKeys [data-octave="4"]');expected=[64]
             else:tap('#intervalAnswers [data-interval="5"]');expected=[60,65]
             page.wait_for_function(f'played.length==={len(expected)}');assert page.evaluate('played')==expected
             assert page.evaluate("session.total===1&&phase==='done'")

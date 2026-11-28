@@ -68,7 +68,7 @@ with sync_playwright() as playwright:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.set_content(document(INSTRUMENT), wait_until="domcontentloaded")
     page.wait_for_function("ready", timeout=20000)
-    assert page.text_content("#appVersion") == "3.0.9"
+    assert page.text_content("#appVersion") == "3.0.10"
     assert page.locator("#soundSelect option").evaluate_all("options=>options.map(o=>o.value)") == ["piano", "violin", "mixed"]
     assert page.locator("#soundSelect").input_value() == INSTRUMENT
     page.evaluate("""() => {
@@ -245,6 +245,8 @@ with sync_playwright() as playwright:
     expect_notes([65], OTHER)
     clear()
     tap('#apNameKeys [data-pc="7"]')
+    assert not played()
+    tap('#apOctaveKeys [data-octave="4"]')
     expect_notes([67], OTHER)
     assert page.evaluate("session.total===1&&session.reviewPaused")
     clear()
@@ -277,6 +279,8 @@ with sync_playwright() as playwright:
     ap_correct()
     clear()
     tap('#apNameKeys [data-pc="2"]')
+    assert not played()
+    tap('#apOctaveKeys [data-octave="4"]')
     expect_notes([62], "piano")
     tap("#nextButton")
     answer_phase()

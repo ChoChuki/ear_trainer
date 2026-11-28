@@ -26,7 +26,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.9'
+    assert page.text_content('#appVersion')=='3.0.10'
     page.locator('#displaySelect').select_option('buttons')
     page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab')
     page.locator('#commonSettings details summary').tap();page.locator('#maskCheck').uncheck()
@@ -43,23 +43,45 @@ with sync_playwright() as p:
         page.evaluate('queued=[]');tap(selector)
         page.wait_for_function(f'queued.length==={len(notes)}');assert queued()==notes,(selector,queued(),notes)
         assert page.text_content('#previewLabel')
+    def silent(selector):
+        page.evaluate('queued=[]');tap(selector);page.wait_for_timeout(120)
+        assert queued()==[],(selector,queued())
+    def pair(first,second,note):
+        silent(first)
+        preview(second,[note])
+        assert page.evaluate('Object.keys(reviewSelection).length===0')
     tap('#playButton');answer()
     assert page.locator('#apOctaveKeys [data-octave="3"]').is_disabled()
     tap('#apNameKeys [data-pc="5"]');tap('#apOctaveKeys [data-octave="4"]');done()
     assert page.evaluate('trial.correct&&session.total===1')
     assert page.locator('#apNameKeys button:disabled').count()==0
     assert page.locator('#apOctaveKeys [data-octave="3"]').is_enabled()
-    preview('#apNameKeys [data-pc="7"]',[67])
-    preview('#apOctaveKeys [data-octave="3"]',[55])
-    preview('#apNameKeys [data-pc="9"]',[57])
+    pair('#apNameKeys [data-pc="7"]','#apOctaveKeys [data-octave="4"]',67)
+    pair('#apOctaveKeys [data-octave="3"]','#apNameKeys [data-pc="7"]',55)
+    silent('#apNameKeys [data-pc="7"]')
+    silent('#apNameKeys [data-pc="9"]')
+    preview('#apOctaveKeys [data-octave="3"]',[57])
+    pair('#apNameKeys [data-pc="9"]','#apOctaveKeys [data-octave="3"]',57)
     assert page.locator('#apNameKeys [data-pc="5"].correct').count()==1
     page.wait_for_timeout(1000);assert page.evaluate("phase==='done'&&session.reviewPaused&&session.total===1&&session.correct===1&&trial.replayed===0")
     tap('#nextButton');answer();assert page.locator('#apOctaveKeys [data-octave="3"]').is_disabled()
     tap('#apNameKeys [data-pc="5"]');tap('#apOctaveKeys [data-octave="4"]');done();assert page.evaluate('!trial.correct&&session.total===2')
-    preview('#apNameKeys [data-pc="0"]',[60]);assert page.locator('#apNameKeys [data-pc="5"].wrong').count()==1
+    pair('#apNameKeys [data-pc="0"]','#apOctaveKeys [data-octave="4"]',60)
+    # Invalid pair must be silent; the next valid pair starts from scratch.
+    silent('#apNameKeys [data-pc="0"]')
+    silent('#apOctaveKeys [data-octave="0"]' if instrument=='piano' else '#apOctaveKeys [data-octave="3"]')
+    assert page.evaluate('Object.keys(reviewSelection).length===0')
+    assert 'range' in page.text_content('#previewLabel').lower()
+    pair('#apOctaveKeys [data-octave="4"]','#apNameKeys [data-pc="4"]',64)
+    # Replay discards a partial selection.
+    silent('#apNameKeys [data-pc="4"]');tap('#replayButton')
+    assert page.evaluate('Object.keys(reviewSelection).length===0')
+    pair('#apOctaveKeys [data-octave="5"]','#apNameKeys [data-pc="4"]',76)
+    assert page.locator('#apNameKeys [data-pc="5"].wrong').count()==1
+    silent('#apNameKeys [data-pc="4"]')
     tap('#playButton');assert page.locator('#answerArea').is_hidden() and page.locator('#buttonBoard').is_hidden();assert page.evaluate('summarySession.total===2')
     page.locator('#answerLimitSelect').fill('0.5');page.locator('#answerLimitSelect').press('Tab');tap('#playButton');answer();done();assert page.evaluate("trial.result==='timeout'")
-    preview('#apNameKeys [data-pc="2"]',[62]);tap('#playButton')
+    pair('#apNameKeys [data-pc="2"]','#apOctaveKeys [data-octave="4"]',62);tap('#playButton')
     page.locator('#blindCheck').check();page.locator('#autoNextCheck').uncheck();page.locator('#answerLimitSelect').fill('5');page.locator('#answerLimitSelect').press('Tab');tap('#playButton');answer();tap('#otherButton');done()
     assert page.locator('#buttonBoard button:not(:disabled)').count()==0
     assert page.locator('#buttonBoard .correct').count()==0
@@ -76,5 +98,5 @@ with sync_playwright() as p:
     preview('#intervalAnswers [data-interval="7"]',[hi-7,hi]);tap('#playButton');assert page.locator('#answerArea').is_hidden()
     assert page.evaluate('summarySession.total===2&&summarySession.correct===1')
     assert not errors,errors
-    print('PASS',entry,instrument,'AP name/octave, wrong/timeout, RP interval previews, boundary transposition, auto-next pause, no rescoring, hidden after Stop, blind isolation',flush=True)
+    print('PASS',entry,instrument,'AP explicit pairs, both orders, repeated same group, invalid pitches, replay reset, wrong/timeout, RP interval previews, boundary transposition, auto-next pause, no rescoring, hidden after Stop, blind isolation',flush=True)
     browser.close()

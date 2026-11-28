@@ -45,10 +45,10 @@ function drawRP(groups,previous){if(!groups.length)return null;const old=previou
 function gradeAP(target,guess,guessOctave,known){const correct=TrainingCore.matchesLearningSet(target%12,guess,known,0,11);
  return {correct,octaveCorrect:known.includes(target%12)&&guess===target%12&&Number.isInteger(guessOctave)?guessOctave===octave(target):null};}
 // Review is independent of the question pool: choose real pitches only.
-function apReviewPitch(current,kind,value,lo,hi){
- const desired=kind==='name'?12*(octave(current)+1)+value:12*(value+1)+current%12;
- const candidates=range(lo,hi).filter(m=>kind==='name'?m%12===value:octave(m)===value);
- return candidates.reduce((best,m)=>best===null||Math.abs(m-desired)<Math.abs(best-desired)?m:best,null);
+function apReviewPitch(pc,o,lo,hi){
+ if(!Number.isInteger(pc)||pc<0||pc>11||!Number.isInteger(o)||o<0||o>8)return null;
+ const pitch=12*(o+1)+pc;
+ return pitch>=lo&&pitch<=hi?pitch:null;
 }
 function rpReviewPair(reference,target,distance,lo,hi){
  if(!Number.isInteger(distance)||distance<1||distance>hi-lo)return null;
