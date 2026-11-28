@@ -68,7 +68,7 @@ with sync_playwright() as playwright:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.set_content(document(INSTRUMENT), wait_until="domcontentloaded")
     page.wait_for_function("ready", timeout=20000)
-    assert page.text_content("#appVersion") == "3.0.7"
+    assert page.text_content("#appVersion") == "3.0.8"
     assert page.locator("#soundSelect option").evaluate_all("options=>options.map(o=>o.value)") == ["piano", "violin", "mixed"]
     assert page.locator("#soundSelect").input_value() == INSTRUMENT
     page.evaluate("""() => {

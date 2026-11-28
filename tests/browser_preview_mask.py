@@ -52,7 +52,7 @@ with sync_playwright() as playwright:
     page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(document(INSTRUMENT),wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.7'
+    assert page.text_content('#appVersion')=='3.0.8'
     page.evaluate("""()=>{window.queued=[];const q=queueInstrumentNote;queueInstrumentNote=(sound,midi,at,duration=PLAY_DURATION,volume=.75)=>{queued.push({sound,midi,at,duration});return q(sound,midi,at,duration,volume);};UnifiedModel.drawAP=()=>65;}""")
     page.locator('#learningNotes [data-pc="4"]').tap()
     for display in ['buttons','instrument']:

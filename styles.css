@@ -475,13 +475,20 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .selection-preview .mini{margin:3px 0 0;min-height:1.4em}
 #previewLabel{text-align:center;margin:4px 0 0}
 
-/* 3.0.6: bring the answer surfaces within thumb reach without changing key
-   size or requiring viewport-fixed overlays. Tall boards may still scroll. */
+/* 3.0.8: place the entire practice interface together, slightly below center.
+   The only flexible space is outside the group, never between its controls,
+   feedback and answer surface. Large boards keep their natural size and scroll. */
 .app-shell.training-round {display:flex;flex-direction:column;min-height:100vh;min-height:100svh;}
+.training-round #practicePanel {display:flex;flex-direction:column;flex:1 0 auto;min-width:0;}
+.training-round #practicePanel::before,.training-round #practicePanel::after {content:"";min-height:0;}
+.training-round #practicePanel::before {flex:3 0 0px;}
+.training-round #practicePanel::after {flex:2 0 0px;}
+.training-round #practicePanel > * {flex:0 0 auto;}
 .training-round #answerCard {margin-top:0;}
-.training-round #answerArea {display:flex;flex-direction:column;flex:0 0 auto;margin-top:auto;min-width:0;}
+.training-round #answerArea {display:flex;flex-direction:column;min-width:0;margin-top:0;}
 .training-round #answerArea .extra-answers {margin:0 0 5px;}
 .training-round #answerArea .button-board {margin:0;}
-/* Keep the answer grid stationary when a post-answer audition label appears. */
+/* Reserve the clock and audition-label slots so hiding them does not move keys. */
+.training-round #answerTimer[hidden] {display:block!important;visibility:hidden;}
 .training-round #previewLabel {min-height:18px;line-height:18px;}
 .training-round #previewLabel[hidden] {display:block!important;visibility:hidden;}

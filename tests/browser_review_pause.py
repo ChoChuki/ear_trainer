@@ -21,7 +21,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.7'
+    assert page.text_content('#appVersion')=='3.0.8'
     page.evaluate('''()=>{window.queued=[];const queue=queueInstrumentNote;queueInstrumentNote=(sound,midi,at,duration=PLAY_DURATION,volume=.75)=>{queued.push({ordinal:trial?.ordinal,phase,midi,at,duration,volume});return queue(sound,midi,at,duration,volume);};UnifiedModel.drawAP=()=>65;UnifiedModel.drawRP=()=>({reference:60,target:67,size:7,direction:'higher'});}''')
     def tap(s):page.locator(s).first.tap()
     def answer():page.wait_for_function("phase==='answer'",timeout=18000)
@@ -35,14 +35,21 @@ with sync_playwright() as p:
     def still_paused(ms=2100):
         ordinal=page.evaluate('trial.ordinal');total=page.evaluate('session.total');page.wait_for_timeout(ms)
         assert page.evaluate(f"phase==='done'&&trial.ordinal==={ordinal}&&session.total==={total}&&nextTimer===null")
-    def at_bottom(selector):
-        r=page.locator(selector).bounding_box();assert r is not None
-        assert height-22 <= r['y']+r['height'] <= height-3,(selector,r)
+    def together(selector):
+        controls,feedback,answers,board=[page.locator(s).bounding_box() for s in ['#controls','#answerCard','#answerArea',selector]]
+        assert all(r is not None for r in [controls,feedback,answers,board])
+        assert 0<=feedback['y']-(controls['y']+controls['height'])<=12,(controls,feedback)
+        assert 0<=answers['y']-(feedback['y']+feedback['height'])<=12,(feedback,answers)
+        assert board['y']>=answers['y']
+        bottom=board['y']+board['height']
+        assert bottom<=height+1,(selector,board)
+        spare=height-(bottom-controls['y'])
+        if spare>60:assert controls['y']>spare*.4,(controls,board,spare)
     def coord(selector):return page.locator(selector).first.bounding_box()['y']
     page.locator('#displaySelect').select_option('buttons')
     page.locator('#answerLimitSelect').fill('0');page.locator('#answerLimitSelect').press('Tab')
     page.evaluate('cfg.auto=true;cfg.mask=true')
-    start();at_bottom('#buttonBoard')
+    start();together('#buttonBoard')
     y=coord('#apNameKeys [data-pc="5"]');tap('#otherButton');paused();assert page.evaluate('!trial.correct');still_paused(1500)
     tap('#replayButton');still_paused(1300)
     tap('#apNameKeys [data-pc="4"]');page.wait_for_function("queued.at(-1).midi===64")
@@ -58,13 +65,13 @@ with sync_playwright() as p:
     page.evaluate('session.mask=false');next_question();tap('#apNameKeys [data-pc="5"]');tap('#apOctaveKeys [data-octave="4"]');done()
     assert page.evaluate('!session.reviewPaused&&nextTimer!==null');page.wait_for_function("trial.ordinal===4&&phase==='answer'",timeout=5000);stop()
     page.locator('#displaySelect').select_option('instrument');page.evaluate('cfg.mask=false;cfg.apLimit=500')
-    start();at_bottom('#keyboardCard');paused();assert page.evaluate("trial.result==='timeout'");still_paused(1400)
+    start();together('#keyboardCard');paused();assert page.evaluate("trial.result==='timeout'");still_paused(1400)
     tap('#keyboard [data-midi="64"]');page.wait_for_function("queued.at(-1).midi===64")
     assert page.evaluate('session.total===1');stop()
     page.locator('#modeSelect').select_option('interval');page.evaluate('cfg.rpLimit=null;cfg.auto=true')
     for display in ['buttons','instrument']:
         page.locator('#displaySelect').select_option(display);start()
-        at_bottom('#buttonBoard' if display=='buttons' else '#keyboardCard')
+        together('#buttonBoard' if display=='buttons' else '#keyboardCard')
         tap('#intervalAnswers [data-interval="6"]' if display=='buttons' else '#keyboard [data-midi="66"]')
         paused();assert page.evaluate('!trial.correct');still_paused()
         tap('#replayButton');still_paused()
@@ -77,5 +84,5 @@ with sync_playwright() as p:
     start();tap('#otherButton');paused();assert page.text_content('#answerText')=='Answer recorded';assert page.locator('#buttonBoard button:not(:disabled)').count()==0
     next_question();tap('#apNameKeys [data-pc="5"]');tap('#apOctaveKeys [data-octave="4"]');paused();assert page.text_content('#answerText')=='Answer recorded';stop()
     assert not errors,errors
-    print('PASS',entry,instrument,'bottom alignment; full-duration mask; wrong AP/RP, octave, timeout; manual blind Next; stable audition; correct auto-next',flush=True)
+    print('PASS',entry,instrument,'grouped alignment; full-duration mask; wrong AP/RP, octave, timeout; manual blind Next; stable audition; correct auto-next',flush=True)
     browser.close()

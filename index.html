@@ -79,27 +79,29 @@
             </div>
             <p id="configError" role="alert" hidden></p>
         </section>
-        <section id="controls" class="controls unified-controls">
-            <button id="playButton" class="primary" disabled data-i="start"></button>
-            <button id="nextButton" class="secondary" hidden data-i="next"></button>
-            <button id="replayButton" class="secondary" hidden data-i="replay"></button>
-        </section>
-        <section id="answerCard" class="answer-card" hidden>
-            <div id="sessionScore" class="session-score"></div>
-            <div id="answerText" role="status" aria-live="polite"></div>
-            <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
-        </section>
-        <div id="answerArea">
-        <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" type="button" class="secondary other-answer" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
-        <section id="buttonBoard" class="button-board" hidden>
-            <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
-            <div id="apOctaveKeys" class="octave-grid" role="group" aria-label="Octave"></div>
-            <div id="intervalAnswers" class="interval-answers" role="group" aria-label="Semitones"></div>
-            <p id="previewLabel" class="mini" role="status" hidden></p>
-        </section>
-        <section class="keyboard-card" id="keyboardCard" hidden>
-            <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
-        </section>
+        <div id="practicePanel">
+            <section id="controls" class="controls unified-controls">
+                <button id="playButton" class="primary" disabled data-i="start"></button>
+                <button id="nextButton" class="secondary" hidden data-i="next"></button>
+                <button id="replayButton" class="secondary" hidden data-i="replay"></button>
+            </section>
+            <section id="answerCard" class="answer-card" hidden>
+                <div id="sessionScore" class="session-score"></div>
+                <div id="answerText" role="status" aria-live="polite"></div>
+                <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
+            </section>
+            <div id="answerArea">
+                <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" type="button" class="secondary other-answer" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
+                <section id="buttonBoard" class="button-board" hidden>
+                    <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
+                    <div id="apOctaveKeys" class="octave-grid" role="group" aria-label="Octave"></div>
+                    <div id="intervalAnswers" class="interval-answers" role="group" aria-label="Semitones"></div>
+                    <p id="previewLabel" class="mini" role="status" hidden></p>
+                </section>
+                <section class="keyboard-card" id="keyboardCard" hidden>
+                    <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
+                </section>
+            </div>
         </div>
         <section id="sessionSummary" class="settings-card" hidden><h2 data-i="results"></h2><div id="summaryBody"></div><details id="reviewDetails" hidden><summary data-i="review"></summary><ol id="reviewList"></ol></details></section>
         <details id="statistics" class="settings-card history-card">

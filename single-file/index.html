@@ -486,14 +486,21 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 .selection-preview .mini{margin:3px 0 0;min-height:1.4em}
 #previewLabel{text-align:center;margin:4px 0 0}
 
-/* 3.0.6: bring the answer surfaces within thumb reach without changing key
-   size or requiring viewport-fixed overlays. Tall boards may still scroll. */
+/* 3.0.8: place the entire practice interface together, slightly below center.
+   The only flexible space is outside the group, never between its controls,
+   feedback and answer surface. Large boards keep their natural size and scroll. */
 .app-shell.training-round {display:flex;flex-direction:column;min-height:100vh;min-height:100svh;}
+.training-round #practicePanel {display:flex;flex-direction:column;flex:1 0 auto;min-width:0;}
+.training-round #practicePanel::before,.training-round #practicePanel::after {content:"";min-height:0;}
+.training-round #practicePanel::before {flex:3 0 0px;}
+.training-round #practicePanel::after {flex:2 0 0px;}
+.training-round #practicePanel > * {flex:0 0 auto;}
 .training-round #answerCard {margin-top:0;}
-.training-round #answerArea {display:flex;flex-direction:column;flex:0 0 auto;margin-top:auto;min-width:0;}
+.training-round #answerArea {display:flex;flex-direction:column;min-width:0;margin-top:0;}
 .training-round #answerArea .extra-answers {margin:0 0 5px;}
 .training-round #answerArea .button-board {margin:0;}
-/* Keep the answer grid stationary when a post-answer audition label appears. */
+/* Reserve the clock and audition-label slots so hiding them does not move keys. */
+.training-round #answerTimer[hidden] {display:block!important;visibility:hidden;}
 .training-round #previewLabel {min-height:18px;line-height:18px;}
 .training-round #previewLabel[hidden] {display:block!important;visibility:hidden;}
 
@@ -566,27 +573,29 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
             </div>
             <p id="configError" role="alert" hidden></p>
         </section>
-        <section id="controls" class="controls unified-controls">
-            <button id="playButton" class="primary" disabled data-i="start"></button>
-            <button id="nextButton" class="secondary" hidden data-i="next"></button>
-            <button id="replayButton" class="secondary" hidden data-i="replay"></button>
-        </section>
-        <section id="answerCard" class="answer-card" hidden>
-            <div id="sessionScore" class="session-score"></div>
-            <div id="answerText" role="status" aria-live="polite"></div>
-            <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
-        </section>
-        <div id="answerArea">
-        <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" type="button" class="secondary other-answer" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
-        <section id="buttonBoard" class="button-board" hidden>
-            <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
-            <div id="apOctaveKeys" class="octave-grid" role="group" aria-label="Octave"></div>
-            <div id="intervalAnswers" class="interval-answers" role="group" aria-label="Semitones"></div>
-            <p id="previewLabel" class="mini" role="status" hidden></p>
-        </section>
-        <section class="keyboard-card" id="keyboardCard" hidden>
-            <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
-        </section>
+        <div id="practicePanel">
+            <section id="controls" class="controls unified-controls">
+                <button id="playButton" class="primary" disabled data-i="start"></button>
+                <button id="nextButton" class="secondary" hidden data-i="next"></button>
+                <button id="replayButton" class="secondary" hidden data-i="replay"></button>
+            </section>
+            <section id="answerCard" class="answer-card" hidden>
+                <div id="sessionScore" class="session-score"></div>
+                <div id="answerText" role="status" aria-live="polite"></div>
+                <div id="answerTimer" class="answer-timer" aria-hidden="true" hidden><span></span></div>
+            </section>
+            <div id="answerArea">
+                <div id="extraAnswers" class="extra-answers" hidden><button id="otherButton" type="button" class="secondary other-answer" data-i="other"></button><button id="unsureButton" class="secondary" data-i="unsure"></button><button id="relativeButton" class="secondary" data-i="relative" hidden></button></div>
+                <section id="buttonBoard" class="button-board" hidden>
+                    <div id="apNameKeys" class="note-grid" role="group" aria-label="Note name"></div>
+                    <div id="apOctaveKeys" class="octave-grid" role="group" aria-label="Octave"></div>
+                    <div id="intervalAnswers" class="interval-answers" role="group" aria-label="Semitones"></div>
+                    <p id="previewLabel" class="mini" role="status" hidden></p>
+                </section>
+                <section class="keyboard-card" id="keyboardCard" hidden>
+                    <div id="keyboardScroller" class="keyboard-scroller"><div id="keyboard" class="keyboard"></div></div>
+                </section>
+            </div>
         </div>
         <section id="sessionSummary" class="settings-card" hidden><h2 data-i="results"></h2><div id="summaryBody"></div><details id="reviewDetails" hidden><summary data-i="review"></summary><ol id="reviewList"></ol></details></section>
         <details id="statistics" class="settings-card history-card">
@@ -4620,7 +4629,7 @@ var _tone_0400_JCLive_sf2_file={
 	]
 };
 
-const APP_VERSION = "3.0.7";
+const APP_VERSION = "3.0.8";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
