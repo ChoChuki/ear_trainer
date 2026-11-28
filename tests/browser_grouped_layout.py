@@ -20,7 +20,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.10'
+    assert page.text_content('#appVersion')=='3.0.11'
     page.evaluate("""()=>{UnifiedModel.drawAP=()=>65;UnifiedModel.drawRP=()=>({reference:60,target:67,size:7,direction:'higher'});cfg.known=[4,5];cfg.octaves=[4,5];cfg.mask=false;cfg.auto=false;cfg.apLimit=null;cfg.rpLimit=null;renderSettings();}""")
     def tap(s):page.locator(s).first.tap()
     def verify_layout(width,height):

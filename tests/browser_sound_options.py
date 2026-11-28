@@ -68,7 +68,7 @@ with sync_playwright() as playwright:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.set_content(document(INSTRUMENT), wait_until="domcontentloaded")
     page.wait_for_function("ready", timeout=20000)
-    assert page.text_content("#appVersion") == "3.0.10"
+    assert page.text_content("#appVersion") == "3.0.11"
     assert page.locator("#soundSelect option").evaluate_all("options=>options.map(o=>o.value)") == ["piano", "violin", "mixed"]
     assert page.locator("#soundSelect").input_value() == INSTRUMENT
     page.evaluate("""() => {
@@ -381,7 +381,7 @@ with sync_playwright() as playwright:
     assert any(row["timbre"] == "mixed" for row in records["sessions"])
     assert {row["timbre"] for row in records["iv"]} == {"piano", "violin"}
 
-    # Sound choice survives a fresh document and a different instrument board.
+    # Direct document loads retain stored sound; deliberate selector switches reset it (see browser_instrument_sound.py).
     select_sound("mixed")
     stored = page.evaluate("Object.fromEntries(Object.keys(localStorage).map(k=>[k,localStorage.getItem(k)]))")
     other_page = context.new_page()

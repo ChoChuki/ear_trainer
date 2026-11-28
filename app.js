@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.10";
+const APP_VERSION = "3.0.11";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -684,7 +684,15 @@ function setup(){
  for(const box of [$('buttonBoard'),$('extraAnswers')]){box.addEventListener('pointerdown',e=>{if(!e.target.closest('button:not(:disabled)'))return;if(phase==='answer')answerClock.press(AnswerTimer.stamp(e));else if(box===$('buttonBoard')&&buttonReview())pauseReview();},true);box.addEventListener('pointercancel',()=>answerClock.release(),true);box.addEventListener('click',()=>answerClock.release());}
  $('statistics').ontoggle=()=>{if($('statistics').open)refreshHistory();};$('exportButton').onclick=()=>exportHistory().catch(TrainingCore.storageError);$('importButton').onclick=()=>$('importFile').click();$('importFile').onchange=e=>importHistory(e.target.files[0]);
  $('languageSelect').onchange=e=>{if(testActive)return;releaseAllKeys();cancelAudio();clearPreviewMark();currentLanguage=e.target.value;try{localStorage.setItem('earTrainerLanguage',currentLanguage);}catch(_){}translate();};
- $('instrumentSelect').onchange=async e=>{if(testActive||importBusy){e.target.value=instrumentMode;return;}releaseAllKeys();cancelAudio();TrainingTracker.pause();shell.inert=true;await writeQueue;await S.flushWrites();const url=new URL(location.href);url.hash='';if(e.target.value==='piano')url.searchParams.set('instrument','piano');else url.searchParams.delete('instrument');url.searchParams.set('mode',mode);location.replace(url.href);};
+ $('instrumentSelect').onchange=async e=>{
+  const nextInstrument=e.target.value;
+  if(testActive||importBusy||!['piano','violin'].includes(nextInstrument)){e.target.value=instrumentMode;return;}
+  if(nextInstrument===instrumentMode)return;
+  releaseAllKeys();cancelAudio();TrainingTracker.pause();shell.inert=true;await writeQueue;await S.flushWrites();
+  // A deliberate instrument switch resets Sound, while reloads and mode changes retain manual choices.
+  write(timbreKey,nextInstrument);
+  const url=new URL(location.href);url.hash='';if(nextInstrument==='piano')url.searchParams.set('instrument','piano');else url.searchParams.delete('instrument');url.searchParams.set('mode',mode);location.replace(url.href);
+ };
  $('audioReload').onclick=()=>location.reload();window.addEventListener('training-storage-error',()=>{$('storageWarning').hidden=false;$('storageWarning').textContent=tr('storageWarning');});
  const suspendAudio=()=>{stop(true);releaseAllKeys();cancelAudio();clearPreviewMark();};
  document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendAudio();});window.addEventListener('blur',suspendAudio);window.addEventListener('pagehide',suspendAudio);window.addEventListener('pageshow',()=>{shell.inert=false;});
