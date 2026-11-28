@@ -26,7 +26,7 @@ with sync_playwright() as p:
     context=b.new_context(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.6'
+    assert page.text_content('#appVersion')=='3.0.7'
     assert page.locator('#focusEntry,#ivEntry,#focusPanel,#ivPanel').count()==0
     assert page.locator('#modeSelect option').count()==3
     assert page.locator('#displaySelect option').count()==2
@@ -53,7 +53,7 @@ with sync_playwright() as p:
             page.locator(f'#apNameKeys [data-pc="{guess}"]').tap()
         page.wait_for_function("phase==='done'");assert page.evaluate('trial.correct');return m
     start();m=answer_ap();page.locator('#nextButton').tap();page.wait_for_function("phase==='loading'",timeout=3000);assert not page.locator('#answerTimer').is_visible();wait_answer();n=answer_ap();assert m%12!=n%12
-    counts=page.evaluate('maskCounts');assert len(counts)==1 and 6<=len(counts[0])<=8 and len({m%12 for m in counts[0]})==len(counts[0])
+    counts=page.evaluate('maskCounts');assert len(counts)==1 and 3<=len(counts[0])<=4 and len({m%12 for m in counts[0]})==len(counts[0])
     page.locator('#playButton').tap();assert page.locator('#sessionSummary').is_visible()
     # AP board; blind mode does not show feedback, score or allow replay.
     page.locator('#displaySelect').select_option('instrument');page.locator('#blindCheck').check();start()

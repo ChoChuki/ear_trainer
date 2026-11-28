@@ -479,9 +479,11 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 /* Audition highlight leaves original grading colors intact. */
 #buttonBoard button.audition{outline:2px solid #2563eb;outline-offset:-3px}
 #learningNotes button.audition,#octaves button.audition{outline:2px solid #2563eb;outline-offset:-3px}
-.selection-preview{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:6px 0}
-.selection-preview button{min-height:40px}
-.selection-preview .mini{margin:0}
+.selection-preview{margin:6px 0;min-width:0}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px}
+.preview-grid button{min-height:44px;padding:4px 2px;font-size:15px;touch-action:manipulation}
+.preview-grid button.audition{background:#dbeafe;border-color:#2563eb;color:#1e40af;outline:2px solid #2563eb;outline-offset:-3px}
+.selection-preview .mini{margin:3px 0 0;min-height:1.4em}
 #previewLabel{text-align:center;margin:4px 0 0}
 
 /* 3.0.6: bring the answer surfaces within thumb reach without changing key
@@ -541,7 +543,7 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
             <div id="apSettings">
                 <fieldset><legend data-i="learningNotes"></legend><div id="learningNotes" class="note-grid"></div><p id="otherHint" class="mini" data-i="otherHint" hidden></p></fieldset>
                 <fieldset><legend data-i="octaves"></legend><div id="octaves" class="octave-grid"></div></fieldset>
-                <div class="selection-preview"><button id="previewSelectionButton" type="button" class="secondary" data-i="previewSelected" aria-describedby="selectionPreviewLabel" disabled></button><span id="selectionPreviewLabel" class="mini" role="status" aria-live="polite"></span></div>
+                <fieldset class="selection-preview"><legend data-i="previewSelected"></legend><div id="selectionPreviewKeys" class="preview-grid" aria-label="Preview" aria-describedby="selectionPreviewLabel"></div><p id="selectionPreviewLabel" class="mini" role="status" aria-live="polite"></p></fieldset>
                 <label class="option-row"><input type="checkbox" id="blindCheck"><span data-i="blind"></span></label>
             </div>
             <div id="rpSettings" hidden>
@@ -2875,7 +2877,7 @@ const PIANO_TRANSLATIONS = {
  // An unlabelled phrase uses the loaded instrument samples. Its pitches never depend
  // on the upcoming target. Excluding the preceding labelled pitch avoids echoing it.
  function resetTones(queueNote, at, {long = false, previous = null, count:requestedCount, duration:noteDuration = .7} = {}) {
-  const count = Number.isInteger(requestedCount) && requestedCount >= 4 && requestedCount <= 8 ? requestedCount : long ? 6 : 4;
+  const count = Number.isInteger(requestedCount) && requestedCount >= 3 && requestedCount <= 8 ? requestedCount : long ? 6 : 4;
   const register = Array.from({length: 25}, (_, i) => 55 + i);
   const used = new Set();
   if (Number.isInteger(previous)) used.add(previous % 12);
@@ -4031,7 +4033,6 @@ const UNIFIED_COPY={
  mixedHint:['Random sound per question. Both notes and replays keep the same sound.','每題隨機選擇音色；同題的兩個音及重播沿用相同音色。','問題ごとに音色をランダム選択。同じ問題の二音と再生は同じ音色です。','Zufälliger Klang pro Frage. Beide Töne und Wiederholungen behalten denselben Klang.','Suono casuale per domanda. Le due note e i riascolti mantengono lo stesso suono.','Τυχαίος ήχος ανά ερώτηση. Οι δύο νότες και οι επαναλήψεις έχουν τον ίδιο ήχο.'],
  mixedFreeHint:['Random piano or violin sound for each note you play.','每次按音，隨機使用鋼琴或小提琴音色。','弾く音ごとにピアノかバイオリンをランダム選択。','Jeder gespielte Ton erhält zufällig Klavier- oder Violinklang.','Ogni nota suonata usa casualmente pianoforte o violino.','Κάθε νότα παίζεται τυχαία με πιάνο ή βιολί.'],
  previewSelected:['Preview selected notes','試聽所選音','選択した音を試聴','Gewählte Töne anhören','Ascolta le note selezionate','Άκου τις επιλεγμένες νότες'],
- stopPreview:['Stop preview','停止試聽','試聴を停止','Vorhören stoppen','Ferma ascolto','Διακοπή ακρόασης'],
  previewEmpty:['No selected notes in these octaves.','所選八度中沒有可試聽的學習音。','このオクターブ内に選択した音はありません。','Keine gewählten Töne in diesen Oktaven.','Nessuna nota selezionata in queste ottave.','Δεν υπάρχουν επιλεγμένες νότες σε αυτές τις οκτάβες.'],
  otherHint:['Other means any note outside the selected learning notes. No need to identify its name or octave.','其他音：不屬於所選學習音名的任何音，無須辨認音名或八度。','学習外：選択した学習音名以外の音。音名やオクターブの特定は不要です。','Anderer Ton: jeder Ton außerhalb der gewählten Lerntöne. Tonname und Oktave sind nicht nötig.','Altra nota: qualsiasi nota fuori da quelle selezionate. Non occorre identificarne nome o ottava.','Άλλη νότα: κάθε νότα εκτός των επιλεγμένων. Δεν χρειάζεται όνομα ή οκτάβα.'],
  otherUnavailable:['All playable note names are in the learning set.','所有可出題的音名均屬於學習音集。','出題可能な音名はすべて学習対象です。','Alle spielbaren Tonnamen sind Lerntöne.','Tutte le note disponibili sono nel gruppo di apprendimento.','Όλες οι διαθέσιμες νότες είναι στο σύνολο εκμάθησης.'],
@@ -4619,7 +4620,7 @@ var _tone_0400_JCLive_sf2_file={
 	]
 };
 
-const APP_VERSION = "3.0.6";
+const APP_VERSION = "3.0.7";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -5081,35 +5082,43 @@ function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;if(selectio
 }
 function selectedPreviewPitches(){return currentPool().filter(m=>cfg.known.includes(m%12));}
 function renderSelectionPreview(){
- const available=selectedPreviewPitches().length>0;
- const b=$('previewSelectionButton');b.textContent=tr(selectionPreview?'stopPreview':'previewSelected');b.setAttribute('aria-pressed',String(!!selectionPreview));
- b.disabled=testActive||(!selectionPreview&&(!ready||!available));
- if(!selectionPreview)$('selectionPreviewLabel').textContent=available?'':tr('previewEmpty');
+ const notes=selectedPreviewPitches(),grid=$('selectionPreviewKeys');
+ grid.setAttribute('aria-label',tr('previewSelected'));
+ // Preserve the buttons on repeated audition so rapid taps and keyboard focus
+ // are not lost. Rebuild only when the selected playable pitches change.
+ const signature=notes.join(',');
+ if(grid.dataset.pitches!==signature){
+  grid.replaceChildren(...notes.map(midi=>{const b=button(label(midi),()=>previewSelection(midi));b.dataset.previewMidi=midi;return b;}));
+  grid.dataset.pitches=signature;
+ }
+ for(const b of grid.querySelectorAll('button')){
+  b.disabled=testActive||mode!=='single'||!ready;
+  b.classList.toggle('audition',selectionPreview?.midi===Number(b.dataset.previewMidi)&&selectionPreview.playing===true);
+ }
+ if(!selectionPreview)$('selectionPreviewLabel').textContent=notes.length?'':tr('previewEmpty');
 }
 function clearSelectionPreview(){
  selectionPreview=null;
  for(const b of document.querySelectorAll('#learningNotes .audition,#octaves .audition'))b.classList.remove('audition');
  renderSelectionPreview();
 }
-async function previewSelection(){
- if(selectionPreview){cancelAudio();return;}
- if(testActive||mode!=='single'||!ready)return;
- const notes=selectedPreviewPitches(),timbreMode=cfg.timbre;if(!notes.length)return;
- releaseAllKeys();cancelAudio();clearPreviewMark();const token=generation;selectionPreview={token};renderSelectionPreview();$('selectionPreviewLabel').textContent=tr('loading');
+async function previewSelection(midi){
+ if(testActive||mode!=='single'||!ready||!selectedPreviewPitches().includes(midi))return;
+ // Every click replaces the previous audition, even when the pitch is the same.
+ // There is no loop and no queued next note.
+ const timbre=U.drawTimbre(cfg.timbre);
+ releaseAllKeys();cancelAudio();clearPreviewMark();const token=generation;selectionPreview={token,midi,playing:false};renderSelectionPreview();
  const allowed=()=>generation===token&&selectionPreview?.token===token&&!testActive&&mode==='single'&&!document.hidden&&audioContext.state==='running';
  try{
-  await ensureAudio(timbreMode);if(!allowed())return;
-  for(const midi of notes){
-   if(!allowed())return;
-   const timbre=U.drawTimbre(timbreMode),at=audioContext.currentTime+.04;
-   const voice=queueInstrumentNote(timbre,midi,at),clock=APFocusModel.outputClock(audioContext,voice.when??at);
-   if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(clock.when-performance.now())/1000,allowed)||!allowed())return;
-   for(const b of document.querySelectorAll('#learningNotes .audition,#octaves .audition'))b.classList.remove('audition');
-   $('learningNotes').querySelector(`[data-pc="${midi%12}"]`)?.classList.add('audition');$('octaves').querySelector(`[data-octave="${U.octave(midi)}"]`)?.classList.add('audition');
-   $('selectionPreviewLabel').textContent=label(midi)+' · '+tr(timbre);
-   S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
-   if(!await TrainingCore.waitForAudio(audioContext,(voice.when??at)+PLAY_DURATION+.2,allowed))return;
-  }
+  await ensureAudio(timbre);if(!allowed())return;
+  const at=audioContext.currentTime+.04;
+  const voice=queueInstrumentNote(timbre,midi,at),clock=APFocusModel.outputClock(audioContext,voice.when??at);
+  if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(clock.when-performance.now())/1000,allowed)||!allowed())return;
+  selectionPreview.playing=true;renderSelectionPreview();
+  $('learningNotes').querySelector(`[data-pc="${midi%12}"]`)?.classList.add('audition');$('octaves').querySelector(`[data-octave="${U.octave(midi)}"]`)?.classList.add('audition');
+  $('selectionPreviewLabel').textContent=label(midi)+' · '+tr(timbre);
+  S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
+  await TrainingCore.waitForAudio(audioContext,(voice.when??at)+PLAY_DURATION,allowed);
  }catch(_){if(generation===token)status('audioError');}
  finally{if(selectionPreview?.token===token)clearSelectionPreview();}
 }
@@ -5191,7 +5200,7 @@ async function playTrial(replaying){if(!session||!trial||!testActive)return;canc
  try{await ensureAudio(row.timbre);if(!canContinue(token))return;
   const last=S.lastPracticeAt(instrumentMode),rest=last===null||S.rested(last),mask=a.mode==='single'&&!replaying&&a.mask&&(a.ordinal>1||!rest);
   let at=audioContext.currentTime+.05;const firstNoteAt=at;
-  if(mask){const n=6+Math.floor(Math.random()*3);row.resetNoteCount=n;row.resetSoundOn=true;msg(tr('interference'));at=TrainingCore.resetTones((m,t,d,v)=>queueInstrumentNote(U.drawTimbre(a.timbre),m,t,d,v),at,{previous:row.previousPitch,count:n,duration:PLAY_DURATION})+TrainingCore.resetGap();}
+  if(mask){const n=3+Math.floor(Math.random()*2);row.resetNoteCount=n;row.resetSoundOn=true;msg(tr('interference'));at=TrainingCore.resetTones((m,t,d,v)=>queueInstrumentNote(U.drawTimbre(a.timbre),m,t,d,v),at,{previous:row.previousPitch,count:n,duration:PLAY_DURATION})+TrainingCore.resetGap();}
   else msg(tr('listen'));
   if(a.mode==='interval'){queueInstrumentNote(row.timbre,row.reference,at,.6);at+=.8;}
   const voice=queueInstrumentNote(row.timbre,row.target,at);const clock=APFocusModel.outputClock(audioContext,voice.when??at);
@@ -5273,7 +5282,6 @@ function setup(){
  for(let p=low;p<=high;p++){option($('startNote'),p,label(p));option($('endNote'),p,label(p));}option($('maxIntervalSelect'),'unlimited',tr('unlimited'));for(let d=1;d<=high-low;d++){option($('minIntervalSelect'),d,d);option($('maxIntervalSelect'),d,d);}
  $('modeSelect').onchange=e=>changeMode(e.target.value);$('displaySelect').onchange=e=>{releaseAllKeys();cancelAudio();clearPreviewMark();cfg[mode==='single'?'apDisplay':'rpDisplay']=e.target.value;saveConfig();renderSettings();};
  $('soundSelect').onchange=e=>{if(testActive){e.target.value=cfg.timbre;return;}releaseAllKeys();cancelAudio();clearPreviewMark();cfg.timbre=['piano','violin','mixed'].includes(e.target.value)?e.target.value:instrumentMode;write(timbreKey,cfg.timbre);saveConfig();renderSettings();prepareSelectedAudio();};
- $('previewSelectionButton').onclick=previewSelection;
  $('blindCheck').onchange=e=>{cfg.blind=e.target.checked;saveConfig();};$('autoNextCheck').onchange=e=>{cfg.auto=e.target.checked;saveConfig();};$('maskCheck').onchange=e=>{cfg.mask=e.target.checked;saveConfig();};$('answerLimitSelect').onchange=e=>{const k=mode==='single'?'apLimit':'rpLimit';cfg[k]=AnswerTimer.parse(e.target.value,cfg[k]);e.target.value=AnswerTimer.text(cfg[k],currentLanguage);saveConfig();};
  $('minIntervalSelect').onchange=e=>{cfg.min=Number(e.target.value);if(cfg.max!==null&&cfg.max<cfg.min)cfg.max=cfg.min;saveConfig();renderSettings();};$('maxIntervalSelect').onchange=e=>{cfg.max=e.target.value==='unlimited'?null:Number(e.target.value);if(cfg.max!==null&&cfg.min>cfg.max)cfg.min=cfg.max;saveConfig();renderSettings();};$('directionSelect').onchange=e=>{cfg.direction=e.target.value;saveConfig();renderSettings();};
  $('startNote').onchange=e=>{rpLo=Number(e.target.value);if(rpLo>=rpHi)rpHi=Math.min(high,rpLo+1);if(rpLo>=rpHi)rpLo=rpHi-1;renderSettings();};$('endNote').onchange=e=>{rpHi=Number(e.target.value);if(rpHi<=rpLo)rpLo=Math.max(low,rpHi-1);if(rpHi<=rpLo)rpHi=rpLo+1;renderSettings();};

@@ -21,7 +21,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':size,'height':height},is_mobile=True,has_touch=True,service_workers='block')
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html,wait_until='domcontentloaded');page.wait_for_function('ready',timeout=20000)
-    assert page.text_content('#appVersion')=='3.0.6'
+    assert page.text_content('#appVersion')=='3.0.7'
     page.evaluate('''()=>{window.queued=[];const queue=queueInstrumentNote;queueInstrumentNote=(sound,midi,at,duration=PLAY_DURATION,volume=.75)=>{queued.push({ordinal:trial?.ordinal,phase,midi,at,duration,volume});return queue(sound,midi,at,duration,volume);};UnifiedModel.drawAP=()=>65;UnifiedModel.drawRP=()=>({reference:60,target:67,size:7,direction:'higher'});}''')
     def tap(s):page.locator(s).first.tap()
     def answer():page.wait_for_function("phase==='answer'",timeout=18000)
@@ -49,7 +49,8 @@ with sync_playwright() as p:
     assert abs(coord('#apNameKeys [data-pc="5"]')-y)<2
     page.evaluate('queued=[]');next_question()
     notes=page.evaluate("queued.filter(n=>n.phase==='loading')")
-    assert 7<=len(notes)<=9,notes
+    assert 4<=len(notes)<=5,notes
+    assert len(notes)==page.evaluate("trial.resetNoteCount+1"),notes
     assert all(abs(n['duration']-.7)<1e-8 for n in notes),notes
     assert all(b['at']>=a['at']+a['duration']+.089 for a,b in zip(notes,notes[1:])),notes
     tap('#apNameKeys [data-pc="5"]');tap('#apOctaveKeys [data-octave="5"]');paused()

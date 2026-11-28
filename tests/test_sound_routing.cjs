@@ -94,11 +94,11 @@ function expectSound(ctx,notes,sound){assert.deepEqual(plain(ctx.queued),notes.m
  }
 
  // Fixed AP interference and target obey the sound choice, and maskers still
- // use the real reset-tone generator and its 6–8-note count.
- {
-  const ctx=fixture('violin');ctx.session.timbre='piano';ctx.session.mask=true;ctx.session.ordinal=2;
+ // use the real reset-tone generator and its 3–4-note count.
+ for(const [random,expected] of [[0,3],[.999999,4]]){
+  const ctx=fixture('violin');ctx.Math=Object.create(Math);ctx.Math.random=()=>random;ctx.session.timbre='piano';ctx.session.mask=true;ctx.session.ordinal=2;
   await ctx.playTrial(false);
-  assert(ctx.trial.resetNoteCount>=6&&ctx.trial.resetNoteCount<=8);
+  assert.equal(ctx.trial.resetNoteCount,expected);
   assert.equal(ctx.queued.length,ctx.trial.resetNoteCount+1);
   assert(ctx.queued.every(note=>note.sound==='piano'));
   assert.equal(ctx.durations.length,ctx.trial.resetNoteCount+1);
@@ -182,14 +182,25 @@ function expectSound(ctx,notes,sound){assert.deepEqual(plain(ctx.queued),notes.m
   ctx.cfg.known=[5];assert.deepEqual(plain(ctx.selectedPreviewPitches()),[]);
  }
 
- // The complete settings-preview loop emits the selected pitches in order,
- // applies mixed sound per note, and finishes without changing the score.
- {
-  const ctx=fixture();ctx.testActive=false;ctx.cfg.known=[4,5];let count=0;
+ // One click emits exactly the clicked pitch. Arbitrary order and repeated
+ // pitches work; unselected pitches and calls without a pitch do not play.
+ for(const instrument of ['piano','violin']){
+  const ctx=fixture(instrument);ctx.testActive=false;ctx.cfg.known=[4,5];let count=0;
   ctx.U.drawTimbre=choice=>{assert.equal(choice,'mixed');return count++%2?'violin':'piano';};
-  await ctx.previewSelection();
-  assert.deepEqual(plain(ctx.queued),[64,65,76,77].map((midi,i)=>({midi,sound:i%2?'violin':'piano'})));
-  assert.equal(ctx.selectionPreview,null);assert.equal(ctx.session.total,0);
+  for(const midi of [77,64,77,76,65])await ctx.previewSelection(midi);
+  assert.deepEqual(plain(ctx.queued),[77,64,77,76,65].map((midi,i)=>({midi,sound:i%2?'violin':'piano'})));
+  for(const midi of [undefined,67,89,20])await ctx.previewSelection(midi);
+  assert.equal(ctx.queued.length,5);assert.equal(ctx.selectionPreview,null);assert.equal(ctx.session.total,0);
+  ctx.testActive=true;await ctx.previewSelection(77);assert.equal(ctx.queued.length,5);
+ }
+ // Rapid clicks while audio is loading: only the latest request can sound.
+ {
+  const ctx=fixture();ctx.testActive=false;ctx.cfg.known=[4,5];
+  const old=deferred(),fresh=deferred();let loads=0;
+  ctx.ensureAudio=()=>++loads===1?old.promise:fresh.promise;
+  const first=ctx.previewSelection(64),second=ctx.previewSelection(77);
+  old.resolve();await first;assert.equal(ctx.queued.length,0);assert.equal(ctx.selectionPreview.midi,77);
+  fresh.resolve();await second;assert.equal(ctx.queued.length,1);assert.equal(ctx.queued[0].midi,77);
  }
 
  // Cancelling while audio is still resuming/decoding must prevent any later
@@ -197,7 +208,7 @@ function expectSound(ctx,notes,sound){assert.deepEqual(plain(ctx.queued),notes.m
  for(const kind of ['selection','review']){
   const ctx=fixture();const gate=deferred();ctx.ensureAudio=()=>gate.promise;let marked=0;
   let task;
-  if(kind==='selection'){ctx.testActive=false;task=ctx.previewSelection();assert(ctx.selectionPreview);}
+  if(kind==='selection'){ctx.testActive=false;task=ctx.previewSelection(65);assert(ctx.selectionPreview);}
   else task=ctx.previewNotes([65],()=>marked++,()=>true);
   ctx.cancelAudio();gate.resolve();await task;
   assert.equal(ctx.queued.length,0);assert.equal(marked,0);assert.equal(ctx.selectionPreview,null);

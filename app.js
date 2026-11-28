@@ -1,4 +1,4 @@
-const APP_VERSION = "3.0.6";
+const APP_VERSION = "3.0.7";
 const pageOptions = new URLSearchParams(location.search);
 const instrumentMode = pageOptions.get("instrument") === "piano" ? "piano" : "violin";
 if (instrumentMode === "piano") {
@@ -460,35 +460,43 @@ function freePlay(midi,pointerId){if(!ready||!idleBoardPlay())return;if(selectio
 }
 function selectedPreviewPitches(){return currentPool().filter(m=>cfg.known.includes(m%12));}
 function renderSelectionPreview(){
- const available=selectedPreviewPitches().length>0;
- const b=$('previewSelectionButton');b.textContent=tr(selectionPreview?'stopPreview':'previewSelected');b.setAttribute('aria-pressed',String(!!selectionPreview));
- b.disabled=testActive||(!selectionPreview&&(!ready||!available));
- if(!selectionPreview)$('selectionPreviewLabel').textContent=available?'':tr('previewEmpty');
+ const notes=selectedPreviewPitches(),grid=$('selectionPreviewKeys');
+ grid.setAttribute('aria-label',tr('previewSelected'));
+ // Preserve the buttons on repeated audition so rapid taps and keyboard focus
+ // are not lost. Rebuild only when the selected playable pitches change.
+ const signature=notes.join(',');
+ if(grid.dataset.pitches!==signature){
+  grid.replaceChildren(...notes.map(midi=>{const b=button(label(midi),()=>previewSelection(midi));b.dataset.previewMidi=midi;return b;}));
+  grid.dataset.pitches=signature;
+ }
+ for(const b of grid.querySelectorAll('button')){
+  b.disabled=testActive||mode!=='single'||!ready;
+  b.classList.toggle('audition',selectionPreview?.midi===Number(b.dataset.previewMidi)&&selectionPreview.playing===true);
+ }
+ if(!selectionPreview)$('selectionPreviewLabel').textContent=notes.length?'':tr('previewEmpty');
 }
 function clearSelectionPreview(){
  selectionPreview=null;
  for(const b of document.querySelectorAll('#learningNotes .audition,#octaves .audition'))b.classList.remove('audition');
  renderSelectionPreview();
 }
-async function previewSelection(){
- if(selectionPreview){cancelAudio();return;}
- if(testActive||mode!=='single'||!ready)return;
- const notes=selectedPreviewPitches(),timbreMode=cfg.timbre;if(!notes.length)return;
- releaseAllKeys();cancelAudio();clearPreviewMark();const token=generation;selectionPreview={token};renderSelectionPreview();$('selectionPreviewLabel').textContent=tr('loading');
+async function previewSelection(midi){
+ if(testActive||mode!=='single'||!ready||!selectedPreviewPitches().includes(midi))return;
+ // Every click replaces the previous audition, even when the pitch is the same.
+ // There is no loop and no queued next note.
+ const timbre=U.drawTimbre(cfg.timbre);
+ releaseAllKeys();cancelAudio();clearPreviewMark();const token=generation;selectionPreview={token,midi,playing:false};renderSelectionPreview();
  const allowed=()=>generation===token&&selectionPreview?.token===token&&!testActive&&mode==='single'&&!document.hidden&&audioContext.state==='running';
  try{
-  await ensureAudio(timbreMode);if(!allowed())return;
-  for(const midi of notes){
-   if(!allowed())return;
-   const timbre=U.drawTimbre(timbreMode),at=audioContext.currentTime+.04;
-   const voice=queueInstrumentNote(timbre,midi,at),clock=APFocusModel.outputClock(audioContext,voice.when??at);
-   if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(clock.when-performance.now())/1000,allowed)||!allowed())return;
-   for(const b of document.querySelectorAll('#learningNotes .audition,#octaves .audition'))b.classList.remove('audition');
-   $('learningNotes').querySelector(`[data-pc="${midi%12}"]`)?.classList.add('audition');$('octaves').querySelector(`[data-octave="${U.octave(midi)}"]`)?.classList.add('audition');
-   $('selectionPreviewLabel').textContent=label(midi)+' · '+tr(timbre);
-   S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
-   if(!await TrainingCore.waitForAudio(audioContext,(voice.when??at)+PLAY_DURATION+.2,allowed))return;
-  }
+  await ensureAudio(timbre);if(!allowed())return;
+  const at=audioContext.currentTime+.04;
+  const voice=queueInstrumentNote(timbre,midi,at),clock=APFocusModel.outputClock(audioContext,voice.when??at);
+  if(!await TrainingCore.waitForAudio(audioContext,audioContext.currentTime+(clock.when-performance.now())/1000,allowed)||!allowed())return;
+  selectionPreview.playing=true;renderSelectionPreview();
+  $('learningNotes').querySelector(`[data-pc="${midi%12}"]`)?.classList.add('audition');$('octaves').querySelector(`[data-octave="${U.octave(midi)}"]`)?.classList.add('audition');
+  $('selectionPreviewLabel').textContent=label(midi)+' · '+tr(timbre);
+  S.markLabel(instrumentMode);TrainingCore.rememberLabel(midi);TrainingTracker.activity('free-play');
+  await TrainingCore.waitForAudio(audioContext,(voice.when??at)+PLAY_DURATION,allowed);
  }catch(_){if(generation===token)status('audioError');}
  finally{if(selectionPreview?.token===token)clearSelectionPreview();}
 }
@@ -570,7 +578,7 @@ async function playTrial(replaying){if(!session||!trial||!testActive)return;canc
  try{await ensureAudio(row.timbre);if(!canContinue(token))return;
   const last=S.lastPracticeAt(instrumentMode),rest=last===null||S.rested(last),mask=a.mode==='single'&&!replaying&&a.mask&&(a.ordinal>1||!rest);
   let at=audioContext.currentTime+.05;const firstNoteAt=at;
-  if(mask){const n=6+Math.floor(Math.random()*3);row.resetNoteCount=n;row.resetSoundOn=true;msg(tr('interference'));at=TrainingCore.resetTones((m,t,d,v)=>queueInstrumentNote(U.drawTimbre(a.timbre),m,t,d,v),at,{previous:row.previousPitch,count:n,duration:PLAY_DURATION})+TrainingCore.resetGap();}
+  if(mask){const n=3+Math.floor(Math.random()*2);row.resetNoteCount=n;row.resetSoundOn=true;msg(tr('interference'));at=TrainingCore.resetTones((m,t,d,v)=>queueInstrumentNote(U.drawTimbre(a.timbre),m,t,d,v),at,{previous:row.previousPitch,count:n,duration:PLAY_DURATION})+TrainingCore.resetGap();}
   else msg(tr('listen'));
   if(a.mode==='interval'){queueInstrumentNote(row.timbre,row.reference,at,.6);at+=.8;}
   const voice=queueInstrumentNote(row.timbre,row.target,at);const clock=APFocusModel.outputClock(audioContext,voice.when??at);
@@ -652,7 +660,6 @@ function setup(){
  for(let p=low;p<=high;p++){option($('startNote'),p,label(p));option($('endNote'),p,label(p));}option($('maxIntervalSelect'),'unlimited',tr('unlimited'));for(let d=1;d<=high-low;d++){option($('minIntervalSelect'),d,d);option($('maxIntervalSelect'),d,d);}
  $('modeSelect').onchange=e=>changeMode(e.target.value);$('displaySelect').onchange=e=>{releaseAllKeys();cancelAudio();clearPreviewMark();cfg[mode==='single'?'apDisplay':'rpDisplay']=e.target.value;saveConfig();renderSettings();};
  $('soundSelect').onchange=e=>{if(testActive){e.target.value=cfg.timbre;return;}releaseAllKeys();cancelAudio();clearPreviewMark();cfg.timbre=['piano','violin','mixed'].includes(e.target.value)?e.target.value:instrumentMode;write(timbreKey,cfg.timbre);saveConfig();renderSettings();prepareSelectedAudio();};
- $('previewSelectionButton').onclick=previewSelection;
  $('blindCheck').onchange=e=>{cfg.blind=e.target.checked;saveConfig();};$('autoNextCheck').onchange=e=>{cfg.auto=e.target.checked;saveConfig();};$('maskCheck').onchange=e=>{cfg.mask=e.target.checked;saveConfig();};$('answerLimitSelect').onchange=e=>{const k=mode==='single'?'apLimit':'rpLimit';cfg[k]=AnswerTimer.parse(e.target.value,cfg[k]);e.target.value=AnswerTimer.text(cfg[k],currentLanguage);saveConfig();};
  $('minIntervalSelect').onchange=e=>{cfg.min=Number(e.target.value);if(cfg.max!==null&&cfg.max<cfg.min)cfg.max=cfg.min;saveConfig();renderSettings();};$('maxIntervalSelect').onchange=e=>{cfg.max=e.target.value==='unlimited'?null:Number(e.target.value);if(cfg.max!==null&&cfg.min>cfg.max)cfg.min=cfg.max;saveConfig();renderSettings();};$('directionSelect').onchange=e=>{cfg.direction=e.target.value;saveConfig();renderSettings();};
  $('startNote').onchange=e=>{rpLo=Number(e.target.value);if(rpLo>=rpHi)rpHi=Math.min(high,rpLo+1);if(rpLo>=rpHi)rpLo=rpHi-1;renderSettings();};$('endNote').onchange=e=>{rpHi=Number(e.target.value);if(rpHi<=rpLo)rpLo=Math.max(low,rpHi-1);if(rpHi<=rpLo)rpHi=rpLo+1;renderSettings();};

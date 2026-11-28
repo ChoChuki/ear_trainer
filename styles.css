@@ -468,9 +468,11 @@ select { width: 100%; min-height: 35px; border-radius: 9px; border: 1px solid #d
 /* Audition highlight leaves original grading colors intact. */
 #buttonBoard button.audition{outline:2px solid #2563eb;outline-offset:-3px}
 #learningNotes button.audition,#octaves button.audition{outline:2px solid #2563eb;outline-offset:-3px}
-.selection-preview{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:6px 0}
-.selection-preview button{min-height:40px}
-.selection-preview .mini{margin:0}
+.selection-preview{margin:6px 0;min-width:0}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px}
+.preview-grid button{min-height:44px;padding:4px 2px;font-size:15px;touch-action:manipulation}
+.preview-grid button.audition{background:#dbeafe;border-color:#2563eb;color:#1e40af;outline:2px solid #2563eb;outline-offset:-3px}
+.selection-preview .mini{margin:3px 0 0;min-height:1.4em}
 #previewLabel{text-align:center;margin:4px 0 0}
 
 /* 3.0.6: bring the answer surfaces within thumb reach without changing key

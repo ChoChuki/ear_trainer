@@ -68,7 +68,7 @@ with sync_playwright() as playwright:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.set_content(document(INSTRUMENT), wait_until="domcontentloaded")
     page.wait_for_function("ready", timeout=20000)
-    assert page.text_content("#appVersion") == "3.0.6"
+    assert page.text_content("#appVersion") == "3.0.7"
     assert page.locator("#soundSelect option").evaluate_all("options=>options.map(o=>o.value)") == ["piano", "violin", "mixed"]
     assert page.locator("#soundSelect").input_value() == INSTRUMENT
     page.evaluate("""() => {
@@ -140,79 +140,85 @@ with sync_playwright() as playwright:
         done()
         assert page.evaluate("trial.correct")
 
-    # Settings audition uses the selected pitches, not the current board's sound.
+    # Settings preview: explicit pitches, arbitrary order, no autoplay.
+    def preview(midi):
+        tap(f'#selectionPreviewKeys [data-preview-midi="{midi}"]')
+
+    def available():
+        return page.locator('#selectionPreviewKeys button').evaluate_all(
+            'buttons=>buttons.map(b=>Number(b.dataset.previewMidi))')
+
     select_sound(OTHER)
+    assert available() == [65,77]
     clear()
-    tap("#previewSelectionButton")
-    page.wait_for_function("document.getElementById('selectionPreviewLabel').textContent.includes('F4')")
-    expect_first = {"sound": OTHER, "midi": 65}
-    assert played()[0] == expect_first, played()
-    wait_sounds(2)
-    expect_notes([65, 77], OTHER)
-    page.wait_for_function("!document.getElementById('previewSelectionButton').textContent.toLowerCase().includes('stop')")
+    preview(77)
+    expect_notes([77],OTHER)
+    page.wait_for_function("document.getElementById('selectionPreviewLabel').textContent.includes('F5')")
+    page.wait_for_timeout(1100)
+    expect_notes([77],OTHER)  # no automatically scheduled next note
+    preview(77)
+    expect_notes([77,77],OTHER)
+    preview(65)
+    expect_notes([77,77,65],OTHER)
     assert page.evaluate("!testActive&&session===null&&trial===null")
-    assert page.evaluate("TrainingCore.recentLabel(instrumentMode)") == 77
+    page.wait_for_function("TrainingCore.recentLabel(instrumentMode)===65")
     assert page.evaluate("S.lastLabelAt(instrumentMode)") > 0
 
-    # Both chosen names/octaves can be heard. Mixed uses both real sample sets.
+    # Both answer interfaces expose identical manual audition keys.
+    page.locator('#displaySelect').select_option('instrument')
+    assert available() == [65,77]
+    page.locator('#displaySelect').select_option('buttons')
     tap('#learningNotes [data-pc="4"]')
-    select_sound("mixed")
+    assert available() == [64,65,76,77]
+    select_sound('mixed')
     page.evaluate("mixedQueue=['piano','violin','piano','violin']")
     clear()
-    tap("#previewSelectionButton")
-    wait_sounds(4)
+    for i,midi in enumerate([77,64,77,76]):
+        preview(midi)
+        wait_sounds(i+1)
     assert played() == [
-        {"sound": "piano", "midi": 64}, {"sound": "violin", "midi": 65},
-        {"sound": "piano", "midi": 76}, {"sound": "violin", "midi": 77},
+        {"sound":"piano","midi":77},{"sound":"violin","midi":64},
+        {"sound":"piano","midi":77},{"sound":"violin","midi":76},
     ], played()
-    page.wait_for_function("!document.getElementById('previewSelectionButton').textContent.toLowerCase().includes('stop')")
-
-    # Stop and settings changes must cancel pending preview notes and highlights.
-    clear()
-    tap("#previewSelectionButton")
-    wait_sounds(1)
-    tap("#previewSelectionButton")
-    count = len(played())
     page.wait_for_timeout(1000)
-    assert len(played()) == count
-    assert page.locator("#learningNotes .audition,#octaves .audition").count() == 0
+    assert len(played()) == 4
+
+    # Settings changes cancel playback; a removed pitch is no longer offered.
     clear()
-    tap("#previewSelectionButton")
+    preview(64)
     wait_sounds(1)
     select_sound(OTHER)
-    count = len(played())
-    page.wait_for_timeout(1000)
-    assert len(played()) == count
-    assert "Stop" not in page.text_content("#previewSelectionButton")
+    page.wait_for_timeout(900)
+    assert len(played()) == 1
+    assert page.evaluate('selectionPreview===null')
     clear()
-    tap("#previewSelectionButton")
+    preview(64)
     wait_sounds(1)
     tap('#learningNotes [data-pc="4"]')
-    count = len(played())
-    page.wait_for_timeout(1000)
-    assert len(played()) == count
-    assert "Stop" not in page.text_content("#previewSelectionButton")
+    assert available() == [65,77]
+    page.wait_for_timeout(900)
+    assert len(played()) == 1
+    assert page.locator('#selectionPreviewKeys .audition,#learningNotes .audition,#octaves .audition').count() == 0
 
-    # A selected name outside a partial playable octave cannot create a fake note.
-    partial = 8 if INSTRUMENT == "piano" else 6
+    # Partial octaves must not introduce out-of-range preview keys.
+    partial = 8 if INSTRUMENT == 'piano' else 6
     tap(f'#octaves [data-octave="{partial}"]')
     tap('#octaves [data-octave="4"]')
     tap('#octaves [data-octave="5"]')
-    assert page.locator("#previewSelectionButton").is_disabled()
+    assert available() == []
     tap('#octaves [data-octave="4"]')
     tap('#octaves [data-octave="5"]')
     tap(f'#octaves [data-octave="{partial}"]')
-    assert page.locator("#previewSelectionButton").is_enabled()
+    assert available() == [65,77]
 
-    # A lifecycle interruption also stops a preview without creating a session.
+    # A lifecycle interruption also stops preview without creating a session.
     clear()
-    tap("#previewSelectionButton")
+    preview(65)
     wait_sounds(1)
     page.evaluate("window.dispatchEvent(new Event('blur'))")
-    count = len(played())
-    page.wait_for_timeout(1000)
-    assert len(played()) == count
-    assert page.evaluate("!testActive&&session===null&&trial===null")
+    page.wait_for_timeout(900)
+    assert len(played()) == 1
+    assert page.evaluate("!testActive&&session===null&&trial===null&&selectionPreview===null")
 
     # Fixed sound: AP question, replay, correction and button audition all agree.
     page.locator("#displaySelect").select_option("buttons")
@@ -243,7 +249,7 @@ with sync_playwright() as playwright:
     clear()
     tap("#nextButton")
     answer_phase()
-    assert page.evaluate("6<=trial.resetNoteCount&&trial.resetNoteCount<=8")
+    assert page.evaluate("3<=trial.resetNoteCount&&trial.resetNoteCount<=4")
     assert len(played()) == page.evaluate("trial.resetNoteCount+1")
     assert all(note["sound"] == OTHER for note in played()), played()
     ap_correct()

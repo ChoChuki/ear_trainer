@@ -159,7 +159,7 @@
  // An unlabelled phrase uses the loaded instrument samples. Its pitches never depend
  // on the upcoming target. Excluding the preceding labelled pitch avoids echoing it.
  function resetTones(queueNote, at, {long = false, previous = null, count:requestedCount, duration:noteDuration = .7} = {}) {
-  const count = Number.isInteger(requestedCount) && requestedCount >= 4 && requestedCount <= 8 ? requestedCount : long ? 6 : 4;
+  const count = Number.isInteger(requestedCount) && requestedCount >= 3 && requestedCount <= 8 ? requestedCount : long ? 6 : 4;
   const register = Array.from({length: 25}, (_, i) => 55 + i);
   const used = new Set();
   if (Number.isInteger(previous)) used.add(previous % 12);
